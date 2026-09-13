@@ -8,7 +8,7 @@ import com.facebook.react.uimanager.annotations.ReactProp
 /**
  * Exposes [SuperCanvasView] to React Native as `<SuperCanvasView>` (mounted
  * in JS via `requireNativeComponent('SuperCanvasView')` — see
- * src/SuperCanvasScreen.tsx). Registered manually via [SuperCanvasPackage],
+ * src/ui/nativeCanvasView.ts). Registered manually via [SuperCanvasPackage],
  * same pattern as sn-tables' TableGridPackage, but with createViewManagers
  * populated (sn-tables' left it empty since it had no custom view).
  *

@@ -1,0 +1,109 @@
+// The plugin's one screen (PRD §3 step 3, §9): the native canvas full-screen,
+// under a header (Save to Note, Close) and over the floating toolbar. Thin by
+// design: the canvas session and the button presses are injected (wiring.ts,
+// via App.tsx), so this only maps taps and presses onto them.
+
+import React, {useEffect, useRef, useState} from 'react';
+import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
+import type {CanvasSession} from '../application/canvasSession';
+import Toolbar from './Toolbar';
+import {SuperCanvasNativeView, dispatchCanvasCommand, type CanvasViewRef, type ToolMode} from './nativeCanvasView';
+
+/** Button presses into the plugin, by id (see domain/entryPoints.ts). */
+export type ButtonEventSource = {
+  /** The press that opened the plugin, if it arrived before this screen mounted. */
+  lastButtonId: () => number | null;
+  onButton: (listener: (buttonId: number) => void) => () => void;
+};
+
+type Props = {
+  /** Called once per mount: a session belongs to the native view it drives. */
+  createSession: () => CanvasSession;
+  buttonEvents: ButtonEventSource;
+};
+
+const SAVE_ICON = require('../../assets/icons/action-save.png');
+const CLOSE_ICON = require('../../assets/icons/action-close.png');
+
+export default function SuperCanvasScreen({createSession, buttonEvents}: Props): React.JSX.Element {
+  const [session] = useState(createSession);
+  const [toolMode, setToolMode] = useState<ToolMode>('select');
+  const canvasRef = useRef<CanvasViewRef>(null);
+
+  // The plugin runtime stays warm between opens, so this screen can stay
+  // mounted across them: every press re-resolves which canvas to show.
+  useEffect(() => {
+    session.open(buttonEvents.lastButtonId());
+    return buttonEvents.onButton(buttonId => {
+      session.open(buttonId);
+    });
+  }, [session, buttonEvents]);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>SuperCanvas</Text>
+        <View style={styles.headerActions}>
+          <HeaderButton testID="supercanvas-save-to-note" label="Save to Note" icon={SAVE_ICON} onPress={session.saveToNote} />
+          <HeaderButton testID="supercanvas-close" label="Close" icon={CLOSE_ICON} onPress={session.close} />
+        </View>
+      </View>
+      <View style={styles.canvasArea}>
+        <SuperCanvasNativeView ref={canvasRef} style={StyleSheet.absoluteFill} toolMode={toolMode} />
+        <Toolbar
+          toolMode={toolMode}
+          onToolChange={setToolMode}
+          onCommand={command => dispatchCanvasCommand(canvasRef.current, command)}
+        />
+      </View>
+    </View>
+  );
+}
+
+type HeaderButtonProps = {testID: string; label: string; icon: ImageSourcePropType; onPress: () => void};
+
+function HeaderButton({testID, label, icon, onPress}: HeaderButtonProps): React.JSX.Element {
+  return (
+    <Pressable testID={testID} accessibilityLabel={label} style={styles.headerButton} onPress={onPress}>
+      <Image source={icon} style={styles.headerIcon} />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#cccccc',
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  headerIcon: {
+    width: 22,
+    height: 22,
+    tintColor: '#000000',
+  },
+  canvasArea: {
+    flex: 1,
+    position: 'relative',
+  },
+});

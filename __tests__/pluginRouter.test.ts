@@ -1,16 +1,15 @@
 /**
- * Tests for src/pluginRouter. Validate that:
+ * Tests for src/infrastructure/pluginRouter. Validate that:
  *   - installPluginRouter registers exactly one PluginManager listener
  *     regardless of how many times it's called (idempotent).
  *   - onButtonPress updates getLastButtonEvent and fans out to every active
  *     subscriber.
  *   - Subscribers can unsubscribe via the returned handle.
  *   - A throwing subscriber doesn't block other subscribers from being
- *     invoked (important: one badly-written consumer shouldn't silently
- *     eat events for everyone else).
+ *     invoked (one badly-written consumer shouldn't silently eat events for
+ *     everyone else).
  *
- * Adapted from sn-shapes' __tests__/pluginRouter.test.ts with the button id
- * renamed (500, see index.js).
+ * Adapted from sn-shapes' __tests__/pluginRouter.test.ts.
  */
 type ButtonListenerShape = {
   onButtonPress: (event: unknown) => void;
@@ -32,19 +31,19 @@ import {
   subscribeToButtonEvents,
   getLastButtonEvent,
   __testing__,
-  BUTTON_ID_TOOLBAR,
-} from '../src/pluginRouter';
+} from '../src/infrastructure/pluginRouter';
 
+const press = (id: number) => ({id, pressEvent: 3, name: 'SuperCanvas', icon: '', color: 0, bgColor: 0});
+
+let log: jest.SpyInstance;
 beforeEach(() => {
   registeredListeners.length = 0;
   __testing__.reset();
+  log = jest.spyOn(console, 'log').mockImplementation(() => {});
 });
+afterEach(() => log.mockRestore());
 
 describe('pluginRouter', () => {
-  it('exports the toolbar button id constant', () => {
-    expect(BUTTON_ID_TOOLBAR).toBe(500);
-  });
-
   it('installs a single listener on first call', () => {
     installPluginRouter();
     expect(registeredListeners).toHaveLength(1);
@@ -61,9 +60,8 @@ describe('pluginRouter', () => {
   it('records the last button event for synchronous reads', () => {
     installPluginRouter();
     expect(getLastButtonEvent()).toBeNull();
-    const event = {id: 500, pressEvent: 3, name: 'SuperCanvas', icon: '', color: 0, bgColor: 0};
-    registeredListeners[0].onButtonPress(event);
-    expect(getLastButtonEvent()).toEqual(event);
+    registeredListeners[0].onButtonPress(press(500));
+    expect(getLastButtonEvent()).toEqual(press(500));
   });
 
   it('fans events out to subscribers', () => {
@@ -72,10 +70,9 @@ describe('pluginRouter', () => {
     const b = jest.fn();
     subscribeToButtonEvents(a);
     subscribeToButtonEvents(b);
-    const event = {id: 500, pressEvent: 3, name: 'SuperCanvas', icon: '', color: 0, bgColor: 0};
-    registeredListeners[0].onButtonPress(event);
-    expect(a).toHaveBeenCalledWith(event);
-    expect(b).toHaveBeenCalledWith(event);
+    registeredListeners[0].onButtonPress(press(501));
+    expect(a).toHaveBeenCalledWith(press(501));
+    expect(b).toHaveBeenCalledWith(press(501));
   });
 
   it('removes subscribers via returned unsubscribe handle', () => {
@@ -85,7 +82,7 @@ describe('pluginRouter', () => {
     expect(__testing__.getSubscriberCount()).toBe(1);
     unsubscribe();
     expect(__testing__.getSubscriberCount()).toBe(0);
-    registeredListeners[0].onButtonPress({id: 500, pressEvent: 3, name: '', icon: '', color: 0, bgColor: 0});
+    registeredListeners[0].onButtonPress(press(500));
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -99,7 +96,7 @@ describe('pluginRouter', () => {
       const healthy = jest.fn();
       subscribeToButtonEvents(thrower);
       subscribeToButtonEvents(healthy);
-      registeredListeners[0].onButtonPress({id: 500, pressEvent: 3, name: '', icon: '', color: 0, bgColor: 0});
+      registeredListeners[0].onButtonPress(press(500));
       expect(thrower).toHaveBeenCalled();
       expect(healthy).toHaveBeenCalled();
     } finally {

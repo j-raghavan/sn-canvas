@@ -10,8 +10,8 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 /**
- * RN bridge for the infrequent file operations on the live canvas: save, load
- * and thumbnail rendering (PRD §9 — everything that is not per-frame gesture or
+ * RN bridge for the infrequent file operations on the live canvas: save, load,
+ * delete and thumbnail rendering (PRD §9 — everything that is not per-frame gesture or
  * render state, which lives in [SuperCanvasView]). It holds no canvas logic of
  * its own: persistence is [CanvasJson], rendering is the view.
  *
@@ -56,8 +56,10 @@ class SuperCanvasModule(
     }
 
     /**
-     * Reads [path] and pushes its elements into the live view. A missing file
-     * resolves `false`, not an error — that is simply a canvas never saved yet.
+     * Shows the canvas saved at [path] in the live view, replacing whatever it
+     * showed. A missing file shows an empty canvas and resolves `false`: that is
+     * a canvas never saved yet, not an error. Replacing either way matters when
+     * the session switches canvases in a view that stays mounted.
      */
     @ReactMethod
     fun loadCanvas(
@@ -67,17 +69,24 @@ class SuperCanvasModule(
         Thread {
             try {
                 val file = File(path)
-                if (!file.exists()) {
-                    promise.resolve(false)
-                    return@Thread
-                }
-                val elements = CanvasJson.deserializeElements(file.readText())
+                val exists = file.exists()
+                val elements = if (exists) CanvasJson.deserializeElements(file.readText()) else emptyList()
                 registry.current()?.let { view -> view.post { view.setElements(elements) } }
-                promise.resolve(true)
+                promise.resolve(exists)
             } catch (e: IOException) {
                 promise.reject(ERR_IO, e.message, e)
             }
         }.start()
+    }
+
+    /** Deletes the file at [path]; resolves `true` once it is gone, including when it never existed. */
+    @ReactMethod
+    fun deleteCanvas(
+        path: String,
+        promise: Promise,
+    ) {
+        val file = File(path)
+        promise.resolve(file.delete() || !file.exists())
     }
 
     /**
