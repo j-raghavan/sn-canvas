@@ -32,7 +32,7 @@ const icon = Image.resolveAssetSource(require('./assets/icon.png')).uri;
 
 PluginManager.registerButton(BUTTON_TYPE_SIDEBAR, ['NOTE'], {
   id: BUTTON_ID_SIDEBAR,
-  name: 'SuperCanvas',
+  name: 'Canvas',
   icon,
   showType: SHOW_TYPE_WITH_UI,
   regionType: REGION_TYPE_FULLSCREEN_PERSISTENT,

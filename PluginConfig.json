@@ -1,5 +1,5 @@
 {
-  "name": "SuperCanvas",
+  "name": "Canvas",
   "desc": "An effectively infinite, pannable/zoomable native drawing canvas: shapes, connectors, freehand and calligraphy pens as persistent, re-editable objects.",
   "iconPath": "assets/icon.png",
   "versionName": "0.1.0",

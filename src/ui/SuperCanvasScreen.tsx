@@ -42,7 +42,7 @@ export default function SuperCanvasScreen({createSession, buttonEvents}: Props):
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>SuperCanvas</Text>
+        <Text style={styles.title}>Canvas</Text>
         <View style={styles.headerActions}>
           <HeaderButton testID="supercanvas-save-to-note" label="Save to Note" icon={SAVE_ICON} onPress={session.saveToNote} />
           <HeaderButton testID="supercanvas-close" label="Close" icon={CLOSE_ICON} onPress={session.close} />

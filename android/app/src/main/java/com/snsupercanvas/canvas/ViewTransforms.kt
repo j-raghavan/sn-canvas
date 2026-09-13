@@ -67,15 +67,34 @@ object ViewTransforms {
         boxWidthPx: Double,
         boxHeightPx: Double,
         paddingPx: Double,
+        zoomRange: ClosedFloatingPointRange<Double> = 0.0..Double.MAX_VALUE,
     ): ViewTransform {
         val contentWidth = world.width.let { if (it > 0.0) it else MIN_CONTENT_SPAN }
         val contentHeight = world.height.let { if (it > 0.0) it else MIN_CONTENT_SPAN }
         val availableWidth = (boxWidthPx - 2 * paddingPx).coerceAtLeast(1.0)
         val availableHeight = (boxHeightPx - 2 * paddingPx).coerceAtLeast(1.0)
-        val zoom = minOf(availableWidth / contentWidth, availableHeight / contentHeight)
-        val extraX = (boxWidthPx - contentWidth * zoom) / 2.0
-        val extraY = (boxHeightPx - contentHeight * zoom) / 2.0
-        return ViewTransform(viewportX = world.left - extraX / zoom, viewportY = world.top - extraY / zoom, zoom = zoom)
+        val zoom = minOf(availableWidth / contentWidth, availableHeight / contentHeight).coerceIn(zoomRange)
+        // Centered on the content's center, so a zero-width/height extent (a straight line) sits mid-box too.
+        val centerX = (world.left + world.right) / 2
+        val centerY = (world.top + world.bottom) / 2
+        return ViewTransform(viewportX = centerX - boxWidthPx / (2 * zoom), viewportY = centerY - boxHeightPx / (2 * zoom), zoom = zoom)
+    }
+
+    /**
+     * Where the live view looks when a canvas opens (FR13's "sane default view"):
+     * all content fitted into the [viewWidthPx] x [viewHeightPx] view with
+     * [paddingPx] around it. It zooms out as far as [SuperCanvasCore.MIN_ZOOM]
+     * when the content needs it, but never magnifies small content past 100%.
+     * An empty canvas opens at the origin, at 100%.
+     */
+    fun fitToView(
+        elements: List<Element>,
+        viewWidthPx: Double,
+        viewHeightPx: Double,
+        paddingPx: Double,
+    ): ViewTransform {
+        val bounds = contentBounds(elements) ?: return ViewTransform(viewportX = 0.0, viewportY = 0.0, zoom = 1.0)
+        return fitTransform(bounds, viewWidthPx, viewHeightPx, paddingPx, SuperCanvasCore.MIN_ZOOM..1.0)
     }
 
     /** The combined world-space bounding box of [elements] (bound line endpoints resolved live), or null if empty. */

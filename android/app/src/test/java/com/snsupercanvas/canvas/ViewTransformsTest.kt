@@ -130,4 +130,44 @@ class ViewTransformsTest {
         assertEquals(60.0, bounds.right, 0.0001)
         assertEquals(60.0, bounds.bottom, 0.0001)
     }
+
+    // --- opening a canvas: fitToView --------------------------------------------------
+
+    @Test
+    fun `fitToView opens an empty canvas at the origin at 100 percent`() {
+        assertEquals(ViewTransform(0.0, 0.0, 1.0), ViewTransforms.fitToView(emptyList(), 1000.0, 800.0, 50.0))
+    }
+
+    @Test
+    fun `fitToView centers small content without magnifying it past 100 percent`() {
+        val box = Element(id = "b", type = "rectangle", x = 5000.0, y = -3000.0, width = 100.0, height = 50.0)
+        val fit = ViewTransforms.fitToView(listOf(box), 1000.0, 800.0, 50.0)
+        assertEquals(1.0, fit.zoom, 1e-9)
+        assertEquals(500.0, fit.screenX(5050.0), 1e-9)
+        assertEquals(400.0, fit.screenY(-2975.0), 1e-9)
+    }
+
+    @Test
+    fun `fitToView zooms out so content wider than the view fits inside the padding`() {
+        val wide = Element(id = "w", type = "rectangle", x = 0.0, y = 0.0, width = 1800.0, height = 100.0)
+        val fit = ViewTransforms.fitToView(listOf(wide), 1000.0, 800.0, 50.0)
+        assertEquals(0.5, fit.zoom, 1e-9)
+        assertEquals(50.0, fit.screenX(0.0), 1e-9)
+        assertEquals(950.0, fit.screenX(1800.0), 1e-9)
+    }
+
+    @Test
+    fun `fitToView never zooms out past MIN_ZOOM, however far apart the content is`() {
+        val a = Element(id = "a", type = "rectangle", x = 0.0, y = 0.0, width = 1.0, height = 1.0)
+        val b = a.copy(id = "b", x = 1_000_000.0)
+        assertEquals(SuperCanvasCore.MIN_ZOOM, ViewTransforms.fitToView(listOf(a, b), 1000.0, 800.0, 50.0).zoom, 1e-12)
+    }
+
+    @Test
+    fun `fitTransform centers a zero-width extent such as a vertical line`() {
+        val line = WorldRect(left = 10.0, top = 0.0, right = 10.0, bottom = 200.0)
+        val fit = ViewTransforms.fitTransform(line, 400.0, 400.0, 0.0)
+        assertEquals(200.0, fit.screenX(10.0), 1e-9)
+        assertEquals(200.0, fit.screenY(100.0), 1e-9)
+    }
 }

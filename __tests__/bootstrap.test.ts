@@ -58,7 +58,7 @@ test('initialises the plugin manager and installs the button router exactly once
 test('registers the NOTE sidebar button as a persistent full-screen entry point', () => {
   expect(mockRegisterButton).toHaveBeenCalledWith(1, ['NOTE'], {
     id: 500,
-    name: 'SuperCanvas',
+    name: 'Canvas',
     icon: 'file:///icon.png',
     showType: 1,
     regionType: 3,

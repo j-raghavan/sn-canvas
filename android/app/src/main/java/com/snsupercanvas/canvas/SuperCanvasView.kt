@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.PointF
+import android.util.Log
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
@@ -66,6 +67,8 @@ class SuperCanvasView(
     private var toolMode = CanvasTools.SELECT
     private var selectedElementId: String? = null
     private var gesture: Gesture? = null
+    private var isFitPending = false
+    private val arbiter = TouchArbiter()
 
     // Screen-space touch positions for the current gesture.
     private val downTouch = PointF()
@@ -111,10 +114,30 @@ class SuperCanvasView(
         toolMode = mode
     }
 
-    /** Replaces the canvas content (after `loadCanvas`) and restarts the undo history from it. */
+    /** Replaces the canvas content (after `loadCanvas`), restarts the undo history from it, and frames it (FR13). */
     fun setElements(elements: List<Element>) {
         history.reset(elements)
         showElements(elements)
+        fitToContent()
+    }
+
+    override fun onSizeChanged(
+        w: Int,
+        h: Int,
+        oldw: Int,
+        oldh: Int,
+    ) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (isFitPending) fitToContent()
+    }
+
+    /** Frames all content in the view; before the first layout there is no size yet, so it waits for [onSizeChanged]. */
+    private fun fitToContent() {
+        isFitPending = width == 0 || height == 0
+        if (isFitPending) return
+        val fit = ViewTransforms.fitToView(state.elements, width.toDouble(), height.toDouble(), FIT_PADDING_PX)
+        state = state.copy(viewportX = fit.viewportX, viewportY = fit.viewportY, zoom = fit.zoom)
+        invalidate()
     }
 
     /** A snapshot of the current canvas state, e.g. for `saveCanvas`. */
@@ -159,25 +182,66 @@ class SuperCanvasView(
         screenY: Float,
     ): Point = Point(state.viewportX + screenX / state.zoom, state.viewportY + screenY / state.zoom)
 
-    private fun distanceFromDown(event: MotionEvent): Double = hypot((event.x - downTouch.x).toDouble(), (event.y - downTouch.y).toDouble())
+    private fun distanceFromDown(
+        x: Float,
+        y: Float,
+    ): Double = hypot((x - downTouch.x).toDouble(), (y - downTouch.y).toDouble())
 
     private fun generateElementId(): String = "el-" + System.currentTimeMillis() + "-" + (0..9999).random()
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        scaleGestureDetector.onTouchEvent(event)
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> handleActionDown(event)
-            MotionEvent.ACTION_MOVE -> handleActionMove(event)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> handleActionUp(event)
-        }
+        // Pinch-zoom is a two-finger gesture; a palm beside the drawing pen must not zoom.
+        if (!arbiter.isPenActive) scaleGestureDetector.onTouchEvent(event)
+        val inputs =
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> arbiter.down(contactAt(event, event.actionIndex))
+                MotionEvent.ACTION_MOVE -> listOfNotNull(arbiter.move(List(event.pointerCount) { contactAt(event, it) }))
+                MotionEvent.ACTION_POINTER_UP -> listOfNotNull(arbiter.up(contactAt(event, event.actionIndex), isLastContact = false))
+                MotionEvent.ACTION_UP -> listOfNotNull(arbiter.up(contactAt(event, event.actionIndex), isLastContact = true))
+                MotionEvent.ACTION_CANCEL -> listOfNotNull(arbiter.cancel())
+                else -> emptyList()
+            }
+        inputs.forEach(::handleInput)
         return true
     }
 
-    private fun handleActionDown(event: MotionEvent) {
-        downTouch.set(event.x, event.y)
-        lastTouch.set(event.x, event.y)
-        dragCurrent.set(event.x, event.y)
-        gesture = if (CanvasTools.drawsElement(toolMode)) Gesture.DrawShape else selectToolGestureAt(toWorld(event.x, event.y))
+    private fun contactAt(
+        event: MotionEvent,
+        index: Int,
+    ): Contact {
+        val tool = event.getToolType(index)
+        val isPen = tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER
+        return Contact(event.getPointerId(index), isPen, event.getX(index), event.getY(index))
+    }
+
+    private fun handleInput(input: PointerInput) {
+        when (input) {
+            is PointerInput.Start -> handleStart(input.contact)
+            is PointerInput.Move -> handleMove(input.x, input.y)
+            is PointerInput.End -> handleEnd(input.x, input.y)
+            PointerInput.Abandon -> abandonGesture()
+        }
+    }
+
+    private fun handleStart(contact: Contact) {
+        downTouch.set(contact.x, contact.y)
+        lastTouch.set(contact.x, contact.y)
+        dragCurrent.set(contact.x, contact.y)
+        gesture =
+            when {
+                !CanvasTools.drawsElement(toolMode) -> selectToolGestureAt(toWorld(contact.x, contact.y))
+                // Palm rejection: with a drawing tool only the pen draws, as in Supernote's own notes.
+                contact.isPen -> Gesture.DrawShape
+                else -> null
+            }
+        Log.d(LOG_TAG, "touch start pen=${contact.isPen} tool=$toolMode gesture=$gesture")
+    }
+
+    /** Drops the gesture in progress without committing it: a cancelled stream, or a second finger starting a pinch. */
+    private fun abandonGesture() {
+        gesture = null
+        if (isMinimapVisible) scheduleMinimapHide()
+        invalidate()
     }
 
     /** With the select tool, a handle of the selected element wins over its body, which wins over panning. */
@@ -195,27 +259,33 @@ class SuperCanvasView(
         }
     }
 
-    private fun handleActionMove(event: MotionEvent) {
+    private fun handleMove(
+        x: Float,
+        y: Float,
+    ) {
         if (scaleGestureDetector.isInProgress) return
-        val dx = (event.x - lastTouch.x) / state.zoom
-        val dy = (event.y - lastTouch.y) / state.zoom
+        val dx = (x - lastTouch.x) / state.zoom
+        val dy = (y - lastTouch.y) / state.zoom
         when (val active = gesture) {
             Gesture.Pan -> {
                 state = SuperCanvasCore.panBy(state, dx, dy)
                 // Past tap distance only, so a plain tap never flashes the minimap (an e-ink repaint).
-                if (distanceFromDown(event) > TAP_SLOP_PX) showMinimap()
+                if (distanceFromDown(x, y) > TAP_SLOP_PX) showMinimap()
             }
             is Gesture.Move -> gesture = active.copy(dx = active.dx + dx, dy = active.dy + dy)
-            Gesture.DrawShape, Gesture.Rotate, is Gesture.Resize, is Gesture.DragEndpoint -> dragCurrent.set(event.x, event.y)
+            Gesture.DrawShape, Gesture.Rotate, is Gesture.Resize, is Gesture.DragEndpoint -> dragCurrent.set(x, y)
             null -> Unit
         }
         if (gesture != null) invalidate()
-        lastTouch.set(event.x, event.y)
+        lastTouch.set(x, y)
     }
 
-    private fun handleActionUp(event: MotionEvent) {
-        val totalDist = distanceFromDown(event)
-        val end = toWorld(event.x, event.y)
+    private fun handleEnd(
+        x: Float,
+        y: Float,
+    ) {
+        val totalDist = distanceFromDown(x, y)
+        val end = toWorld(x, y)
         when (val finished = gesture) {
             Gesture.Pan -> {
                 if (totalDist <= TAP_SLOP_PX) selectedElementId = SuperCanvasCore.hitTest(end.x, end.y, state.elements)?.id
@@ -313,5 +383,10 @@ class SuperCanvasView(
         const val MIN_SHAPE_DRAG_PX = 8f
         const val HANDLE_HIT_RADIUS_PX = 28f
         const val MINIMAP_LINGER_MS = 1500L
+
+        // Generous, so fitted content clears the floating toolbar at the bottom.
+        const val FIT_PADDING_PX = 96.0
+
+        const val LOG_TAG = "SuperCanvas"
     }
 }
