@@ -1,0 +1,86 @@
+/**
+ * The style panel (FR19): its open/close toggle, every option, which one is in
+ * use, and that each tap sends exactly one style property.
+ */
+import React from 'react';
+import {StyleSheet} from 'react-native';
+import ReactTestRenderer, {act} from 'react-test-renderer';
+import {COLORS, DEFAULT_STYLE, type CanvasStyle} from '../src/domain/styles';
+import StylePanel from '../src/ui/StylePanel';
+
+const renderPanel = (style: CanvasStyle = DEFAULT_STYLE, open = true) => {
+  const onChange = jest.fn();
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = ReactTestRenderer.create(<StylePanel style={style} swatch={color => `swatch:${color}`} onChange={onChange} />);
+  });
+  const tap = (testID: string) =>
+    act(() => {
+      renderer.root.findByProps({testID}).props.onPress();
+    });
+  if (open) {
+    tap('style-toggle');
+  }
+  // The rendered view (findByProps finds the Option wrapper first), which carries the state and look.
+  const host = (testID: string) => renderer.root.find(node => node.props.testID === testID && typeof node.type === 'string');
+  const isSelected = (testID: string) => host(testID).props.accessibilityState.selected;
+  const look = (testID: string) => StyleSheet.flatten(host(testID).props.style);
+  const isPanelShown = () => renderer.root.findAllByProps({testID: 'style-color-red'}).length > 0;
+  return {renderer, onChange, tap, host, isSelected, look, isPanelShown};
+};
+
+test('the panel starts closed behind a toggle that shows the colour in use, and the toggle opens and closes it', () => {
+  const {renderer, tap, host, isPanelShown} = renderPanel({...DEFAULT_STYLE, color: 'violet'}, false);
+  const toggleState = () => [host('style-toggle').props.accessibilityState.expanded, host('style-toggle').props.accessibilityLabel];
+  expect(isPanelShown()).toBe(false);
+  expect(JSON.stringify(renderer.toJSON())).toContain('swatch:violet');
+  expect(toggleState()).toEqual([false, 'Show styles']);
+  tap('style-toggle');
+  expect(isPanelShown()).toBe(true);
+  expect(toggleState()).toEqual([true, 'Hide styles']);
+  tap('style-toggle');
+  expect(isPanelShown()).toBe(false);
+});
+
+test('shows all 12 colours in the swatch colour it is given, the one in use selected and named', () => {
+  const {renderer, isSelected} = renderPanel({...DEFAULT_STYLE, color: 'light-blue'});
+  for (const color of COLORS) {
+    expect(isSelected(`style-color-${color.id}`)).toBe(color.id === 'light-blue');
+  }
+  expect(JSON.stringify(renderer.toJSON())).toContain('swatch:red');
+  expect(renderer.root.findAllByProps({children: 'Light blue'}).length).toBeGreaterThan(0);
+});
+
+test('the fill, dash and size in use are selected', () => {
+  const {isSelected} = renderPanel({...DEFAULT_STYLE, fill: 'solid', dash: 'dotted', size: 's'});
+  expect(['style-fill-solid', 'style-dash-dotted', 'style-size-s'].map(isSelected)).toEqual([true, true, true]);
+  expect(['style-fill-none', 'style-dash-draw', 'style-size-m'].map(isSelected)).toEqual([false, false, false]);
+});
+
+test('the option in use is marked subtly: a light background and thin outline, or a thin ring round the colour', () => {
+  const {look} = renderPanel({...DEFAULT_STYLE, color: 'red', fill: 'solid'});
+  expect(look('style-fill-solid')).toMatchObject({backgroundColor: '#e6e6e6', borderWidth: 1.5});
+  expect(look('style-fill-none').borderWidth).toBeUndefined();
+  expect(look('style-color-red')).toMatchObject({borderWidth: 2});
+  expect(look('style-color-red').backgroundColor).toBeUndefined();
+  expect(look('style-color-blue').borderWidth).toBeUndefined();
+});
+
+test('the opacity knob sits at the step in use, with the track filled up to it', () => {
+  const {look} = renderPanel({...DEFAULT_STYLE, opacity: 0.5});
+  expect(look('style-opacity-knob').left).toBe('50%');
+  const full = renderPanel({...DEFAULT_STYLE, opacity: 1});
+  expect(full.look('style-opacity-knob').left).toBe('90%');
+});
+
+test.each([
+  ['style-color-red', 'color', 'red'],
+  ['style-opacity-0.25', 'opacity', '0.25'],
+  ['style-fill-pattern', 'fill', 'pattern'],
+  ['style-dash-dashed', 'dash', 'dashed'],
+  ['style-size-xl', 'size', 'xl'],
+])('tapping %s sends %s = %s', (testID, property, value) => {
+  const {onChange, tap} = renderPanel();
+  tap(testID);
+  expect(onChange).toHaveBeenCalledWith(property, value);
+});

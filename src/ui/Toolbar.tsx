@@ -1,15 +1,12 @@
-// The floating, centered tool pill: the drawing tools, then Delete/Undo/Redo.
-// Icons are drawn PNGs (assets/icons/) rather than Unicode glyphs, which
-// rendered badly in the device font. They are black on transparent, so
-// tintColor can invert the active tool.
+// The floating, centered tool pill. Icons are drawn PNGs (assets/icons/)
+// rather than Unicode glyphs, which rendered badly in the device font. They
+// are black on transparent, so tintColor can invert the active tool.
 
 import React from 'react';
 import {Image, Pressable, StyleSheet, View, type ImageSourcePropType} from 'react-native';
-import type {CanvasCommand, ToolMode} from './nativeCanvasView';
+import type {ToolMode} from './nativeCanvasView';
 
-type Item<T> = {id: T; label: string; icon: ImageSourcePropType};
-
-const TOOLS: ReadonlyArray<Item<ToolMode>> = [
+const TOOLS: ReadonlyArray<{id: ToolMode; label: string; icon: ImageSourcePropType}> = [
   {id: 'select', label: 'Select', icon: require('../../assets/icons/tool-select.png')},
   {id: 'rectangle', label: 'Rectangle', icon: require('../../assets/icons/tool-rectangle.png')},
   {id: 'ellipse', label: 'Ellipse', icon: require('../../assets/icons/tool-ellipse.png')},
@@ -17,19 +14,12 @@ const TOOLS: ReadonlyArray<Item<ToolMode>> = [
   {id: 'arrow', label: 'Arrow', icon: require('../../assets/icons/action-arrow.png')},
 ];
 
-const COMMANDS: ReadonlyArray<Item<CanvasCommand> & {testID: string}> = [
-  {id: 'deleteSelected', label: 'Delete', testID: 'supercanvas-delete', icon: require('../../assets/icons/action-delete.png')},
-  {id: 'undo', label: 'Undo', testID: 'supercanvas-undo', icon: require('../../assets/icons/action-undo.png')},
-  {id: 'redo', label: 'Redo', testID: 'supercanvas-redo', icon: require('../../assets/icons/action-redo.png')},
-];
-
 type Props = {
   toolMode: ToolMode;
   onToolChange: (tool: ToolMode) => void;
-  onCommand: (command: CanvasCommand) => void;
 };
 
-export default function Toolbar({toolMode, onToolChange, onCommand}: Props): React.JSX.Element {
+export default function Toolbar({toolMode, onToolChange}: Props): React.JSX.Element {
   // box-none: the wrapper spans the width so the pill can center itself, but
   // taps beside the pill must still reach the canvas underneath.
   return (
@@ -48,17 +38,6 @@ export default function Toolbar({toolMode, onToolChange, onCommand}: Props): Rea
             </Pressable>
           );
         })}
-        <View style={styles.divider} />
-        {COMMANDS.map(command => (
-          <Pressable
-            key={command.id}
-            testID={command.testID}
-            accessibilityLabel={command.label}
-            style={styles.button}
-            onPress={() => onCommand(command.id)}>
-            <Image source={command.icon} style={styles.icon} />
-          </Pressable>
-        ))}
       </View>
     </View>
   );
@@ -106,11 +85,5 @@ const styles = StyleSheet.create({
   },
   iconActive: {
     tintColor: '#ffffff',
-  },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#cccccc',
-    marginHorizontal: 6,
   },
 });

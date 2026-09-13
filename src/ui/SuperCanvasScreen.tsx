@@ -1,13 +1,24 @@
 // The plugin's one screen (PRD §3 step 3, §9): the native canvas full-screen,
-// under a header (Save to Note, Close) and over the floating toolbar. Thin by
-// design: the canvas session and the button presses are injected (wiring.ts,
-// via App.tsx), so this only maps taps and presses onto them.
+// under a header (Save to Note, Close), with the style panel top right and the
+// action bar above the floating toolbar (FR16-FR19). Thin by design: the canvas
+// session and the button presses are injected (wiring.ts, via App.tsx), and
+// the action bar and style panel follow the state the canvas reports.
 
 import React, {useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
 import type {CanvasSession} from '../application/canvasSession';
+import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
+import ActionBar from './ActionBar';
+import StylePanel from './StylePanel';
 import Toolbar from './Toolbar';
-import {SuperCanvasNativeView, dispatchCanvasCommand, type CanvasViewRef, type ToolMode} from './nativeCanvasView';
+import {
+  SuperCanvasNativeView,
+  dispatchCanvasCommand,
+  nativeEinkGrays,
+  type CanvasCommand,
+  type CanvasViewRef,
+  type ToolMode,
+} from './nativeCanvasView';
 
 /** Button presses into the plugin, by id (see domain/entryPoints.ts). */
 export type ButtonEventSource = {
@@ -22,12 +33,19 @@ type Props = {
   buttonEvents: ButtonEventSource;
 };
 
-const SAVE_ICON = require('../../assets/icons/action-save.png');
+// FR23: Save to Note has its own icon; the upward arrow is kept for Export to PDF.
+const SAVE_TO_NOTE_ICON = require('../../assets/icons/action-save-to-note.png');
 const CLOSE_ICON = require('../../assets/icons/action-close.png');
+
+/** How long the "Added to note" confirmation stays up. */
+export const NOTICE_MS = 2500;
 
 export default function SuperCanvasScreen({createSession, buttonEvents}: Props): React.JSX.Element {
   const [session] = useState(createSession);
+  const [einkGrays] = useState(nativeEinkGrays);
   const [toolMode, setToolMode] = useState<ToolMode>('select');
+  const [ui, setUi] = useState<CanvasUiState>(INITIAL_UI_STATE);
+  const [notice, setNotice] = useState<string | null>(null);
   const canvasRef = useRef<CanvasViewRef>(null);
 
   // The plugin runtime stays warm between opens, so this screen can stay
@@ -39,22 +57,52 @@ export default function SuperCanvasScreen({createSession, buttonEvents}: Props):
     });
   }, [session, buttonEvents]);
 
+  useEffect(() => {
+    if (notice === null) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const runCommand = (command: CanvasCommand, args?: readonly string[]) =>
+    dispatchCanvasCommand(canvasRef.current, command, args);
+
+  // FR12: confirm the insert, so the thumbnail isn't added twice for want of feedback.
+  const saveToNote = async () => {
+    if (await session.saveToNote()) {
+      setNotice('Added to note');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Canvas</Text>
         <View style={styles.headerActions}>
-          <HeaderButton testID="supercanvas-save-to-note" label="Save to Note" icon={SAVE_ICON} onPress={session.saveToNote} />
+          <HeaderButton testID="supercanvas-save-to-note" label="Save to Note" icon={SAVE_TO_NOTE_ICON} onPress={saveToNote} />
           <HeaderButton testID="supercanvas-close" label="Close" icon={CLOSE_ICON} onPress={session.close} />
         </View>
       </View>
       <View style={styles.canvasArea}>
-        <SuperCanvasNativeView ref={canvasRef} style={StyleSheet.absoluteFill} toolMode={toolMode} />
-        <Toolbar
+        <SuperCanvasNativeView
+          ref={canvasRef}
+          style={StyleSheet.absoluteFill}
           toolMode={toolMode}
-          onToolChange={setToolMode}
-          onCommand={command => dispatchCanvasCommand(canvasRef.current, command)}
+          onCanvasState={event => setUi(parseUiState(event.nativeEvent))}
         />
+        <StylePanel
+          style={ui.style}
+          swatch={color => swatchColor(color, einkGrays)}
+          onChange={(property, value) => runCommand('setStyle', [property, value])}
+        />
+        <ActionBar ui={ui} onCommand={runCommand} />
+        <Toolbar toolMode={toolMode} onToolChange={setToolMode} />
+        {notice !== null && (
+          <View style={styles.notice} pointerEvents="none">
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -105,5 +153,18 @@ const styles = StyleSheet.create({
   canvasArea: {
     flex: 1,
     position: 'relative',
+  },
+  notice: {
+    position: 'absolute',
+    top: 12,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#000000',
+  },
+  noticeText: {
+    fontSize: 15,
+    color: '#ffffff',
   },
 });

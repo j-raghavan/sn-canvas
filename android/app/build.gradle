@@ -261,6 +261,7 @@ kover {
                     // Android Canvas drawing only — same reason as SuperCanvasView; the math
                     // they draw with (fit/rotation) is covered in SuperCanvasCore/ViewTransforms.
                     "com.snsupercanvas.canvas.CanvasRenderer*",
+                    "com.snsupercanvas.canvas.ElementPainter*",
                     "com.snsupercanvas.canvas.MinimapRenderer*",
                     "com.snsupercanvas.canvas.ShapeDrawingKt",
                     // RN autolinking-generated (app:generateAutolinkingPackageList) — not our

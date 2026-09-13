@@ -10,42 +10,71 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
+// Drawing primitives shared by the live view, the note thumbnail and the minimap.
+
+/** [world] on screen through [transform]. */
+internal fun screenPoint(
+    world: Point,
+    transform: ViewTransform,
+): PointF = PointF(transform.screenX(world.x).toFloat(), transform.screenY(world.y).toFloat())
+
+/** A bbox element's unrotated screen bounds through [transform]. */
+internal fun screenBounds(
+    element: Element,
+    transform: ViewTransform,
+): RectF =
+    RectF(
+        transform.screenX(element.x).toFloat(),
+        transform.screenY(element.y).toFloat(),
+        transform.screenX(element.x + element.width).toFloat(),
+        transform.screenY(element.y + element.height).toFloat(),
+    )
+
 /**
- * Draws [element]'s rect/oval in screen-space [bounds], rotated by its
- * [Element.rotation] about the bounds' center. Every world->screen transform
- * in this plugin is a uniform scale + translate, so the screen center is the
- * world rotation pivot. Shared by the live view, the note thumbnail, and the
- * minimap so all three draw a rotated shape identically.
+ * Runs [draw] with [canvas] rotated by [element]'s rotation about [bounds]'
+ * center. Every world->screen transform in this plugin is a uniform scale +
+ * translate, so the screen center is the world rotation pivot.
  */
+internal inline fun withRotation(
+    canvas: Canvas,
+    element: Element,
+    bounds: RectF,
+    draw: () -> Unit,
+) {
+    if (element.rotation == 0.0) {
+        draw()
+        return
+    }
+    canvas.save()
+    canvas.rotate(Math.toDegrees(element.rotation).toFloat(), bounds.centerX(), bounds.centerY())
+    draw()
+    canvas.restore()
+}
+
+/** [element]'s rect or oval in screen-space [bounds], rotated: the minimap's outline. */
 internal fun drawRotatedBox(
     canvas: Canvas,
     element: Element,
     bounds: RectF,
     paint: Paint,
-) {
-    val rotated = element.rotation != 0.0
-    if (rotated) {
-        canvas.save()
-        canvas.rotate(Math.toDegrees(element.rotation).toFloat(), bounds.centerX(), bounds.centerY())
-    }
+) = withRotation(canvas, element, bounds) {
     if (element.type == CanvasTools.ELLIPSE) canvas.drawOval(bounds, paint) else canvas.drawRect(bounds, paint)
-    if (rotated) canvas.restore()
 }
 
-private const val ARROWHEAD_LENGTH_PX = 28f
 private const val ARROWHEAD_SPREAD_RAD = Math.PI / 7
 
-/** An open arrowhead at [end] of the screen-space segment from [start]: arrows in the live view, the thumbnail and the drag preview. */
+/** An open arrowhead of [length] pixels at [end] of the screen-space segment from [start]. */
 internal fun drawArrowhead(
     canvas: Canvas,
     start: PointF,
     end: PointF,
     paint: Paint,
+    length: Float,
 ) {
     val angle = atan2((end.y - start.y).toDouble(), (end.x - start.x).toDouble())
     for (side in listOf(angle - ARROWHEAD_SPREAD_RAD, angle + ARROWHEAD_SPREAD_RAD)) {
-        val x = end.x - (ARROWHEAD_LENGTH_PX * cos(side)).toFloat()
-        val y = end.y - (ARROWHEAD_LENGTH_PX * sin(side)).toFloat()
+        val x = end.x - (length * cos(side)).toFloat()
+        val y = end.y - (length * sin(side)).toFloat()
         canvas.drawLine(end.x, end.y, x, y, paint)
     }
 }

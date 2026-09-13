@@ -26,105 +26,36 @@ object CanvasJson {
      * fail loudly — worse than just writing the ~60 lines of JSON handling
      * this fixed, simple, fully-controlled schema actually needs.
      */
-    fun serializeElements(elements: List<Element>): String {
-        val sb = StringBuilder()
-        sb.append("{\"version\":").append(PERSISTENCE_SCHEMA_VERSION).append(",\"elements\":[")
-        elements.forEachIndexed { index, element ->
-            if (index > 0) sb.append(',')
-            sb.append(serializeElement(element))
+    fun serializeElements(elements: List<Element>): String =
+        elements.joinToString(",", prefix = "{\"version\":$PERSISTENCE_SCHEMA_VERSION,\"elements\":[", postfix = "]}") {
+            serializeElement(it)
         }
-        sb.append("]}")
-        return sb.toString()
-    }
 
     private fun serializeElement(element: Element): String {
-        val sb = StringBuilder()
-        sb.append('{')
-        appendStringField(sb, "id", element.id, first = true)
-        appendStringField(sb, "type", element.type)
-        appendNumberField(sb, "x", element.x)
-        appendNumberField(sb, "y", element.y)
-        appendNumberField(sb, "width", element.width)
-        appendNumberField(sb, "height", element.height)
-        appendNullableNumberField(sb, "startX", element.startX)
-        appendNullableNumberField(sb, "startY", element.startY)
-        appendNullableNumberField(sb, "endX", element.endX)
-        appendNullableNumberField(sb, "endY", element.endY)
-        appendNullableStringField(sb, "startElementId", element.startElementId)
-        appendNullableStringField(sb, "endElementId", element.endElementId)
-        appendNumberField(sb, "rotation", element.rotation)
-        sb.append('}')
-        return sb.toString()
-    }
-
-    private fun appendStringField(
-        sb: StringBuilder,
-        key: String,
-        value: String,
-        first: Boolean = false,
-    ) {
-        if (!first) sb.append(',')
-        sb
-            .append('"')
-            .append(key)
-            .append("\":")
-            .append(jsonQuote(value))
-    }
-
-    private fun appendNullableStringField(
-        sb: StringBuilder,
-        key: String,
-        value: String?,
-    ) {
-        sb
-            .append(',')
-            .append('"')
-            .append(key)
-            .append("\":")
-            .append(if (value == null) "null" else jsonQuote(value))
-    }
-
-    private fun appendNumberField(
-        sb: StringBuilder,
-        key: String,
-        value: Double,
-    ) {
-        sb
-            .append(',')
-            .append('"')
-            .append(key)
-            .append("\":")
-            .append(value)
-    }
-
-    private fun appendNullableNumberField(
-        sb: StringBuilder,
-        key: String,
-        value: Double?,
-    ) {
-        sb
-            .append(',')
-            .append('"')
-            .append(key)
-            .append("\":")
-            .append(value ?: "null")
-    }
-
-    private fun jsonQuote(value: String): String {
-        val sb = StringBuilder(value.length + 2)
-        sb.append('"')
-        for (c in value) {
-            when (c) {
-                '"' -> sb.append("\\\"")
-                '\\' -> sb.append("\\\\")
-                '\n' -> sb.append("\\n")
-                '\r' -> sb.append("\\r")
-                '\t' -> sb.append("\\t")
-                else -> if (c.code < 0x20) sb.append("\\u%04x".format(c.code)) else sb.append(c)
+        val sb = StringBuilder("{")
+        JsonObjectWriter(sb).apply {
+            string("id", element.id)
+            string("type", element.type)
+            number("x", element.x)
+            number("y", element.y)
+            number("width", element.width)
+            number("height", element.height)
+            number("startX", element.startX)
+            number("startY", element.startY)
+            number("endX", element.endX)
+            number("endY", element.endY)
+            string("startElementId", element.startElementId)
+            string("endElementId", element.endElementId)
+            number("rotation", element.rotation)
+            obj("style") {
+                string("color", element.style.color.id)
+                number("opacity", element.style.opacity)
+                string("fill", element.style.fill.id)
+                string("dash", element.style.dash.id)
+                string("size", element.style.size.id)
             }
         }
-        sb.append('"')
-        return sb.toString()
+        return sb.append('}').toString()
     }
 
     /**
@@ -159,27 +90,41 @@ object CanvasJson {
         }
     }
 
-    private fun elementFromJson(obj: JsonValue.Obj): Element {
-        fun str(key: String): String? = (obj.entries[key] as? JsonValue.Str)?.value
-
-        fun num(key: String): Double? = (obj.entries[key] as? JsonValue.Num)?.value
-        return Element(
-            id = str("id") ?: throw IllegalArgumentException("missing id"),
-            type = str("type") ?: throw IllegalArgumentException("missing type"),
-            x = num("x") ?: 0.0,
-            y = num("y") ?: 0.0,
-            width = num("width") ?: 0.0,
-            height = num("height") ?: 0.0,
+    private fun elementFromJson(obj: JsonValue.Obj): Element =
+        Element(
+            id = obj.string("id") ?: throw IllegalArgumentException("missing id"),
+            type = obj.string("type") ?: throw IllegalArgumentException("missing type"),
+            x = obj.number("x") ?: 0.0,
+            y = obj.number("y") ?: 0.0,
+            width = obj.number("width") ?: 0.0,
+            height = obj.number("height") ?: 0.0,
             // Absent in canvases saved before rotation existed — those load unrotated.
-            rotation = num("rotation") ?: 0.0,
-            startX = num("startX"),
-            startY = num("startY"),
-            endX = num("endX"),
-            endY = num("endY"),
-            startElementId = str("startElementId"),
-            endElementId = str("endElementId"),
+            rotation = obj.number("rotation") ?: 0.0,
+            startX = obj.number("startX"),
+            startY = obj.number("startY"),
+            endX = obj.number("endX"),
+            endY = obj.number("endY"),
+            startElementId = obj.string("startElementId"),
+            endElementId = obj.string("endElementId"),
+            style = styleFromJson(obj.entries["style"] as? JsonValue.Obj),
+        )
+
+    /** Absent in canvases saved before styles existed, which keep their original look; unknown ids fall back the same way. */
+    private fun styleFromJson(obj: JsonValue.Obj?): ShapeStyle {
+        val legacy = ShapeStyle.LEGACY
+        if (obj == null) return legacy
+        return ShapeStyle(
+            color = StyleColor.entries.byId(obj.string("color"), legacy.color),
+            opacity = obj.number("opacity")?.coerceIn(ShapeStyle.MIN_OPACITY, 1.0) ?: legacy.opacity,
+            fill = FillStyle.entries.byId(obj.string("fill"), legacy.fill),
+            dash = DashStyle.entries.byId(obj.string("dash"), legacy.dash),
+            size = SizeStyle.entries.byId(obj.string("size"), legacy.size),
         )
     }
+
+    private fun JsonValue.Obj.string(key: String): String? = (entries[key] as? JsonValue.Str)?.value
+
+    private fun JsonValue.Obj.number(key: String): Double? = (entries[key] as? JsonValue.Num)?.value
 
     /** Minimal JSON value tree — only what [deserializeElements] needs to walk. */
     private sealed class JsonValue {
@@ -392,5 +337,63 @@ object CanvasJson {
             val NUMBER_SYMBOL_CHARS = charArrayOf('.', 'e', 'E', '+', '-')
             const val END_OF_INPUT = ' '
         }
+    }
+}
+
+/** Writes one JSON object's fields, comma-separated, into [sb]; the caller writes the object's braces. */
+private class JsonObjectWriter(
+    private val sb: StringBuilder,
+) {
+    private var first = true
+
+    fun string(
+        key: String,
+        value: String?,
+    ) = field(key, if (value == null) "null" else quote(value))
+
+    fun number(
+        key: String,
+        value: Double?,
+    ) = field(key, if (value == null) "null" else value.toString())
+
+    fun obj(
+        key: String,
+        write: JsonObjectWriter.() -> Unit,
+    ) {
+        name(key)
+        sb.append('{')
+        JsonObjectWriter(sb).write()
+        sb.append('}')
+    }
+
+    private fun field(
+        key: String,
+        raw: String,
+    ) {
+        name(key)
+        sb.append(raw)
+    }
+
+    private fun name(key: String) {
+        if (!first) sb.append(',')
+        first = false
+        sb.append('"').append(key).append("\":")
+    }
+
+    private fun quote(value: String): String {
+        val quoted = StringBuilder(value.length + 2)
+        quoted.append('"')
+        for (c in value) {
+            when (c) {
+                '"' -> quoted.append("\\\"")
+                '\\' -> quoted.append("\\\\")
+                '\n' -> quoted.append("\\n")
+                '\r' -> quoted.append("\\r")
+                '\t' -> quoted.append("\\t")
+                else -> if (c.code < 0x20) quoted.append("\\u%04x".format(c.code)) else quoted.append(c)
+            }
+        }
+        quoted.append('"')
+        return quoted.toString()
     }
 }

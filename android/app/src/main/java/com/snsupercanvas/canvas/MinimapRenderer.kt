@@ -6,7 +6,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 
 /**
- * Draws SuperCanvas's top-right minimap: every element as a thin outline plus
+ * Draws SuperCanvas's bottom-right minimap (the style panel owns the top
+ * right; the toolbar and action bar are centered): every element as a thin outline plus
  * a shaded box for the currently visible area, both fitted via
  * [ViewTransforms.computeMinimapTransform] (content ∪ viewport, so the box
  * never falls outside the minimap however far the user has panned). The box
@@ -62,6 +63,7 @@ internal class MinimapRenderer {
         if (viewWidth == 0 || viewHeight == 0) return
         val boxHeight = (WIDTH_PX * viewHeight / viewWidth).coerceIn(MIN_HEIGHT_PX, MAX_HEIGHT_PX)
         val boxLeft = viewWidth - MARGIN_PX - WIDTH_PX
+        val boxTop = viewHeight - MARGIN_PX - boxHeight
         val visible =
             WorldRect(
                 left = state.viewportX,
@@ -79,7 +81,7 @@ internal class MinimapRenderer {
             )
 
         canvas.save()
-        canvas.translate(boxLeft, MARGIN_PX)
+        canvas.translate(boxLeft, boxTop)
         canvas.drawRect(0f, 0f, WIDTH_PX, boxHeight, backgroundPaint)
         canvas.clipRect(0f, 0f, WIDTH_PX, boxHeight)
         val viewportBounds = toScreen(visible, fit)
@@ -87,7 +89,7 @@ internal class MinimapRenderer {
         for (element in state.elements) drawElement(canvas, element, state.elements, fit)
         canvas.drawRect(viewportBounds, viewportPaint)
         canvas.restore()
-        canvas.drawRect(boxLeft, MARGIN_PX, boxLeft + WIDTH_PX, MARGIN_PX + boxHeight, borderPaint)
+        canvas.drawRect(boxLeft, boxTop, boxLeft + WIDTH_PX, boxTop + boxHeight, borderPaint)
     }
 
     private fun toScreen(

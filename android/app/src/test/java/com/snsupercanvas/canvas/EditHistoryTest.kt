@@ -51,4 +51,14 @@ class EditHistoryTest {
         history.commit(one)
         assertEquals(three, history.undo())
     }
+
+    @Test
+    fun `canUndo and canRedo say whether a step is available`() {
+        val history = EditHistory()
+        assertEquals(listOf(false, false), listOf(history.canUndo, history.canRedo))
+        history.commit(one)
+        assertEquals(listOf(true, false), listOf(history.canUndo, history.canRedo))
+        history.undo()
+        assertEquals(listOf(false, true), listOf(history.canUndo, history.canRedo))
+    }
 }

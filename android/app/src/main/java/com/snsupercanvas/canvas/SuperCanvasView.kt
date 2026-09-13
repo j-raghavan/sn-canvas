@@ -37,6 +37,8 @@ import kotlin.math.hypot
 class SuperCanvasView(
     context: Context,
     private val registry: ActiveViewRegistry<SuperCanvasView>,
+    /** Receives what the action bar and style panel should show, whenever it changes (FR18/FR19). */
+    private val uiStateListener: (SuperCanvasView, CanvasUiState) -> Unit = { _, _ -> },
 ) : View(context) {
     /** The one gesture a touch sequence performs: decided on ACTION_DOWN, finished on ACTION_UP. */
     private sealed interface Gesture {
@@ -66,6 +68,14 @@ class SuperCanvasView(
     private val renderer = CanvasRenderer()
     private var toolMode = CanvasTools.SELECT
     private var selectedElementId: String? = null
+        set(value) {
+            field = value
+            publishUiState()
+        }
+
+    // The style new elements get (FR19); the style panel changes it through setStyle.
+    private var currentStyle = ShapeStyle.DEFAULT
+    private var lastUiState: CanvasUiState? = null
     private var gesture: Gesture? = null
     private var isFitPending = false
     private val arbiter = TouchArbiter()
@@ -101,6 +111,7 @@ class SuperCanvasView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         registry.attach(this)
+        publishUiState()
     }
 
     override fun onDetachedFromWindow() {
@@ -160,8 +171,67 @@ class SuperCanvasView(
         history.redo()?.let(::showElements)
     }
 
-    /** The note thumbnail of [elements] (FR12). Safe off the UI thread, see [CanvasRenderer.renderThumbnail]. */
-    fun renderThumbnailBitmap(elements: List<Element>): Bitmap = renderer.renderThumbnail(elements)
+    /** Duplicates the selected element, a little down and to the right, and selects the copy (FR18). */
+    fun duplicateSelected() {
+        val id = selectedElementId ?: return
+        val copyId = generateElementId()
+        commitElements(CanvasActions.duplicate(state, id, copyId, DUPLICATE_OFFSET_PX / state.zoom).elements)
+        selectedElementId = copyId
+    }
+
+    // Not bringToFront/sendToBack: View already has a bringToFront of its own.
+    fun bringSelectedToFront() = editSelected { CanvasActions.bringToFront(state, it) }
+
+    fun sendSelectedToBack() = editSelected { CanvasActions.sendToBack(state, it) }
+
+    /** Frames all content in the view. */
+    fun zoomToFit() = fitToContent()
+
+    /** Returns to 100% zoom about the view's center. */
+    fun zoomTo100() {
+        val center = toWorld(width / 2f, height / 2f)
+        state = SuperCanvasCore.zoomTo(state, 1.0 / state.zoom, center.x, center.y)
+        invalidate()
+    }
+
+    /**
+     * Sets one style property (FR19), such as "color" to "red": for elements
+     * drawn from now on, and, when an element is selected, on it too, as one
+     * undoable step. Only that property changes; the rest of its style stays.
+     */
+    fun setStyle(
+        property: String,
+        value: String,
+    ) {
+        currentStyle = currentStyle.with(property, value)
+        val selected = selectedElementId?.let { id -> state.elements.find { it.id == id } }
+        if (selected != null) {
+            val restyled = selected.style.with(property, value)
+            if (restyled != selected.style) commitElements(CanvasActions.restyle(state, selected.id, restyled).elements)
+        }
+        publishUiState()
+    }
+
+    /**
+     * The note thumbnail of [elements] (FR12), in true colour. It runs off the UI
+     * thread, so it uses a renderer of its own rather than the live one.
+     */
+    fun renderThumbnailBitmap(elements: List<Element>): Bitmap = CanvasRenderer().renderThumbnail(elements)
+
+    /** Applies [edit] to the selected element as one undoable step; a no-op with nothing selected. */
+    private inline fun editSelected(edit: (String) -> CanvasState) {
+        val id = selectedElementId ?: return
+        commitElements(edit(id).elements)
+    }
+
+    /** Tells the UI what the action bar and style panel should show, when that has changed. */
+    private fun publishUiState() {
+        val selected = selectedElementId?.let { id -> state.elements.find { it.id == id } }
+        val uiState = CanvasUiState(history.canUndo, history.canRedo, selected != null, selected?.style ?: currentStyle)
+        if (uiState == lastUiState) return
+        lastUiState = uiState
+        uiStateListener(this, uiState)
+    }
 
     /** Shows [elements] as they are (a load, or an undo/redo step), clearing the selection. */
     private fun showElements(elements: List<Element>) {
@@ -174,6 +244,7 @@ class SuperCanvasView(
     private fun commitElements(elements: List<Element>) {
         state = state.copy(elements = elements)
         history.commit(elements)
+        publishUiState()
         invalidate()
     }
 
@@ -346,7 +417,7 @@ class SuperCanvasView(
             } else {
                 SuperCanvasCore.boxFromDrag(generateElementId(), toolMode, start, end)
             }
-        commitElements(SuperCanvasCore.insertElement(state, element).elements)
+        commitElements(SuperCanvasCore.insertElement(state, element.copy(style = currentStyle)).elements)
     }
 
     /** Shows the minimap and cancels any pending hide; called on every pan/zoom step. */
@@ -372,7 +443,7 @@ class SuperCanvasView(
         renderer.drawBackground(canvas, width.toFloat(), height.toFloat())
         val elements = elementsForDrawing()
         val transform = state.transform
-        renderer.drawElements(canvas, elements, transform, selectedElementId)
+        renderer.drawElements(canvas, elements, transform, StylePalette.EINK)
         selectedElementId?.let { renderer.drawSelectionHandles(canvas, elements, it, transform) }
         if (gesture == Gesture.DrawShape) renderer.drawDragPreview(canvas, toolMode, downTouch, dragCurrent)
         if (isMinimapVisible) minimapRenderer.draw(canvas, state, width, height)
@@ -388,5 +459,8 @@ class SuperCanvasView(
         const val FIT_PADDING_PX = 96.0
 
         const val LOG_TAG = "SuperCanvas"
+
+        // How far a duplicate lands from its original, in screen pixels.
+        const val DUPLICATE_OFFSET_PX = 16.0
     }
 }

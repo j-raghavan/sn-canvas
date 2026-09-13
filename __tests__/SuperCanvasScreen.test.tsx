@@ -1,7 +1,8 @@
 /**
- * The screen with an injected fake session and button source: the tool
- * palette and its toolMode prop, native command dispatch, and how taps and
- * button presses map onto the session.
+ * The screen with an injected fake session and button source: the toolbar
+ * and its toolMode prop, the action bar and style panel following the
+ * canvas-state event, native command dispatch, and how taps and button
+ * presses map onto the session.
  *
  * `react-native` is mocked by picking only the named exports the screen
  * uses off the real module: spreading the whole index would evaluate every
@@ -32,12 +33,12 @@ jest.mock('react-native', () => {
 import React from 'react';
 import ReactTestRenderer, {act} from 'react-test-renderer';
 import type {CanvasSession} from '../src/application/canvasSession';
-import SuperCanvasScreen, {type ButtonEventSource} from '../src/ui/SuperCanvasScreen';
+import SuperCanvasScreen, {NOTICE_MS, type ButtonEventSource} from '../src/ui/SuperCanvasScreen';
 import {SuperCanvasNativeView} from '../src/ui/nativeCanvasView';
 
 const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   open: jest.fn().mockResolvedValue(undefined),
-  saveToNote: jest.fn().mockResolvedValue(undefined),
+  saveToNote: jest.fn().mockResolvedValue(true),
   close: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
 });
@@ -66,8 +67,15 @@ const render = async (session = createFakeSession(), buttons = createFakeButtons
       renderer.root.findByProps({testID}).props.onPress();
     });
   };
+  const emitCanvasState = async (payload: unknown) => {
+    await act(async () => {
+      renderer.root.findByType(SuperCanvasNativeView).props.onCanvasState({nativeEvent: payload});
+    });
+  };
   const isActive = (tool: string) => Boolean(renderer.root.findByProps({testID: `supercanvas-tool-${tool}`}).props.style[1]);
-  return {renderer: renderer!, session, buttons, press, isActive};
+  const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
+  const shows = (text: string) => renderer.root.findAllByProps({children: text}).length > 0;
+  return {renderer: renderer!, session, buttons, press, emitCanvasState, isActive, isDisabled, shows};
 };
 
 beforeEach(() => {
@@ -91,22 +99,67 @@ describe('toolbar', () => {
       expect(renderer.root.findByType(SuperCanvasNativeView).props.toolMode).toBe(tool);
     },
   );
+});
+
+describe('action bar', () => {
+  const ACTIONS = ['supercanvas-undo', 'supercanvas-redo', 'supercanvas-delete', 'supercanvas-duplicate'];
+
+  test('its actions stay disabled until the canvas reports they apply', async () => {
+    const {emitCanvasState, isDisabled} = await render();
+    expect(ACTIONS.map(isDisabled)).toEqual([true, true, true, true]);
+    await emitCanvasState({canUndo: true, canRedo: false, hasSelection: true});
+    expect(ACTIONS.map(isDisabled)).toEqual([false, true, false, false]);
+  });
 
   test.each([
-    ['supercanvas-delete', 'deleteSelected'],
     ['supercanvas-undo', 'undo'],
     ['supercanvas-redo', 'redo'],
+    ['supercanvas-delete', 'deleteSelected'],
+    ['supercanvas-duplicate', 'duplicateSelected'],
   ])('%s dispatches %s to the mounted canvas view', async (testID, command) => {
-    const {press} = await render();
+    const {press, emitCanvasState} = await render();
+    await emitCanvasState({canUndo: true, canRedo: true, hasSelection: true});
     await press(testID);
     expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, command, []);
+  });
+
+  test('the more menu dispatches its choice', async () => {
+    const {press} = await render();
+    await press('supercanvas-more');
+    await press('supercanvas-menu-zoomToFit');
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'zoomToFit', []);
   });
 
   test('commands are skipped while the native view has no handle', async () => {
     mockFindNodeHandle.mockReturnValue(null);
     const {press} = await render();
-    await press('supercanvas-undo');
+    await press('supercanvas-more');
+    await press('supercanvas-menu-zoomTo100');
     expect(mockDispatchViewManagerCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe('style panel', () => {
+  test('shows the style the canvas reports', async () => {
+    const {renderer, press, emitCanvasState, shows} = await render();
+    await press('style-toggle');
+    await emitCanvasState({style: {color: 'red', opacity: 0.5, fill: 'semi', dash: 'dotted', size: 'xl'}});
+    const redSwatch = renderer.root.find(node => node.props.testID === 'style-color-red' && typeof node.type === 'string');
+    expect(redSwatch.props.accessibilityState.selected).toBe(true);
+    expect(shows('Red')).toBe(true);
+  });
+
+  test('a change goes to the canvas as setStyle', async () => {
+    const {press} = await render();
+    await press('style-toggle');
+    await press('style-size-l');
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'setStyle', ['size', 'l']);
+  });
+
+  test('swatches fall back to true colour when the canvas exports no e-ink grays', async () => {
+    const {renderer, press} = await render();
+    await press('style-toggle');
+    expect(JSON.stringify(renderer.toJSON())).toContain('#e03131');
   });
 });
 
@@ -137,11 +190,33 @@ describe('session', () => {
     expect(createSession).toHaveBeenCalledTimes(1);
   });
 
-  test('Save to Note and Close go to the session', async () => {
-    const {session, press} = await render();
+  test('Save to Note confirms an inserted thumbnail, and the notice then clears', async () => {
+    jest.useFakeTimers();
+    try {
+      const {press, shows} = await render();
+      await press('supercanvas-save-to-note');
+      expect(shows('Added to note')).toBe(true);
+      await act(async () => {
+        jest.advanceTimersByTime(NOTICE_MS);
+      });
+      expect(shows('Added to note')).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('Save to Note shows nothing when no thumbnail was inserted', async () => {
+    const session = createFakeSession();
+    session.saveToNote.mockResolvedValue(false);
+    const {press, shows} = await render(session);
     await press('supercanvas-save-to-note');
-    await press('supercanvas-close');
     expect(session.saveToNote).toHaveBeenCalledTimes(1);
+    expect(shows('Added to note')).toBe(false);
+  });
+
+  test('Close goes to the session', async () => {
+    const {session, press} = await render();
+    await press('supercanvas-close');
     expect(session.close).toHaveBeenCalledTimes(1);
   });
 });

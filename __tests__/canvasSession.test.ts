@@ -211,3 +211,23 @@ test('an operation that throws is logged and does not block the ones after it', 
   expect(logger.lines).toContain('error [SUPERCANVAS] Error: boom');
   expect(host.closeCount).toBe(1);
 });
+
+describe('saveToNote result', () => {
+  test('is true once the thumbnail is inserted, false when it is not', async () => {
+    const {host, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    expect(await session.saveToNote()).toBe(true);
+    host.insertSucceeds = false;
+    expect(await session.saveToNote()).toBe(false);
+  });
+
+  test('is false for a tap ignored while one runs, and without a plugin directory', async () => {
+    const {session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    expect(await Promise.all([session.saveToNote(), session.saveToNote()])).toEqual([true, false]);
+    const {session: noDirSession, host: noDirHost} = setup();
+    noDirHost.dir = null;
+    expect(await noDirSession.saveToNote()).toBe(false);
+  });
+});
+

@@ -48,8 +48,8 @@ export type CanvasSessionDeps = {
 export type CanvasSession = {
   /** Shows the canvas a button press asks for; null (no press seen yet) means the scratch canvas. */
   open: (buttonId: number | null) => Promise<void>;
-  /** Inserts the canvas into the note as a thumbnail that links back to it. Taps while one runs are ignored. */
-  saveToNote: () => Promise<void>;
+  /** Inserts the canvas into the note as a thumbnail that links back to it; true once inserted. Taps while one runs are ignored. */
+  saveToNote: () => Promise<boolean>;
   /** Saves the canvas, then closes the plugin view whether or not the save worked. */
   close: () => Promise<void>;
   currentCanvasId: () => string;
@@ -112,10 +112,10 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
       logger.log(`${TAG} button=${buttonId} opened canvas=${canvasId}`);
     });
 
-  const linkIntoNote = async (): Promise<void> => {
+  const linkIntoNote = async (): Promise<boolean> => {
     const dir = await resolvePluginDir();
     if (!dir) {
-      return;
+      return false;
     }
     // The scratch canvas gets an id of its own; a linked canvas re-links under the id it has.
     const fromScratch = canvasId === DEFAULT_CANVAS_ID;
@@ -130,7 +130,7 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
         await store.remove(canvasFile);
         await store.remove(thumbnail);
       }
-      return;
+      return false;
     }
     if (fromScratch) {
       // The scratch content lives on as the linked canvas, so the next sidebar open starts blank.
@@ -138,21 +138,23 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
       await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID));
     }
     logger.log(`${TAG}[LINK] inserted thumbnail for canvas=${linkedId}`);
+    return true;
   };
 
-  const saveToNote = (): Promise<void> => {
+  const saveToNote = (): Promise<boolean> => {
     if (saveToNotePending) {
       logger.log(`${TAG}[LINK] save to note already running; tap ignored`);
-      return tail;
+      return Promise.resolve(false);
     }
     saveToNotePending = true;
+    let inserted = false;
     return serially(async () => {
       try {
-        await linkIntoNote();
+        inserted = await linkIntoNote();
       } finally {
         saveToNotePending = false;
       }
-    });
+    }).then(() => inserted);
   };
 
   const close = (): Promise<void> =>

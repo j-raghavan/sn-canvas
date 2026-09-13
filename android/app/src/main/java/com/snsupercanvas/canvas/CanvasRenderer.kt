@@ -9,32 +9,19 @@ import android.graphics.PointF
 import android.graphics.RectF
 
 /**
- * Draws canvas content through a [ViewTransform]: the elements, selection
- * handles and drag-to-draw preview of [SuperCanvasView]'s live frame, and the
- * same elements into a bitmap for the note thumbnail (FR12). One draw path
- * serves both, so a thumbnail always looks like the canvas. This class owns
- * only paints and pixels; *what* to draw (live previews, the selection) is the
- * view's call.
+ * Draws canvas content through a [ViewTransform]: the elements, each in its
+ * own style via [ElementPainter], the selection frame and handles, and the
+ * drag-to-draw preview for [SuperCanvasView]'s live frame, plus the same
+ * elements into a bitmap for the note thumbnail (FR12). One draw path serves
+ * both, so a thumbnail always looks like the canvas; the live view paints
+ * through the e-ink palette and the thumbnail in true colour (FR19). This
+ * class owns only paints and pixels; *what* to draw is the view's call.
  *
- * [renderThumbnail] runs off the UI thread, possibly alongside a live frame;
- * that is safe because both only read the shared paints.
+ * A renderer draws on one thread at a time; the thumbnail, which renders off
+ * the UI thread, gets a renderer of its own.
  */
 internal class CanvasRenderer {
-    private val elementPaint =
-        Paint().apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
-            color = Color.DKGRAY
-            isAntiAlias = true
-        }
-
-    private val selectedPaint =
-        Paint().apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 5f
-            color = Color.BLACK
-            isAntiAlias = true
-        }
+    private val painter = ElementPainter()
 
     private val previewPaint =
         Paint().apply {
@@ -57,6 +44,14 @@ internal class CanvasRenderer {
             color = Color.BLACK
         }
 
+    private val selectionFramePaint =
+        Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            color = Color.BLACK
+            isAntiAlias = true
+        }
+
     private val rotateStemPaint =
         Paint().apply {
             style = Paint.Style.STROKE
@@ -73,24 +68,21 @@ internal class CanvasRenderer {
         canvas.drawRect(0f, 0f, width, height, backgroundPaint)
     }
 
-    /** Draws [elements] in z-order, outlining [selectedId] (null for none, as in a thumbnail) more heavily. */
+    /** Draws [elements] in z-order, each in its own style through [palette]. */
     fun drawElements(
         canvas: Canvas,
         elements: List<Element>,
         transform: ViewTransform,
-        selectedId: String?,
+        palette: StylePalette,
     ) {
-        for (element in elements) {
-            val paint = if (element.id == selectedId) selectedPaint else elementPaint
-            if (element.hasEndpoints()) {
-                drawConnector(canvas, element, elements, transform, paint)
-            } else {
-                drawRotatedBox(canvas, element, screenBounds(element, transform), paint)
-            }
-        }
+        for (element in elements) painter.draw(canvas, element, elements, transform, palette)
     }
 
-    /** The selected element's handles (FR9): two endpoint handles for a line/arrow; four corners plus rotate for a shape. */
+    /**
+     * The selected element's frame and handles (FR9): two endpoint handles for a
+     * line or arrow; for a shape, a frame around it, four corner handles and the
+     * rotate handle.
+     */
     fun drawSelectionHandles(
         canvas: Canvas,
         elements: List<Element>,
@@ -103,6 +95,8 @@ internal class CanvasRenderer {
             drawHandle(canvas, screenPoint(start, transform))
             drawHandle(canvas, screenPoint(end, transform))
         } else {
+            val bounds = screenBounds(element, transform)
+            withRotation(canvas, element, bounds) { canvas.drawRect(bounds, selectionFramePaint) }
             for (corner in SuperCanvasCore.cornerPoints(element)) drawHandle(canvas, screenPoint(corner, transform))
             drawRotateHandle(canvas, element, transform)
         }
@@ -117,7 +111,7 @@ internal class CanvasRenderer {
     ) {
         if (CanvasTools.isConnector(tool)) {
             canvas.drawLine(from.x, from.y, to.x, to.y, previewPaint)
-            if (tool == CanvasTools.ARROW) drawArrowhead(canvas, from, to, previewPaint)
+            if (tool == CanvasTools.ARROW) drawArrowhead(canvas, from, to, previewPaint, PREVIEW_ARROWHEAD_PX)
             return
         }
         val bounds = RectF(minOf(from.x, to.x), minOf(from.y, to.y), maxOf(from.x, to.x), maxOf(from.y, to.y))
@@ -125,10 +119,10 @@ internal class CanvasRenderer {
     }
 
     /**
-     * Renders [elements] into a fresh [sizePx]-square bitmap, fitted by
-     * [ViewTransforms.computeThumbnailTransform]: the image "Save to Note"
-     * embeds (FR12). No selection and no preview, since a saved image has no
-     * live gesture to show. It draws only into its own bitmap, never an
+     * Renders [elements] into a fresh [sizePx]-square bitmap in true colour,
+     * fitted by [ViewTransforms.computeThumbnailTransform]: the image "Save to
+     * Note" embeds (FR12). No selection and no preview, since a saved image has
+     * no live gesture to show. It draws only into its own bitmap, never an
      * attached surface, which is what makes it safe off the UI thread.
      */
     fun renderThumbnail(
@@ -139,38 +133,8 @@ internal class CanvasRenderer {
         val canvas = Canvas(bitmap)
         drawBackground(canvas, sizePx.toFloat(), sizePx.toFloat())
         val fit = ViewTransforms.computeThumbnailTransform(elements, sizePx.toDouble(), THUMBNAIL_PADDING_PX)
-        drawElements(canvas, elements, fit, selectedId = null)
+        drawElements(canvas, elements, fit, StylePalette.TRUE_COLOR)
         return bitmap
-    }
-
-    private fun screenPoint(
-        world: Point,
-        transform: ViewTransform,
-    ): PointF = PointF(transform.screenX(world.x).toFloat(), transform.screenY(world.y).toFloat())
-
-    private fun screenBounds(
-        element: Element,
-        transform: ViewTransform,
-    ): RectF =
-        RectF(
-            transform.screenX(element.x).toFloat(),
-            transform.screenY(element.y).toFloat(),
-            transform.screenX(element.x + element.width).toFloat(),
-            transform.screenY(element.y + element.height).toFloat(),
-        )
-
-    private fun drawConnector(
-        canvas: Canvas,
-        element: Element,
-        elements: List<Element>,
-        transform: ViewTransform,
-        paint: Paint,
-    ) {
-        val (startWorld, endWorld) = SuperCanvasCore.resolveArrowEndpoints(element, elements)
-        val start = screenPoint(startWorld, transform)
-        val end = screenPoint(endWorld, transform)
-        canvas.drawLine(start.x, start.y, end.x, end.y, paint)
-        if (element.type == CanvasTools.ARROW) drawArrowhead(canvas, start, end, paint)
     }
 
     private fun drawHandle(
@@ -193,11 +157,12 @@ internal class CanvasRenderer {
         drawRotateHandleGlyph(canvas, handle.x, handle.y, ROTATE_HANDLE_RADIUS_PX)
     }
 
-    companion object {
+    private companion object {
         /** The note thumbnail's size (FR12): a square PNG, independent of the live view's size. */
-        private const val THUMBNAIL_SIZE_PX = 400
-        private const val THUMBNAIL_PADDING_PX = 24.0
-        private const val HANDLE_DRAW_SIZE_PX = 24f
-        private const val ROTATE_HANDLE_RADIUS_PX = 22f
+        const val THUMBNAIL_SIZE_PX = 400
+        const val THUMBNAIL_PADDING_PX = 24.0
+        const val HANDLE_DRAW_SIZE_PX = 24f
+        const val ROTATE_HANDLE_RADIUS_PX = 22f
+        const val PREVIEW_ARROWHEAD_PX = 28f
     }
 }

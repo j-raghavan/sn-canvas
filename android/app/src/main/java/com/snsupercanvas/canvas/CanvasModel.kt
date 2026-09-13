@@ -118,6 +118,8 @@ data class Element(
     // only — lines/arrows already point any direction via their endpoints. x/y/width/
     // height always describe the *unrotated* box; see [toLocal]/[toWorld].
     val rotation: Double = 0.0,
+    // FR19. The default is the look elements had before styles existed.
+    val style: ShapeStyle = ShapeStyle.LEGACY,
 ) {
     init {
         require(rotation.isFinite()) { "rotation must be finite" }

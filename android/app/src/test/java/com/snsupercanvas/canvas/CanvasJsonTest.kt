@@ -252,4 +252,33 @@ class CanvasJsonTest {
             assertEquals(json, emptyList<Element>(), CanvasJson.deserializeElements(json))
         }
     }
+
+    // --- styles (FR19) -------------------------------------------------------------------
+
+    @Test
+    fun `styles survive a save and load`() {
+        val style = ShapeStyle(StyleColor.LIGHT_BLUE, 0.5, FillStyle.PATTERN, DashStyle.DOTTED, SizeStyle.XL)
+        val element = Element(id = "s", type = "ellipse", width = 10.0, height = 10.0, style = style)
+        assertEquals(listOf(element), CanvasJson.deserializeElements(CanvasJson.serializeElements(listOf(element))))
+    }
+
+    @Test
+    fun `canvases saved before styles existed load with their original look`() {
+        val json = """{"version":1,"elements":[{"id":"old","type":"rectangle","width":5,"height":5}]}"""
+        assertEquals(ShapeStyle.LEGACY, CanvasJson.deserializeElements(json).single().style)
+    }
+
+    @Test
+    fun `unknown style ids fall back and opacity is clamped`() {
+        val json =
+            """{"version":1,"elements":[{"id":"s","type":"rectangle","width":5,"height":5,""" +
+                """"style":{"color":"magenta","opacity":9,"fill":"glitter","dash":"wavy","size":"xxl"}}]}"""
+        assertEquals(ShapeStyle.LEGACY, CanvasJson.deserializeElements(json).single().style)
+    }
+
+    @Test
+    fun `a style without an opacity loads opaque`() {
+        val json = """{"version":1,"elements":[{"id":"s","type":"rectangle","width":5,"height":5,"style":{"color":"red"}}]}"""
+        assertEquals(ShapeStyle.LEGACY.copy(color = StyleColor.RED), CanvasJson.deserializeElements(json).single().style)
+    }
 }

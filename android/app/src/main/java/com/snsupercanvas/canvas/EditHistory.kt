@@ -11,6 +11,10 @@ class EditHistory(
     private val snapshots = mutableListOf(initial)
     private var index = 0
 
+    val canUndo: Boolean get() = index > 0
+
+    val canRedo: Boolean get() = index < snapshots.lastIndex
+
     /** Starts a fresh history at [elements], e.g. after a canvas is loaded. */
     fun reset(elements: List<Element>) {
         snapshots.clear()
@@ -27,14 +31,14 @@ class EditHistory(
 
     /** The previous snapshot, or null when there is nothing to undo. */
     fun undo(): List<Element>? {
-        if (index == 0) return null
+        if (!canUndo) return null
         index--
         return snapshots[index]
     }
 
     /** The next snapshot, or null when there is nothing to redo. */
     fun redo(): List<Element>? {
-        if (index == snapshots.lastIndex) return null
+        if (!canRedo) return null
         index++
         return snapshots[index]
     }
