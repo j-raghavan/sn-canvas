@@ -8,7 +8,7 @@ import android.graphics.RectF
 /**
  * Draws SuperCanvas's top-right minimap: every element as a thin outline plus
  * a shaded box for the currently visible area, both fitted via
- * [SuperCanvasCore.computeMinimapTransform] (content ∪ viewport, so the box
+ * [ViewTransforms.computeMinimapTransform] (content ∪ viewport, so the box
  * never falls outside the minimap however far the user has panned). The box
  * matches the view's aspect ratio so the viewport rectangle reads true.
  *
@@ -70,7 +70,7 @@ internal class MinimapRenderer {
                 bottom = state.viewportY + viewHeight / state.zoom,
             )
         val fit =
-            SuperCanvasCore.computeMinimapTransform(
+            ViewTransforms.computeMinimapTransform(
                 state.elements,
                 visible,
                 WIDTH_PX.toDouble(),
@@ -92,28 +92,28 @@ internal class MinimapRenderer {
 
     private fun toScreen(
         rect: WorldRect,
-        fit: ThumbnailTransform,
+        fit: ViewTransform,
     ): RectF =
         RectF(
-            ((rect.left - fit.viewportX) * fit.zoom).toFloat(),
-            ((rect.top - fit.viewportY) * fit.zoom).toFloat(),
-            ((rect.right - fit.viewportX) * fit.zoom).toFloat(),
-            ((rect.bottom - fit.viewportY) * fit.zoom).toFloat(),
+            fit.screenX(rect.left).toFloat(),
+            fit.screenY(rect.top).toFloat(),
+            fit.screenX(rect.right).toFloat(),
+            fit.screenY(rect.bottom).toFloat(),
         )
 
     private fun drawElement(
         canvas: Canvas,
         element: Element,
         elements: List<Element>,
-        fit: ThumbnailTransform,
+        fit: ViewTransform,
     ) {
         if (element.hasEndpoints()) {
             val (start, end) = SuperCanvasCore.resolveArrowEndpoints(element, elements)
             canvas.drawLine(
-                ((start.x - fit.viewportX) * fit.zoom).toFloat(),
-                ((start.y - fit.viewportY) * fit.zoom).toFloat(),
-                ((end.x - fit.viewportX) * fit.zoom).toFloat(),
-                ((end.y - fit.viewportY) * fit.zoom).toFloat(),
+                fit.screenX(start.x).toFloat(),
+                fit.screenY(start.y).toFloat(),
+                fit.screenX(end.x).toFloat(),
+                fit.screenY(end.y).toFloat(),
                 elementPaint,
             )
             return

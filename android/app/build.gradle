@@ -240,11 +240,12 @@ dependencies {
 // sources are boilerplate with no unit-testable logic (they require Android
 // instrumentation, not plain JUnit), so they are excluded from the REPORT
 // (reports.filters — what counts toward the percentage), not just
-// instrumentation. SuperCanvasView/SuperCanvasViewManager/SuperCanvasModule
-// are thin RN-bridge/rendering adapters exercised by manual/on-device
-// testing per spec/SuperCanvas-PRD.md §9 — only SuperCanvasCore (the pure
-// math) is held to the line/branch coverage bound below, mirroring the
-// sn-tables scaffold this was copied from.
+// instrumentation. SuperCanvasView/SuperCanvasViewManager/SuperCanvasModule/
+// SuperCanvasPackage are thin RN-bridge adapters and the renderers only draw
+// with Android Canvas; all are exercised on-device (spec/SuperCanvas-PRD.md §9).
+// Everything with logic (the model, SuperCanvasCore, ViewTransforms, CanvasJson,
+// EditHistory, ActiveViewRegistry) is plain Kotlin, held to the line/branch
+// coverage bound below.
 kover {
     reports {
         filters {
@@ -257,8 +258,9 @@ kover {
                     "com.snsupercanvas.canvas.SuperCanvasViewManager*",
                     "com.snsupercanvas.canvas.SuperCanvasModule*",
                     "com.snsupercanvas.canvas.SuperCanvasPackage*",
-                    // Android Canvas drawing only — same reason as SuperCanvasView; the
-                    // math they draw with (fit/rotation) is covered in SuperCanvasCore.
+                    // Android Canvas drawing only — same reason as SuperCanvasView; the math
+                    // they draw with (fit/rotation) is covered in SuperCanvasCore/ViewTransforms.
+                    "com.snsupercanvas.canvas.CanvasRenderer*",
                     "com.snsupercanvas.canvas.MinimapRenderer*",
                     "com.snsupercanvas.canvas.ShapeDrawingKt",
                     // RN autolinking-generated (app:generateAutolinkingPackageList) — not our

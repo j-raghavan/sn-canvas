@@ -10,56 +10,43 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 /**
- * RN bridge for the infrequent, heavier SuperCanvas operations (spec/SuperCanvas-PRD.md
- * §9 — everything that is NOT per-frame gesture/render state, which instead lives in
- * [SuperCanvasView]). Mirrors sn-tables' TableGridModule's style: contains no canvas
- * logic itself, only marshals RN <-> Kotlin (Single Responsibility).
+ * RN bridge for the infrequent file operations on the live canvas: save, load
+ * and thumbnail rendering (PRD §9 — everything that is not per-frame gesture or
+ * render state, which lives in [SuperCanvasView]). It holds no canvas logic of
+ * its own: persistence is [CanvasJson], rendering is the view.
  *
- * Registered manually in MainApplication.kt via [SuperCanvasPackage] (this module
- * lives in the app itself, not an autolinked npm package).
+ * Paths always arrive fully resolved from the JS side (built from the host's
+ * plugin directory); this module never derives storage locations itself. The
+ * live view comes from the injected [registry] (see [SuperCanvasPackage]).
  *
- * v1c implements saveCanvas/loadCanvas (JSON I/O against a fully-resolved path the
- * JS side builds from `PluginManager.getPluginDirPath()` — this module intentionally
- * does not try to independently derive the plugin-private directory itself, see
- * SuperCanvasScreen.tsx). exportPdf/generateThumbnail remain v0 scaffold stubs,
- * deliberately deferred rather than half-built (exportPdf: v1.2 per PRD §13;
- * generateThumbnail: v1d's FR12 sticker/userData reopen mechanism).
- *
- * There is no existing link between this module and the live [SuperCanvasView] (they
- * were built as fully separate classes) — [SuperCanvasView.currentInstance] is the
- * single, simplest bridge for "read the live element list" / "push a loaded list
- * back in", appropriate for a plugin that only ever mounts one canvas view at a time.
+ * Threading: view state is read and written on the UI thread (via `post`) and
+ * file I/O runs on a background thread, so neither races the view nor blocks
+ * the bridge.
  */
 class SuperCanvasModule(
     reactContext: ReactApplicationContext,
+    private val registry: ActiveViewRegistry<SuperCanvasView>,
 ) : ReactContextBaseJavaModule(reactContext) {
     override fun getName(): String = NAME
 
-    /**
-     * Serializes the live canvas's current elements and writes them to [path]
-     * (parent directories created as needed). Reads the view's state on the UI
-     * thread (the only thread that mutates it) before handing the actual file
-     * I/O off to a background thread, so this neither races [SuperCanvasView]'s
-     * own state nor blocks the thread the JS bridge call arrived on.
-     */
+    /** Writes the live canvas's elements to [path] as JSON, creating parent directories as needed. */
     @ReactMethod
     fun saveCanvas(
         path: String,
         promise: Promise,
     ) {
-        val view = SuperCanvasView.currentInstance()
+        val view = registry.current()
         if (view == null) {
-            promise.reject(ERR_NO_ACTIVE_VIEW, "No active SuperCanvasView to save from")
+            promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to save from")
             return
         }
         view.post {
             val elements = view.getState().elements
             Thread {
                 try {
-                    val json = SuperCanvasCore.serializeElements(elements)
                     val file = File(path)
                     file.parentFile?.mkdirs()
-                    file.writeText(json)
+                    file.writeText(CanvasJson.serializeElements(elements))
                     promise.resolve(true)
                 } catch (e: IOException) {
                     promise.reject(ERR_IO, e.message, e)
@@ -69,11 +56,8 @@ class SuperCanvasModule(
     }
 
     /**
-     * Reads [path] (if it exists — a missing file resolves `false`, not an error;
-     * that's just the first-run case) off the calling thread, deserializes it, and
-     * pushes the result into the live canvas view via [SuperCanvasView.setElements]
-     * — dispatched back onto the UI thread via [android.view.View.post], since
-     * that method mutates view state and calls `invalidate()`.
+     * Reads [path] and pushes its elements into the live view. A missing file
+     * resolves `false`, not an error — that is simply a canvas never saved yet.
      */
     @ReactMethod
     fun loadCanvas(
@@ -87,12 +71,8 @@ class SuperCanvasModule(
                     promise.resolve(false)
                     return@Thread
                 }
-                val json = file.readText()
-                val elements = SuperCanvasCore.deserializeElements(json)
-                val view = SuperCanvasView.currentInstance()
-                if (view != null) {
-                    view.post { view.setElements(elements) }
-                }
+                val elements = CanvasJson.deserializeElements(file.readText())
+                registry.current()?.let { view -> view.post { view.setElements(elements) } }
                 promise.resolve(true)
             } catch (e: IOException) {
                 promise.reject(ERR_IO, e.message, e)
@@ -100,36 +80,19 @@ class SuperCanvasModule(
         }.start()
     }
 
-    // Parameters are unused for now because both methods below are intentional
-    // v0 scaffold stubs (see class doc comment) — the signature is the real,
-    // load-bearing part to get right before the implementation lands, so the
-    // names are kept meaningful rather than underscored.
-    @Suppress("UnusedParameter")
-    @ReactMethod
-    fun exportPdf(
-        path: String,
-        promise: Promise,
-    ) {
-        promise.reject(ERR_NOT_IMPLEMENTED, "exportPdf is a v0 scaffold stub — see SuperCanvasModule.kt")
-    }
-
     /**
-     * Renders the live canvas's current elements to a PNG thumbnail at [path]
-     * (v1d, FR12 — the note-embedded "Save to Note" thumbnail). Reads the
-     * view's state on the UI thread first, same reasoning as [saveCanvas];
-     * the actual [Bitmap] render + PNG compress + file write happen off it, on
-     * a background thread — none of that touches this View's own attached
-     * surface (see [SuperCanvasView.renderThumbnailBitmap]'s doc), so it's
-     * safe there.
+     * Renders the live canvas to a PNG thumbnail at [path] (FR12, the "Save to
+     * Note" image). The bitmap render touches only a private Bitmap/Canvas pair,
+     * never the view's own surface, so it is safe off the UI thread.
      */
     @ReactMethod
     fun generateThumbnail(
         path: String,
         promise: Promise,
     ) {
-        val view = SuperCanvasView.currentInstance()
+        val view = registry.current()
         if (view == null) {
-            promise.reject(ERR_NO_ACTIVE_VIEW, "No active SuperCanvasView to render a thumbnail from")
+            promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to render a thumbnail from")
             return
         }
         view.post {
@@ -154,7 +117,6 @@ class SuperCanvasModule(
 
     companion object {
         const val NAME = "SuperCanvasModule"
-        const val ERR_NOT_IMPLEMENTED = "E_NOT_IMPLEMENTED"
         const val ERR_NO_ACTIVE_VIEW = "E_NO_ACTIVE_VIEW"
         const val ERR_IO = "E_IO"
         private const val PNG_QUALITY = 100

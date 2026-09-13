@@ -4,7 +4,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PointF
 import android.graphics.RectF
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -26,8 +28,26 @@ internal fun drawRotatedBox(
         canvas.save()
         canvas.rotate(Math.toDegrees(element.rotation).toFloat(), bounds.centerX(), bounds.centerY())
     }
-    if (element.type == SuperCanvasView.TOOL_ELLIPSE) canvas.drawOval(bounds, paint) else canvas.drawRect(bounds, paint)
+    if (element.type == CanvasTools.ELLIPSE) canvas.drawOval(bounds, paint) else canvas.drawRect(bounds, paint)
     if (rotated) canvas.restore()
+}
+
+private const val ARROWHEAD_LENGTH_PX = 28f
+private const val ARROWHEAD_SPREAD_RAD = Math.PI / 7
+
+/** An open arrowhead at [end] of the screen-space segment from [start]: arrows in the live view, the thumbnail and the drag preview. */
+internal fun drawArrowhead(
+    canvas: Canvas,
+    start: PointF,
+    end: PointF,
+    paint: Paint,
+) {
+    val angle = atan2((end.y - start.y).toDouble(), (end.x - start.x).toDouble())
+    for (side in listOf(angle - ARROWHEAD_SPREAD_RAD, angle + ARROWHEAD_SPREAD_RAD)) {
+        val x = end.x - (ARROWHEAD_LENGTH_PX * cos(side)).toFloat()
+        val y = end.y - (ARROWHEAD_LENGTH_PX * sin(side)).toFloat()
+        canvas.drawLine(end.x, end.y, x, y, paint)
+    }
 }
 
 private val rotateGlyphFillPaint =

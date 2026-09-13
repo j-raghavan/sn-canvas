@@ -6,14 +6,17 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
 /**
- * Registers both the [SuperCanvasModule] (Promise-based save/export calls)
- * and the [SuperCanvasViewManager] (the `<SuperCanvasView>` rendering
- * surface). This is the one place SuperCanvas's package differs from the
- * sn-tables TableGridPackage template it was copied from: that one returns
- * emptyList() from createViewManagers since it had no custom view.
+ * Native composition root: registers [SuperCanvasModule] (save/load/thumbnail
+ * calls) and [SuperCanvasViewManager] (the `<SuperCanvasView>` surface), and
+ * wires the one dependency they share, the [ActiveViewRegistry] that tells the
+ * module which canvas view is live. Registered in MainApplication.kt.
  */
 class SuperCanvasPackage : ReactPackage {
-    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> = listOf(SuperCanvasModule(reactContext))
+    private val canvasRegistry = ActiveViewRegistry<SuperCanvasView>()
 
-    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> = listOf(SuperCanvasViewManager())
+    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
+        listOf(SuperCanvasModule(reactContext, canvasRegistry))
+
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
+        listOf(SuperCanvasViewManager(canvasRegistry))
 }

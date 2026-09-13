@@ -1,7 +1,6 @@
 package com.snsupercanvas.canvas
 
 import com.facebook.react.bridge.ReadableArray
-import com.facebook.react.common.MapBuilder
 import com.facebook.react.uimanager.SimpleViewManager
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.annotations.ReactProp
@@ -22,33 +21,36 @@ import com.facebook.react.uimanager.annotations.ReactProp
  * `com.facebook.react.uimanager.ViewManager` in the resolved RN 0.79.2 AAR)
  * because which one the runtime calls depends on whether the view's react
  * tag is a Paper or Fabric tag at the interop boundary; handling both is the
- * safe choice rather than assuming one path. This is compiled and reviewed
- * against the real RN 0.79.2 API surface, but not yet behaviorally verified
- * on-device with an actual button tap — do that before relying on it.
+ * safe choice rather than assuming one path. Verified on-device: Delete, Undo
+ * and Redo taps reach the view through this path.
+ *
+ * Each view it creates receives the injected [registry] so the module can find
+ * the live one (see [SuperCanvasPackage]).
  */
-class SuperCanvasViewManager : SimpleViewManager<SuperCanvasView>() {
+class SuperCanvasViewManager(
+    private val registry: ActiveViewRegistry<SuperCanvasView>,
+) : SimpleViewManager<SuperCanvasView>() {
     override fun getName(): String = NAME
 
-    override fun createViewInstance(reactContext: ThemedReactContext): SuperCanvasView = SuperCanvasView(reactContext)
+    override fun createViewInstance(reactContext: ThemedReactContext): SuperCanvasView = SuperCanvasView(reactContext, registry)
 
     @ReactProp(name = "toolMode")
     fun setToolMode(
         view: SuperCanvasView,
         toolMode: String?,
     ) {
-        view.setToolMode(toolMode ?: SuperCanvasView.TOOL_SELECT)
+        view.setToolMode(toolMode ?: CanvasTools.SELECT)
     }
 
     override fun getCommandsMap(): MutableMap<String, Int> =
-        MapBuilder.of(
-            COMMAND_DELETE_SELECTED_NAME,
-            COMMAND_DELETE_SELECTED,
-            COMMAND_UNDO_NAME,
-            COMMAND_UNDO,
-            COMMAND_REDO_NAME,
-            COMMAND_REDO,
+        mutableMapOf(
+            COMMAND_DELETE_SELECTED_NAME to COMMAND_DELETE_SELECTED,
+            COMMAND_UNDO_NAME to COMMAND_UNDO,
+            COMMAND_REDO_NAME to COMMAND_REDO,
         )
 
+    // Deprecated upstream in favor of the String overload below, but still the one a Paper tag calls (see class doc).
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun receiveCommand(
         root: SuperCanvasView,
         commandId: Int,
