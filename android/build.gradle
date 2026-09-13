@@ -1,0 +1,27 @@
+buildscript {
+    ext {
+        buildToolsVersion = "35.0.0"
+        minSdkVersion = 27
+        compileSdkVersion = 35
+        targetSdkVersion = 35
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.0.21"
+    }
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        // Kotlin quality gates: coverage (Kover), formatting (ktlint), static
+        // analysis (detekt). Applied in app/build.gradle.
+        classpath("org.jetbrains.kotlinx:kover-gradle-plugin:0.9.9")
+        classpath("org.jlleitschuh.gradle:ktlint-gradle:14.2.0")
+        classpath("io.gitlab.arturbosch.detekt:detekt-gradle-plugin:1.23.8")
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"

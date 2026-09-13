@@ -1,0 +1,11 @@
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+plugins {
+    id("com.facebook.react.settings")
+    // Lets Gradle auto-download a matching JDK for gradle/gradle-daemon-jvm.properties
+    // (Daemon JVM auto-provisioning) on a machine that doesn't already have one installed.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'SnSuperCanvas'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')
