@@ -18,6 +18,8 @@ export type FakeStore = CanvasStorePort & {
   imageDir: string | null;
   /** The images put on the canvas: their source and the folder they were copied into. */
   imported: Array<{source: string; imageDir: string}>;
+  /** The PDFs the canvas was exported to, by path. */
+  exported: string[];
 };
 
 export const createFakeStore = (initial: Record<string, string> = {}): FakeStore => {
@@ -34,6 +36,14 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
     notePen: null,
     imageDir: null,
     imported: [],
+    exported: [],
+    async exportPdf(path) {
+      if (failing.has('exportPdf')) {
+        return false;
+      }
+      store.exported.push(path);
+      return true;
+    },
     async rememberNotePen(pen) {
       if (failing.has('rememberNotePen')) {
         return false;

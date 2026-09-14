@@ -38,6 +38,10 @@ type Props = {
 
 // FR23: Save to Note has its own icon; the upward arrow is kept for Export to PDF.
 const SAVE_TO_NOTE_ICON = require('../../assets/icons/action-save-to-note.png');
+const EXPORT_PDF_ICON = require('../../assets/icons/action-save.png');
+
+// A notice names a file from the storage root down, as the device's file manager shows it.
+const STORAGE_ROOT = '/storage/emulated/0';
 const CLOSE_ICON = require('../../assets/icons/action-close.png');
 
 /** How long the "Added to note" confirmation stays up. */
@@ -79,6 +83,12 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
     }
   };
 
+  // FR11: say where the PDF went, since nothing on the canvas shows it; or that it didn't.
+  const exportPdf = async () => {
+    const path = await session.exportPdf();
+    setNotice(path === null ? 'Could not export the PDF' : `Saved to ${path.replace(`${STORAGE_ROOT}/`, '')}`);
+  };
+
   // FR12: confirm the insert, so the thumbnail isn't added twice for want of feedback.
   const saveToNote = async () => {
     if (await session.saveToNote()) {
@@ -91,6 +101,7 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
       <View style={styles.header}>
         <Text style={styles.title}>Canvas</Text>
         <View style={styles.headerActions}>
+          <HeaderButton testID="canvas-export-pdf" label="Export to PDF" icon={EXPORT_PDF_ICON} onPress={exportPdf} />
           <HeaderButton testID="canvas-save-to-note" label="Save to Note" icon={SAVE_TO_NOTE_ICON} onPress={saveToNote} />
           <HeaderButton testID="canvas-close" label="Close" icon={CLOSE_ICON} onPress={session.close} />
         </View>

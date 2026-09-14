@@ -262,6 +262,8 @@ kover {
                     // Decoding and caching image pixels (FR22): Android BitmapFactory, verified on the device.
                     "com.sncanvas.canvas.ImageCache*",
                     "com.sncanvas.canvas.ImageSource*",
+                    // Writing the PDF through Android's PdfDocument (FR11); the page it fits is PdfPages, covered.
+                    "com.sncanvas.canvas.PdfExport*",
                     "com.sncanvas.canvas.MotionSamples*",
                     "com.sncanvas.canvas.CanvasViewManager*",
                     "com.sncanvas.canvas.CanvasModule*",

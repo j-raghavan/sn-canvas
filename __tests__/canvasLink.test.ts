@@ -4,6 +4,8 @@
  */
 import {
   DEFAULT_CANVAS_ID,
+  EXPORT_DIR,
+  pdfPath,
   SHARED_CANVAS_DIR,
   canvasFilePath,
   canvasIdFromLassoedElements,
@@ -82,6 +84,11 @@ describe('canvasIdFromLassoedElements', () => {
     ];
     expect(canvasIdFromLassoedElements(lassoed)).toBe('c-2');
   });
+});
+
+test('a PDF export goes to EXPORT, named for its local date and time', () => {
+  expect(EXPORT_DIR).toBe('/storage/emulated/0/EXPORT');
+  expect(pdfPath(new Date(2026, 0, 5, 9, 4, 3))).toBe('/storage/emulated/0/EXPORT/Canvas-20260105-090403.pdf');
 });
 
 test('picturePathOf reads Element.picture.picturePath and tolerates anything else', () => {

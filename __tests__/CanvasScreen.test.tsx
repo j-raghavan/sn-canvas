@@ -42,6 +42,7 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   saveToNote: jest.fn().mockResolvedValue(true),
   newCanvas: jest.fn().mockResolvedValue(undefined),
   insertImage: jest.fn().mockResolvedValue(true),
+  exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
   close: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
 });
@@ -257,6 +258,23 @@ test('New canvas in the ⋮ menu asks the session for one', async () => {
   await press('canvas-more');
   await press('canvas-menu-newCanvas');
   expect(session.newCanvas).toHaveBeenCalledTimes(1);
+});
+
+describe('Export to PDF', () => {
+  test('exports through the session and says where the PDF went', async () => {
+    const {session, press, shows} = await render();
+    await press('canvas-export-pdf');
+    expect(session.exportPdf).toHaveBeenCalledTimes(1);
+    expect(shows('Saved to EXPORT/Canvas-20260914-111507.pdf')).toBe(true);
+  });
+
+  test('says so when nothing was exported', async () => {
+    const session = createFakeSession();
+    session.exportPdf.mockResolvedValue(null);
+    const {press, shows} = await render(session);
+    await press('canvas-export-pdf');
+    expect(shows('Could not export the PDF')).toBe(true);
+  });
 });
 
 describe('image', () => {

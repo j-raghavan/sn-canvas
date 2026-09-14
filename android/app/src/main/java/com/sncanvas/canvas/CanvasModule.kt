@@ -113,6 +113,26 @@ class CanvasModule(
         }
     }
 
+    /**
+     * Exports the live canvas to a one-page PDF at [path] (FR11), fitted to its
+     * content, in true colour ([PdfExport]). It is written off the UI thread,
+     * so the canvas never freezes while it is made (NFR4).
+     */
+    @ReactMethod
+    fun exportPdf(
+        path: String,
+        promise: Promise,
+    ) {
+        val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to export")
+        view.post {
+            val elements = view.getState().elements
+            inBackground(promise) {
+                PdfExport.write(elements, File(path), images)
+                true
+            }
+        }
+    }
+
     /** The text at [path], or null when there is no such file (the canvas link index, which the JS session reads). */
     @ReactMethod
     fun readText(

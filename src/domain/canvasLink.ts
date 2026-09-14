@@ -72,6 +72,17 @@ export function imagesPath(canvasDir: string): string {
   return `${canvasDir}/images`;
 }
 
+/** Where "Export to PDF" writes (FR11): the folder Supernote keeps exported files in. */
+export const EXPORT_DIR = '/storage/emulated/0/EXPORT';
+
+/** The PDF a canvas exported at [at] is saved as, named by the device's local time: `Canvas-20260914-111507.pdf`. */
+export function pdfPath(at: Date): string {
+  const two = (value: number) => String(value).padStart(2, '0');
+  const date = `${at.getFullYear()}${two(at.getMonth() + 1)}${two(at.getDate())}`;
+  const time = `${two(at.getHours())}${two(at.getMinutes())}${two(at.getSeconds())}`;
+  return `${EXPORT_DIR}/Canvas-${date}-${time}.pdf`;
+}
+
 /** The link index (domain/canvasIndex.ts); `links` is not a canvas id, so it never lists as a canvas. */
 export function indexPath(canvasDir: string): string {
   return `${canvasDir}/links.json`;

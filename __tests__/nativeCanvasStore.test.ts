@@ -17,6 +17,16 @@ const createNative = (): jest.Mocked<NativeCanvasModule> => ({
   adoptFolder: jest.fn().mockResolvedValue(0),
   setNotePen: jest.fn().mockResolvedValue(true),
   importImage: jest.fn().mockResolvedValue(true),
+  exportPdf: jest.fn().mockResolvedValue(true),
+});
+
+test('a PDF export reaches the native view with its path, and only a native true is true', async () => {
+  const native = createNative();
+  const store = createNativeCanvasStore(createRecordingLogger(), native);
+  expect(await store.exportPdf('/e/Canvas.pdf')).toBe(true);
+  expect(native.exportPdf).toHaveBeenCalledWith('/e/Canvas.pdf');
+  native.exportPdf.mockResolvedValueOnce(false);
+  expect(await store.exportPdf('/e/Canvas.pdf')).toBe(false);
 });
 
 test('a picked image reaches the native view with the folder to copy it into, and only a native true is true', async () => {

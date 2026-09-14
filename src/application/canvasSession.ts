@@ -37,6 +37,7 @@ import {
   imagesPath,
   indexPath,
   installMarkerPath,
+  pdfPath,
   privateCanvasDir,
   thumbnailPath,
 } from '../domain/canvasLink';
@@ -58,6 +59,8 @@ export type CanvasStorePort = {
   load: (path: string, imageDir: string) => Promise<boolean>;
   /** Copies the image at [source] into [imageDir] and puts it on the canvas shown (FR22); false when it can't. */
   importImage: (source: string, imageDir: string) => Promise<boolean>;
+  /** Writes the canvas shown to a one-page PDF at [path], fitted to its content (FR11); false when it can't. */
+  exportPdf: (path: string) => Promise<boolean>;
   save: (path: string) => Promise<boolean>;
   remove: (path: string) => Promise<boolean>;
   renderThumbnail: (path: string) => Promise<boolean>;
@@ -98,6 +101,8 @@ export type CanvasSessionDeps = {
   host: HostPort;
   newCanvasId: () => string;
   logger: Logger;
+  /** The device's clock, which names each PDF export; the real one unless given. */
+  now?: () => Date;
 };
 
 export type CanvasSession = {
@@ -109,6 +114,8 @@ export type CanvasSession = {
   insertImage: () => Promise<boolean>;
   /** Inserts the canvas into the note as a thumbnail that links back to it; true once inserted. Taps while one runs are ignored. */
   saveToNote: () => Promise<boolean>;
+  /** Exports the canvas shown to a PDF in EXPORT, fitted to its content (FR11); its path, or null when none was written. */
+  exportPdf: () => Promise<string | null>;
   /** Saves the canvas, then closes the plugin view whether or not the save worked. */
   close: () => Promise<void>;
   currentCanvasId: () => string;
@@ -116,7 +123,13 @@ export type CanvasSession = {
 
 const TAG = '[SNCANVAS]';
 
-export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSessionDeps): CanvasSession {
+export function createCanvasSession({
+  store,
+  host,
+  newCanvasId,
+  logger,
+  now = () => new Date(),
+}: CanvasSessionDeps): CanvasSession {
   let canvasId = DEFAULT_CANVAS_ID;
   let hasOpened = false;
   let saveToNotePending = false;
@@ -399,6 +412,24 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
     return inserted;
   };
 
+  const exportPdf = async (): Promise<string | null> => {
+    let exported: string | null = null;
+    await serially(async () => {
+      if (!(await host.requestFileAccess())) {
+        logger.warn(`${TAG}[PDF] no file write access; nothing exported`);
+        return;
+      }
+      const path = pdfPath(now());
+      if (await store.exportPdf(path)) {
+        exported = path;
+        logger.log(`${TAG}[PDF] exported ${path}`);
+      } else {
+        logger.warn(`${TAG}[PDF] could not export ${path}`);
+      }
+    });
+    return exported;
+  };
+
   const close = (): Promise<void> =>
     serially(async () => {
       // Never saved before a canvas was opened: the view would not hold it, and saving would overwrite it.
@@ -409,5 +440,5 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
       host.closeView();
     });
 
-  return {open, newCanvas, saveToNote, insertImage, close, currentCanvasId: () => canvasId};
+  return {open, newCanvas, saveToNote, insertImage, exportPdf, close, currentCanvasId: () => canvasId};
 }
