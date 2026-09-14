@@ -8,6 +8,7 @@ import {
   canvasFilePath,
   canvasIdFromLassoedElements,
   canvasIdFromThumbnailPath,
+  imagesPath,
   indexPath,
   installMarkerPath,
   isCanvasId,
@@ -27,6 +28,7 @@ test('canvases, thumbnails and the link index share one folder: in MyStyle, or t
   expect(privateCanvasDir('/plugin')).toBe('/plugin/SuperCanvas');
   expect(canvasFilePath(SHARED_CANVAS_DIR, DEFAULT_CANVAS_ID)).toBe('/storage/emulated/0/MyStyle/SnSuperCanvas/default.json');
   expect(thumbnailPath('/plugin/SuperCanvas', 'c-1')).toBe('/plugin/SuperCanvas/thumbnails/c-1.png');
+  expect(imagesPath('/plugin/SuperCanvas')).toBe('/plugin/SuperCanvas/images');
   expect(indexPath('/plugin/SuperCanvas')).toBe('/plugin/SuperCanvas/links.json');
   // The first-open marker lives outside the canvas folder, so it never moves to MyStyle with the canvases.
   expect(installMarkerPath('/plugin')).toBe('/plugin/canvas-opened');

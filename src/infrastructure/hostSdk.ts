@@ -5,13 +5,16 @@
 // infrastructure/filePermissions.ts), injected so index.js and the session ask
 // through the same one.
 
-import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI} from 'sn-plugin-lib';
+import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
 import type {HostPort, NotePen} from '../application/canvasSession';
 import {elementSummary, notePageOf, pictureNumbersOf, picturesOf} from '../domain/canvasIndex';
 import {taggedPicture} from '../domain/canvasTag';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
 
 const TAG = '[SUPERCANVAS]';
+
+// RattaFileSelector.selectFile's selectType for picking a single file.
+const SINGLE_FILE = 1;
 
 /** True for a getPenInfo result with a number for each of the pen's codes. */
 const isNotePen = (pen: unknown): pen is NotePen =>
@@ -42,6 +45,20 @@ export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<b
         const pen = resultOf<unknown>(await PluginCommAPI.getPenInfo());
         logger.log(`${TAG}[PEN] note pen=${JSON.stringify(pen ?? null)}`);
         return isNotePen(pen) ? {type: pen.type, width: pen.width, color: pen.color} : null;
+      }),
+    // The device's file picker, for one image of a kind ImageElements.kt takes; a cancel comes back empty.
+    // Not selectImage: that starts the picker from an Activity a plugin doesn't have, and its
+    // NullPointerException closes the plugin. selectFile starts it through the host.
+    pickImage: () =>
+      attempt('selectFile', null, async () => {
+        const paths: unknown = await RattaFileSelector.selectFile({
+          selectType: SINGLE_FILE,
+          suffixList: ['png', 'jpg', 'jpeg', 'webp'],
+          maxNum: 1,
+          title: 'Insert an image',
+        });
+        const path: unknown = Array.isArray(paths) ? paths[0] : null;
+        return typeof path === 'string' && path !== '' ? path : null;
       }),
     lassoedElements: () => attempt('getLassoElements', [], async () => listOf(await PluginCommAPI.getLassoElements())),
     insertImage: path => attempt('insertImage', false, async () => succeeded(await PluginNoteAPI.insertImage(path))),

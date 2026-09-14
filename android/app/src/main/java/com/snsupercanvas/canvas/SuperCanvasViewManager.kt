@@ -31,6 +31,7 @@ import com.facebook.react.uimanager.events.Event
  */
 class SuperCanvasViewManager(
     private val registry: ActiveViewRegistry<SuperCanvasView>,
+    private val images: ImageSource,
 ) : SimpleViewManager<SuperCanvasView>() {
     override fun getName(): String = NAME
 
@@ -49,6 +50,7 @@ class SuperCanvasViewManager(
                     request: TextEditRequest,
                 ) = dispatch(reactContext, view, EVENT_EDIT_TEXT, request.toPayload())
             },
+            images,
         )
 
     @ReactProp(name = "toolMode")

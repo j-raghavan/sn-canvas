@@ -29,9 +29,11 @@ import java.io.IOException
  * bridge. Every file call settles its promise, even when the firmware refuses
  * the file (see [inBackground]).
  */
+@Suppress("TooManyFunctions") // one method per bridge call
 class SuperCanvasModule(
     reactContext: ReactApplicationContext,
     private val registry: ActiveViewRegistry<SuperCanvasView>,
+    private val images: ImageCache,
 ) : ReactContextBaseJavaModule(reactContext) {
     override fun getName(): String = NAME
 
@@ -54,19 +56,22 @@ class SuperCanvasModule(
     }
 
     /**
-     * Shows the canvas saved at [path] in the live view, replacing whatever it
-     * showed. A missing file shows an empty canvas and resolves `false`: that is
-     * a canvas never saved yet, not an error. Replacing either way matters when
-     * the session switches canvases in a view that stays mounted.
+     * Shows the canvas saved at [path] in the live view, its images drawn from
+     * [imageDir] (FR22), replacing whatever it showed. A missing file shows an
+     * empty canvas and resolves `false`: that is a canvas never saved yet, not
+     * an error. Replacing either way matters when the session switches
+     * canvases in a view that stays mounted.
      */
     @ReactMethod
     fun loadCanvas(
         path: String,
+        imageDir: String,
         promise: Promise,
     ) = inBackground(promise) {
         val file = File(path)
         val exists = file.exists()
         val elements = if (exists) CanvasJson.deserializeElements(file.readText()) else emptyList()
+        images.folder = File(imageDir)
         registry.current()?.let { view -> view.post { view.setElements(elements) } }
         exists
     }
@@ -161,6 +166,26 @@ class SuperCanvasModule(
         val pen = FirmwarePen.ofNotePen(type.toInt(), width.toInt(), color.toInt())
         view.post { view.setNotePen(pen) }
         promise.resolve(pen != null)
+    }
+
+    /**
+     * Copies the image at [source] into [imageDir] under a name of its own and
+     * puts it in the middle of the canvas, selected (FR22); resolves false,
+     * adding nothing, for a file the canvas can't show. The picker is another
+     * app's screen: the host hides the canvas while it shows and brings it
+     * back only as the pick returns, so the image goes in once the canvas is
+     * on screen again ([ActiveViewRegistry.whenAttached]).
+     */
+    @ReactMethod
+    fun importImage(
+        source: String,
+        imageDir: String,
+        promise: Promise,
+    ) = inBackground(promise) {
+        val name = ImageElements.fileNameFor("img-${java.util.UUID.randomUUID()}", source)
+        val image = name?.let { images.import(File(source), File(imageDir), it) }
+        image?.let { registry.whenAttached { view -> view.post { view.insertImage(it) } } }
+        image != null
     }
 
     companion object {

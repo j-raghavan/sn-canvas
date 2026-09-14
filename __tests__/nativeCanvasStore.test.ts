@@ -16,6 +16,16 @@ const createNative = (): jest.Mocked<NativeCanvasModule> => ({
   listCanvasFiles: jest.fn().mockResolvedValue([]),
   adoptFolder: jest.fn().mockResolvedValue(0),
   setNotePen: jest.fn().mockResolvedValue(true),
+  importImage: jest.fn().mockResolvedValue(true),
+});
+
+test('a picked image reaches the native view with the folder to copy it into, and only a native true is true', async () => {
+  const native = createNative();
+  const store = createNativeCanvasStore(createRecordingLogger(), native);
+  expect(await store.importImage('/sdcard/a.png', '/c/images')).toBe(true);
+  expect(native.importImage).toHaveBeenCalledWith('/sdcard/a.png', '/c/images');
+  native.importImage.mockResolvedValueOnce(false);
+  expect(await store.importImage('/sdcard/a.pdf', '/c/images')).toBe(false);
 });
 
 test("the note's pen reaches the native view as its three codes, and only a native true is true", async () => {
@@ -30,11 +40,11 @@ test("the note's pen reaches the native view as its three codes, and only a nati
 test('each port call reaches its native method with the path', async () => {
   const native = createNative();
   const store = createNativeCanvasStore(createRecordingLogger(), native);
-  expect(await store.load('/a.json')).toBe(true);
+  expect(await store.load('/a.json', '/images')).toBe(true);
   expect(await store.save('/b.json')).toBe(true);
   expect(await store.remove('/c.json')).toBe(true);
   expect(await store.renderThumbnail('/d.png')).toBe(true);
-  expect(native.loadCanvas).toHaveBeenCalledWith('/a.json');
+  expect(native.loadCanvas).toHaveBeenCalledWith('/a.json', '/images');
   expect(native.saveCanvas).toHaveBeenCalledWith('/b.json');
   expect(native.deleteCanvas).toHaveBeenCalledWith('/c.json');
   expect(native.generateThumbnail).toHaveBeenCalledWith('/d.png');
@@ -43,7 +53,7 @@ test('each port call reaches its native method with the path', async () => {
 test('a native false (e.g. loading a canvas never saved) is false', async () => {
   const native = createNative();
   native.loadCanvas.mockResolvedValue(false);
-  expect(await createNativeCanvasStore(createRecordingLogger(), native).load('/new.json')).toBe(false);
+  expect(await createNativeCanvasStore(createRecordingLogger(), native).load('/new.json', '/images')).toBe(false);
 });
 
 test('the link index reads and writes as text, and anything but a string reads as no file', async () => {
@@ -89,7 +99,7 @@ test('a native rejection is logged and reported as false', async () => {
 test('without the native module every call falls back, with an error saying why', async () => {
   const logger = createRecordingLogger();
   const store = createNativeCanvasStore(logger);
-  expect(await store.load('/a.json')).toBe(false);
+  expect(await store.load('/a.json', '/images')).toBe(false);
   expect(await store.readText('/links.json')).toBeNull();
   expect(await store.writeText('/links.json', '{}')).toBe(false);
   expect(await store.savedCanvasIds('/p/SuperCanvas')).toEqual([]);

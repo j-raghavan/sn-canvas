@@ -90,6 +90,16 @@ class CanvasController(
         commit(SuperCanvasCore.insertElement(state, TextElements.fit(element.copy(style = currentStyle), measurer)).elements)
     }
 
+    /** Adds [image] (FR22) in the middle of the [visible] world rect, in the current style and selected, as one undoable step. */
+    fun insertImage(
+        image: ImageData,
+        visible: WorldRect,
+    ) {
+        val element = ImageElements.create(newId(), image, visible)
+        selectedId = element.id
+        insert(element)
+    }
+
     /**
      * Places a new text box (or, for [CanvasTools.NOTE], a sticky note) at [at]
      * and opens the editor on it. It joins the undo history only once it has
@@ -161,13 +171,14 @@ class CanvasController(
     /**
      * Sets one style property (FR19): for elements drawn from now on and, when
      * an element is selected, on it too as one undoable step (text refits to a
-     * new size). Only that property changes; the rest of its style stays.
+     * new size). Only that property changes; the rest of its style stays. An
+     * outline of none is for the selected image alone: what is drawn next keeps its outline.
      */
     fun setStyle(
         property: String,
         value: String,
     ) {
-        currentStyle = currentStyle.with(property, value)
+        currentStyle.with(property, value).takeIf { it.dash != DashStyle.NONE }?.let { currentStyle = it }
         val element = selected
         if (element != null && element.style.with(property, value) != element.style) {
             val restyled = CanvasActions.restyle(state, element.id, element.style.with(property, value))

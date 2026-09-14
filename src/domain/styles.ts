@@ -23,7 +23,9 @@ export const FILLS = ['none', 'semi', 'solid', 'pattern'] as const;
 export type FillId = (typeof FILLS)[number];
 
 export const DASHES = ['draw', 'dashed', 'dotted', 'solid'] as const;
-export type DashId = (typeof DASHES)[number];
+/** An image's frame can also be left off (FR22). */
+export const IMAGE_DASHES = [...DASHES, 'none'] as const;
+export type DashId = (typeof IMAGE_DASHES)[number];
 
 export const SIZES = ['s', 'm', 'l', 'xl'] as const;
 export type SizeId = (typeof SIZES)[number];
@@ -77,7 +79,7 @@ export function parseUiState(payload: unknown): CanvasUiState {
       color: oneOf(COLOR_IDS, style.color, DEFAULT_STYLE.color),
       opacity: isOpacity(style.opacity) ? style.opacity : DEFAULT_STYLE.opacity,
       fill: oneOf(FILLS, style.fill, DEFAULT_STYLE.fill),
-      dash: oneOf(DASHES, style.dash, DEFAULT_STYLE.dash),
+      dash: oneOf(IMAGE_DASHES, style.dash, DEFAULT_STYLE.dash),
       size: oneOf(SIZES, style.size, DEFAULT_STYLE.size),
     },
   };

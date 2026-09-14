@@ -10,9 +10,11 @@ import type {CanvasStorePort} from '../application/canvasSession';
 import {isCanvasId} from '../domain/canvasLink';
 import type {Logger} from '../sdk/types';
 
-type PathMethod = 'loadCanvas' | 'saveCanvas' | 'deleteCanvas' | 'generateThumbnail';
+type PathMethod = 'saveCanvas' | 'deleteCanvas' | 'generateThumbnail';
 
 export type NativeCanvasModule = Record<PathMethod, (path: string) => Promise<boolean>> & {
+  loadCanvas: (path: string, imageDir: string) => Promise<boolean>;
+  importImage: (source: string, imageDir: string) => Promise<boolean>;
   readText: (path: string) => Promise<string | null>;
   writeText: (path: string, text: string) => Promise<boolean>;
   /** The `*.json` file names in a folder, most recently saved first. */
@@ -46,7 +48,9 @@ export function createNativeCanvasStore(
   return {
     rememberNotePen: pen =>
       invoke('setNotePen', false, async module => (await module.setNotePen(pen.type, pen.width, pen.color)) === true),
-    load: path => call('loadCanvas', path),
+    load: (path, imageDir) => invoke('loadCanvas', false, async module => (await module.loadCanvas(path, imageDir)) === true),
+    importImage: (source, imageDir) =>
+      invoke('importImage', false, async module => (await module.importImage(source, imageDir)) === true),
     save: path => call('saveCanvas', path),
     remove: path => call('deleteCanvas', path),
     renderThumbnail: path => call('generateThumbnail', path),

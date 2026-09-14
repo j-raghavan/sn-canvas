@@ -42,6 +42,40 @@ internal fun polylinePath(
         if (closed) close()
     }
 
+// The hand-drawn wobble's reach, per unit of stroke width (world units).
+private const val WOBBLE_PER_STROKE = 0.6
+
+/** World [points] in [element]'s hand-drawn wobble (the draw dash), seeded by its id so it wobbles alike on every redraw. */
+internal fun wobbly(
+    points: List<Point>,
+    closed: Boolean,
+    element: Element,
+): List<Point> = ShapeOutline.handDrawn(points, closed, element.id.hashCode(), element.style.size.strokeWidth * WOBBLE_PER_STROKE)
+
+/** A path through world [points], on screen through [transform], closed back to the first when [closed]. */
+internal fun screenPath(
+    points: List<Point>,
+    transform: ViewTransform,
+    closed: Boolean = false,
+): Path = polylinePath(points.map { Point(transform.screenX(it.x), transform.screenY(it.y)) }, closed)
+
+/** A bbox element's outline in its screen [bounds]: hand-drawn for the draw dash, otherwise its oval or rectangle. */
+internal fun shapePath(
+    element: Element,
+    bounds: RectF,
+    transform: ViewTransform,
+): Path =
+    when {
+        element.style.dash == DashStyle.DRAW ->
+            screenPath(
+                wobbly(ShapeOutline.of(element), closed = true, element),
+                transform,
+                closed = true,
+            )
+        element.type == CanvasTools.ELLIPSE -> Path().apply { addOval(bounds, Path.Direction.CW) }
+        else -> Path().apply { addRect(bounds, Path.Direction.CW) }
+    }
+
 /**
  * Runs [draw] with [canvas] rotated by [element]'s rotation about [bounds]'
  * center. Every world->screen transform in this plugin is a uniform scale +

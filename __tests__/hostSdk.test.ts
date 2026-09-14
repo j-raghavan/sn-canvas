@@ -11,6 +11,7 @@ const mockGetCurrentPageNum = jest.fn();
 const mockGetElements = jest.fn();
 const mockModifyElements = jest.fn();
 const mockGetPenInfo = jest.fn();
+const mockSelectImage = jest.fn();
 
 jest.mock('sn-plugin-lib', () => ({
   PluginManager: {
@@ -24,6 +25,7 @@ jest.mock('sn-plugin-lib', () => ({
     getCurrentPageNum: () => mockGetCurrentPageNum(),
   },
   PluginNoteAPI: {insertImage: (path: string) => mockInsertImage(path)},
+  RattaFileSelector: {selectFile: (params: unknown) => mockSelectImage(params)},
   PluginFileAPI: {
     getElements: (page: number, notePath: string) => mockGetElements(page, notePath),
     modifyElements: (notePath: string, page: number, elements: unknown[]) => mockModifyElements(notePath, page, elements),
@@ -148,6 +150,26 @@ test("notePen is the note's pen, logged as the host reported it, and null for an
   expect(logger.lines).toContain('log [SUPERCANVAS][PEN] note pen=null');
   mockGetPenInfo.mockImplementationOnce(failure);
   expect(await host.notePen()).toBeNull();
+});
+
+test('pickImage asks the file picker for one image, and is its path, or null for a cancel or a failure', async () => {
+  const host = createHostSdk(createRecordingLogger(), requestAccess);
+  mockSelectImage.mockResolvedValueOnce(['/sdcard/a.png']);
+  expect(await host.pickImage()).toBe('/sdcard/a.png');
+  expect(mockSelectImage).toHaveBeenCalledWith({
+    selectType: 1,
+    suffixList: ['png', 'jpg', 'jpeg', 'webp'],
+    maxNum: 1,
+    title: 'Insert an image',
+  });
+  mockSelectImage.mockResolvedValueOnce(null);
+  expect(await host.pickImage()).toBeNull();
+  mockSelectImage.mockResolvedValueOnce([]);
+  expect(await host.pickImage()).toBeNull();
+  mockSelectImage.mockResolvedValueOnce(['']);
+  expect(await host.pickImage()).toBeNull();
+  mockSelectImage.mockImplementationOnce(failure);
+  expect(await host.pickImage()).toBeNull();
 });
 
 test('closeView closes the plugin view, and a failure to close is only logged', async () => {

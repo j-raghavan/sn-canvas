@@ -14,6 +14,10 @@ export type FakeStore = CanvasStorePort & {
   failing: Set<keyof CanvasStorePort>;
   /** The note's pen the canvas would set back. */
   notePen: NotePen | null;
+  /** The images folder of the canvas shown. */
+  imageDir: string | null;
+  /** The images put on the canvas: their source and the folder they were copied into. */
+  imported: Array<{source: string; imageDir: string}>;
 };
 
 export const createFakeStore = (initial: Record<string, string> = {}): FakeStore => {
@@ -28,6 +32,8 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
     failing,
     shown: '',
     notePen: null,
+    imageDir: null,
+    imported: [],
     async rememberNotePen(pen) {
       if (failing.has('rememberNotePen')) {
         return false;
@@ -35,9 +41,17 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       store.notePen = pen;
       return true;
     },
-    async load(path) {
+    async load(path, imageDir) {
       store.shown = files.get(path) ?? '';
+      store.imageDir = imageDir;
       return files.has(path);
+    },
+    async importImage(source, imageDir) {
+      if (failing.has('importImage')) {
+        return false;
+      }
+      store.imported.push({source, imageDir});
+      return true;
     },
     async save(path) {
       if (failing.has('save')) {
@@ -104,14 +118,20 @@ export type FakeHost = HostPort & {
   closeCount: number;
   /** The pen the note writes with, as getPenInfo reports it. */
   pen: NotePen | null;
+  /** The image the user picks; null when they cancel the picker. */
+  picked: string | null;
 };
 
 export const createFakeHost = (): FakeHost => {
   const host: FakeHost = {
     dir: '/plugin',
     pen: null,
+    picked: null,
     async notePen() {
       return host.pen;
+    },
+    async pickImage() {
+      return host.picked;
     },
     lassoed: [],
     inserted: [],

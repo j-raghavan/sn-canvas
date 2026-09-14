@@ -1,7 +1,9 @@
 // The floating, centered tool pill: shapes, connectors, the pencil and eraser,
-// text, sticky notes and tables (FR16). Icons are drawn PNGs (assets/icons/)
-// rather than Unicode glyphs, which rendered badly in the device font. They
-// are black on transparent, so tintColor can invert the active tool.
+// text, sticky notes and tables (FR16), then the image button, which picks an
+// image to insert rather than being a tool (FR22). Icons are drawn PNGs
+// (assets/icons/) rather than Unicode glyphs, which rendered badly in the
+// device font. They are black on transparent, so tintColor can invert the
+// active tool.
 
 import React from 'react';
 import {Image, Pressable, StyleSheet, View, type ImageSourcePropType} from 'react-native';
@@ -20,12 +22,15 @@ const TOOLS: ReadonlyArray<{id: ToolMode; label: string; icon: ImageSourcePropTy
   {id: 'table', label: 'Table', icon: require('../../assets/icons/tool-table.png')},
 ];
 
+const IMAGE_ICON = require('../../assets/icons/tool-image.png');
+
 type Props = {
   toolMode: ToolMode;
   onToolChange: (tool: ToolMode) => void;
+  onInsertImage: () => void;
 };
 
-export default function Toolbar({toolMode, onToolChange}: Props): React.JSX.Element {
+export default function Toolbar({toolMode, onToolChange, onInsertImage}: Props): React.JSX.Element {
   // box-none: the wrapper spans the width so the pill can center itself, but
   // taps beside the pill must still reach the canvas underneath.
   return (
@@ -44,6 +49,9 @@ export default function Toolbar({toolMode, onToolChange}: Props): React.JSX.Elem
             </Pressable>
           );
         })}
+        <Pressable testID="supercanvas-insert-image" accessibilityLabel="Image" style={styles.button} onPress={onInsertImage}>
+          <Image source={IMAGE_ICON} style={styles.icon} />
+        </Pressable>
       </View>
     </View>
   );

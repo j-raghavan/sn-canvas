@@ -84,3 +84,30 @@ test.each([
   tap(testID);
   expect(onChange).toHaveBeenCalledWith(property, value);
 });
+
+test('a selected image offers no outline besides the four dashes, and no fill', () => {
+  const onChange = jest.fn();
+  let renderer!: ReactTestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = ReactTestRenderer.create(
+      <StylePanel style={{...DEFAULT_STYLE, dash: 'none'}} selectedType="image" swatch={color => color} onChange={onChange} />,
+    );
+  });
+  act(() => {
+    renderer.root.findByProps({testID: 'style-toggle'}).props.onPress();
+  });
+  const shown = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
+  expect(shown('style-dash-none')).toBe(true);
+  expect(shown('style-dash-draw')).toBe(true);
+  expect(shown('style-fill-none')).toBe(false);
+  act(() => {
+    renderer.root.findByProps({testID: 'style-dash-dotted'}).props.onPress();
+  });
+  expect(onChange).toHaveBeenCalledWith('dash', 'dotted');
+});
+
+test('anything but an image offers the four dashes and the fills', () => {
+  const {host} = renderPanel();
+  expect(() => host('style-dash-none')).toThrow();
+  expect(host('style-fill-none')).toBeDefined();
+});

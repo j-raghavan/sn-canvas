@@ -259,6 +259,9 @@ kover {
                     // Firmware pen ink, and reading MotionEvents: device-only glue, verified on the device.
                     "com.snsupercanvas.canvas.FirmwareInk*",
                     "com.snsupercanvas.canvas.LiveInk*",
+                    // Decoding and caching image pixels (FR22): Android BitmapFactory, verified on the device.
+                    "com.snsupercanvas.canvas.ImageCache*",
+                    "com.snsupercanvas.canvas.ImageSource*",
                     "com.snsupercanvas.canvas.MotionSamples*",
                     "com.snsupercanvas.canvas.SuperCanvasViewManager*",
                     "com.snsupercanvas.canvas.SuperCanvasModule*",

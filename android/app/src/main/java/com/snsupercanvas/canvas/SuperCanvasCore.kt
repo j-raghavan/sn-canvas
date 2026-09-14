@@ -332,8 +332,8 @@ object SuperCanvasCore {
 
     /**
      * Resizes the bbox element with the given [id] by dragging [corner] to a new
-     * world-space position, keeping the opposite corner fixed. A no-op if no
-     * element has that id.
+     * world-space position, keeping the opposite corner fixed; an image keeps
+     * its proportions too ([ImageElements.resize]). A no-op if no element has that id.
      */
     fun resizeElement(
         state: CanvasState,
@@ -345,7 +345,11 @@ object SuperCanvasCore {
         state.copy(
             elements =
                 state.elements.map { element ->
-                    if (element.id == id) resizeCorner(element, corner, newWorldX, newWorldY) else element
+                    when {
+                        element.id != id -> element
+                        element.image != null -> ImageElements.resize(element, element.image, corner, Point(newWorldX, newWorldY))
+                        else -> resizeCorner(element, corner, newWorldX, newWorldY)
+                    }
                 },
         )
 

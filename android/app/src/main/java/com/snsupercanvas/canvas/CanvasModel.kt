@@ -52,6 +52,12 @@ data class ViewTransform(
     fun screenX(worldX: Double): Double = (worldX - viewportX) * zoom
 
     fun screenY(worldY: Double): Double = (worldY - viewportY) * zoom
+
+    /** The world rect a [widthPx] × [heightPx] view shows through this transform. */
+    fun visibleRect(
+        widthPx: Double,
+        heightPx: Double,
+    ): WorldRect = WorldRect(viewportX, viewportY, viewportX + widthPx / zoom, viewportY + heightPx / zoom)
 }
 
 /**
@@ -122,6 +128,29 @@ data class TableData(
     }
 }
 
+/**
+ * An image element's picture (FR22): its [file] in the canvas folder's
+ * `images` folder, by name alone, so a canvas folder can move (to MyStyle,
+ * say) with its images, and its size in pixels, whose proportions a resize keeps.
+ */
+data class ImageData(
+    val file: String,
+    val pixelWidth: Int,
+    val pixelHeight: Int,
+) {
+    init {
+        require(isFileName(file)) { "an image file is a plain name in the images folder" }
+        require(pixelWidth > 0 && pixelHeight > 0) { "an image has a size" }
+    }
+
+    companion object {
+        private val FILE_NAME = Regex("[A-Za-z0-9_-]+\\.[a-z]+")
+
+        /** True for a plain file name: no folder, so no stored name reaches outside the images folder. */
+        fun isFileName(name: String): Boolean = FILE_NAME.matches(name)
+    }
+}
+
 /** An axis-aligned world-space rectangle — content bounds, or the currently visible viewport (minimap). */
 data class WorldRect(
     val left: Double,
@@ -181,6 +210,8 @@ data class Element(
     val strokeWidth: Double? = null,
     // FR24: a table's grid and cell text; see TableElements.
     val table: TableData? = null,
+    // FR22: an image's picture; see ImageElements.
+    val image: ImageData? = null,
 ) {
     init {
         require(rotation.isFinite()) { "rotation must be finite" }

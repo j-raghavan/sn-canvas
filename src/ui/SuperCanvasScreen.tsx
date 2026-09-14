@@ -72,6 +72,13 @@ export default function SuperCanvasScreen({createSession, buttonEvents}: Props):
   const runCommand = (command: CanvasCommand, args?: readonly string[]) =>
     dispatchCanvasCommand(canvasRef.current, command, args);
 
+  // FR22: a new image arrives selected, so select is the tool that moves and resizes it.
+  const insertImage = async () => {
+    if (await session.insertImage()) {
+      setToolMode('select');
+    }
+  };
+
   // FR12: confirm the insert, so the thumbnail isn't added twice for want of feedback.
   const saveToNote = async () => {
     if (await session.saveToNote()) {
@@ -98,11 +105,12 @@ export default function SuperCanvasScreen({createSession, buttonEvents}: Props):
         />
         <StylePanel
           style={ui.style}
+          selectedType={ui.selectedType}
           swatch={color => swatchColor(color, einkGrays)}
           onChange={(property, value) => runCommand('setStyle', [property, value])}
         />
         <ActionBar ui={ui} onCommand={runCommand} onNewCanvas={session.newCanvas} />
-        <Toolbar toolMode={toolMode} onToolChange={setToolMode} />
+        <Toolbar toolMode={toolMode} onToolChange={setToolMode} onInsertImage={insertImage} />
         {editing !== null && (
           <TextEditor
             // A fresh editor, with its own text, for every edit.

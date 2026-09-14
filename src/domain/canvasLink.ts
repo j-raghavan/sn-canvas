@@ -64,6 +64,11 @@ export function thumbnailPath(canvasDir: string, canvasId: string): string {
   return `${canvasDir}/thumbnails/${canvasId}.png`;
 }
 
+/** The folder a canvas folder's images are copied into (FR22); an image element names its file in it. */
+export function imagesPath(canvasDir: string): string {
+  return `${canvasDir}/images`;
+}
+
 /** The link index (domain/canvasIndex.ts); `links` is not a canvas id, so it never lists as a canvas. */
 export function indexPath(canvasDir: string): string {
   return `${canvasDir}/links.json`;

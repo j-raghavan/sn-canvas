@@ -20,6 +20,7 @@ import {
   COLORS,
   DASHES,
   FILLS,
+  IMAGE_DASHES,
   OPACITY_STEPS,
   SIZES,
   colorName,
@@ -43,7 +44,11 @@ const DASH_OPTIONS: Record<DashId, {label: string; icon: ImageSourcePropType}> =
   dashed: {label: 'Dashed', icon: require('../../assets/icons/dash-dashed.png')},
   dotted: {label: 'Dotted', icon: require('../../assets/icons/dash-dotted.png')},
   solid: {label: 'Solid', icon: require('../../assets/icons/dash-solid.png')},
+  none: {label: 'No outline', icon: require('../../assets/icons/dash-none.png')},
 };
+
+// An image (FR22) takes the outline only: its frame, which it can leave off, and no fill.
+const IMAGE = 'image';
 
 const CHEVRON_DOWN = require('../../assets/icons/chevron-down.png');
 const CHEVRON_UP = require('../../assets/icons/chevron-up.png');
@@ -54,14 +59,18 @@ const stepCenter = (index: number) => `${STEP_SHARE * (index + 0.5)}%` as const;
 
 type Props = {
   style: CanvasStyle;
+  /** The selected element's type, if any: an image shows its own options. */
+  selectedType?: string | null;
   /** The colour a swatch shows; the screen supplies the canvas's e-ink gray. */
   swatch: (color: ColorId) => string;
   onChange: (property: StyleProperty, value: string) => void;
 };
 
-export default function StylePanel({style, swatch, onChange}: Props): React.JSX.Element {
+export default function StylePanel({style, selectedType = null, swatch, onChange}: Props): React.JSX.Element {
   const [isOpen, setOpen] = useState(false);
   const opacityIndex = opacityStepIndex(style.opacity);
+  const isImage = selectedType === IMAGE;
+  const dashes = isImage ? IMAGE_DASHES : DASHES;
   return (
     // box-none: only the toggle and the open panel take touches; the canvas gets the rest.
     <View style={styles.wrapper} pointerEvents="box-none">
@@ -108,20 +117,22 @@ export default function StylePanel({style, swatch, onChange}: Props): React.JSX.
             </View>
           </View>
           <View style={styles.divider} />
+          {!isImage && (
+            <View style={styles.row}>
+              {FILLS.map(fill => (
+                <Option
+                  key={fill}
+                  testID={`style-fill-${fill}`}
+                  label={FILL_OPTIONS[fill].label}
+                  active={fill === style.fill}
+                  onPress={() => onChange('fill', fill)}>
+                  <Image source={FILL_OPTIONS[fill].icon} style={styles.icon} />
+                </Option>
+              ))}
+            </View>
+          )}
           <View style={styles.row}>
-            {FILLS.map(fill => (
-              <Option
-                key={fill}
-                testID={`style-fill-${fill}`}
-                label={FILL_OPTIONS[fill].label}
-                active={fill === style.fill}
-                onPress={() => onChange('fill', fill)}>
-                <Image source={FILL_OPTIONS[fill].icon} style={styles.icon} />
-              </Option>
-            ))}
-          </View>
-          <View style={styles.row}>
-            {DASHES.map(dash => (
+            {dashes.map(dash => (
               <Option
                 key={dash}
                 testID={`style-dash-${dash}`}

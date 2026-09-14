@@ -31,6 +31,7 @@ class SuperCanvasView(
     context: Context,
     private val registry: ActiveViewRegistry<SuperCanvasView>,
     private val events: Events,
+    private val images: ImageSource,
 ) : View(context) {
     /** What the view tells the UI; the view manager sends each as an RN event. */
     interface Events {
@@ -46,7 +47,7 @@ class SuperCanvasView(
     }
 
     private val measurer = AndroidTextMeasurer()
-    private val renderer = CanvasRenderer(measurer)
+    private val renderer = CanvasRenderer(measurer, images)
     private val liveInk = LiveInk(this, renderer)
 
     /** The canvas itself: elements, history, selection, style and text editing. The view manager routes commands to it. */
@@ -164,7 +165,11 @@ class SuperCanvasView(
     fun getState(): CanvasState = controller.state
 
     /** The note thumbnail of [elements] (FR12), in true colour; off the UI thread, so with a renderer of its own. */
-    fun renderThumbnailBitmap(elements: List<Element>): Bitmap = CanvasRenderer().renderThumbnail(elements)
+    fun renderThumbnailBitmap(elements: List<Element>): Bitmap = CanvasRenderer(images = images).renderThumbnail(elements)
+
+    /** Adds [image] in the middle of what the view shows, selected (FR22). */
+    fun insertImage(image: ImageData) =
+        controller.insertImage(image, controller.state.transform.visibleRect(width.toDouble(), height.toDouble()))
 
     /** Frames all content in the view. */
     fun zoomToFit() = fitToContent()

@@ -48,6 +48,10 @@ test('a swatch shows the e-ink gray when the canvas exports one, otherwise the t
   expect(swatchColor('red', null)).toBe('#e03131');
 });
 
+test("an image's outline of none reads back from the canvas-state event", () => {
+  expect(parseUiState({selectedType: 'image', style: {dash: 'none'}}).style.dash).toBe('none');
+});
+
 test('opacityStepIndex finds the nearest slider step', () => {
   expect([1, 0.1, 0.3, 0.6, 0.75].map(opacityStepIndex)).toEqual([4, 0, 1, 2, 3]);
 });

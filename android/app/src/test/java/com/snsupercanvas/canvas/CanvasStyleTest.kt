@@ -15,10 +15,10 @@ class CanvasStyleTest {
     }
 
     @Test
-    fun `tldraw's 12 colours, 4 fills, 4 dashes and 4 sizes`() {
+    fun `tldraw's 12 colours, 4 fills, 4 dashes and 4 sizes, and an image's outline of none`() {
         assertEquals(12, StyleColor.entries.size)
         assertEquals(listOf("none", "semi", "solid", "pattern"), FillStyle.entries.map { it.id })
-        assertEquals(listOf("draw", "dashed", "dotted", "solid"), DashStyle.entries.map { it.id })
+        assertEquals(listOf("draw", "dashed", "dotted", "solid", "none"), DashStyle.entries.map { it.id })
         assertEquals(listOf(2.0, 3.5, 5.0, 10.0), SizeStyle.entries.map { it.strokeWidth })
     }
 

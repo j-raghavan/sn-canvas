@@ -341,4 +341,27 @@ class CanvasControllerTest {
         controller.erase(setOf("b2"))
         assertEquals("box", controller.selectedId)
     }
+
+    @Test
+    fun `an inserted image lands in the middle of the view, in the current style and selected, as one undoable step`() {
+        controller.setStyle("color", "red")
+        controller.insertImage(ImageData("img-1.png", 100, 50), WorldRect(0.0, 0.0, 1000.0, 800.0))
+        val image = controller.selected
+        assertEquals(listOf("id-1"), ids)
+        assertEquals(450.0, image?.x)
+        assertEquals(375.0, image?.y)
+        assertEquals(StyleColor.RED, image?.style?.color)
+        assertEquals(ImageElements.TYPE, ui.selectedType)
+        assertTrue(ui.canUndo)
+    }
+
+    @Test
+    fun `an outline of none goes to the selected image alone, never to what is drawn next`() {
+        controller.insertImage(ImageData("img-1.png", 100, 50), WorldRect(0.0, 0.0, 1000.0, 800.0))
+        controller.setStyle("dash", "none")
+        assertEquals(DashStyle.NONE, controller.selected?.style?.dash)
+        assertEquals(DashStyle.DRAW, controller.currentStyle.dash)
+        controller.setStyle("dash", "dotted")
+        assertEquals(DashStyle.DOTTED, controller.currentStyle.dash)
+    }
 }

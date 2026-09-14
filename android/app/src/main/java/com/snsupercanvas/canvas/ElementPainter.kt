@@ -1,6 +1,7 @@
 package com.snsupercanvas.canvas
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
@@ -10,14 +11,16 @@ import android.graphics.RectF
  * Paints one element in its style (FR19): shapes and connectors with colour
  * through a [StylePalette], opacity, fill (none, semi, solid or hatched
  * pattern), dash (hand-drawn, dashed, dotted or solid) and size; freehand
- * strokes as lines as wide as the pen pressed (FR5); and text, notes and table
+ * strokes as lines as wide as the pen pressed (FR5); images from [images],
+ * framed by their style's outline, or by none (FR22); and text, notes and table
  * cells through [TextPainter]. [CanvasRenderer] decides what to draw; this
- * decides how an element looks. Its paints are reconfigured for every element,
- * so a painter stays on one thread: the note thumbnail renders with a renderer
- * of its own.
+ * decides how an element looks, with the outlines ShapeDrawing.kt builds. Its
+ * paints are reconfigured for every element, so a painter stays on one
+ * thread: the note thumbnail renders with a renderer of its own.
  */
 internal class ElementPainter(
     measurer: TextMeasurer,
+    private val images: ImageSource,
 ) {
     /** How to paint: through which transform and palette, leaving out the text being edited. */
     data class Context(
@@ -52,15 +55,20 @@ internal class ElementPainter(
 
     private val arrowheadPaint = Paint()
 
+    // Filtered, so a scaled-down photo stays smooth rather than blocky.
+    private val imagePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+
     fun draw(
         canvas: Canvas,
         element: Element,
         elements: List<Element>,
         context: Context,
     ) {
+        val image = element.image
         when {
             element.hasEndpoints() -> drawConnector(canvas, element, elements, context)
             element.points != null -> drawStroke(canvas, element, context)
+            image != null -> drawImage(canvas, element, image, context)
             TextElements.isEditable(element) -> textPainter.drawTextElement(canvas, element, context)
             else -> {
                 drawShape(canvas, element, context)
@@ -78,26 +86,52 @@ internal class ElementPainter(
         val outline = shapePath(element, bounds, context.transform)
         withRotation(canvas, element, bounds) {
             drawFill(canvas, outline, bounds, element.style, context.palette)
-            configureStroke(element.style, context.palette, element.style.strokeWidthPx(context.transform.zoom))
-            canvas.drawPath(outline, strokePaint)
+            drawOutline(canvas, outline, element.style, context)
         }
     }
 
-    private fun shapePath(
+    /** An image (FR22), stretched to its box and faded by its opacity, framed by its style's outline; a missing file shows crossed out. */
+    private fun drawImage(
+        canvas: Canvas,
         element: Element,
-        bounds: RectF,
-        transform: ViewTransform,
-    ): Path {
-        val path = Path()
-        when {
-            element.style.dash == DashStyle.DRAW -> {
-                addPolyline(path, wobbly(ShapeOutline.of(element), closed = true, element), transform)
-                path.close()
+        image: ImageData,
+        context: Context,
+    ) {
+        val bounds = screenBounds(element, context.transform)
+        withRotation(canvas, element, bounds) {
+            val bitmap = images.bitmap(image)
+            if (bitmap == null) {
+                drawMissingImage(canvas, bounds)
+            } else {
+                imagePaint.alpha = element.style.alpha
+                canvas.drawBitmap(bitmap, null, bounds, imagePaint)
             }
-            element.type == CanvasTools.ELLIPSE -> path.addOval(bounds, Path.Direction.CW)
-            else -> path.addRect(bounds, Path.Direction.CW)
+            drawOutline(canvas, shapePath(element, bounds, context.transform), element.style, context)
         }
-        return path
+    }
+
+    /** A light box with a cross through it: where an image's file can't be read. */
+    private fun drawMissingImage(
+        canvas: Canvas,
+        bounds: RectF,
+    ) {
+        fillPaint.color = MISSING_IMAGE_FILL
+        canvas.drawRect(bounds, fillPaint)
+        hatchPaint.color = Color.GRAY
+        canvas.drawLine(bounds.left, bounds.top, bounds.right, bounds.bottom, hatchPaint)
+        canvas.drawLine(bounds.left, bounds.bottom, bounds.right, bounds.top, hatchPaint)
+    }
+
+    /** Strokes [outline] in [style]; a dash of none leaves it undrawn. */
+    private fun drawOutline(
+        canvas: Canvas,
+        outline: Path,
+        style: ShapeStyle,
+        context: Context,
+    ) {
+        if (style.dash == DashStyle.NONE) return
+        configureStroke(style, context.palette, style.strokeWidthPx(context.transform.zoom))
+        canvas.drawPath(outline, strokePaint)
     }
 
     private fun drawConnector(
@@ -110,10 +144,8 @@ internal class ElementPainter(
         val style = element.style
         val width = style.strokeWidthPx(context.transform.zoom)
         val points = if (style.dash == DashStyle.DRAW) wobbly(listOf(start, end), closed = false, element) else listOf(start, end)
-        val path = Path()
-        addPolyline(path, points, context.transform)
         configureStroke(style, context.palette, width)
-        canvas.drawPath(path, strokePaint)
+        canvas.drawPath(screenPath(points, context.transform), strokePaint)
         if (element.type == CanvasTools.ARROW) {
             // The head is always solid, even on a dashed or dotted arrow.
             arrowheadPaint.set(strokePaint)
@@ -209,31 +241,12 @@ internal class ElementPainter(
                 DashStyle.DASHED -> DashPathEffect(floatArrayOf(width * DASH_LENGTH, width * DASH_GAP), 0f)
                 // Zero-length dashes with round caps draw as dots.
                 DashStyle.DOTTED -> DashPathEffect(floatArrayOf(0f, width * DOT_GAP), 0f)
-                DashStyle.DRAW, DashStyle.SOLID -> null
+                // A connector never goes without its line, so none draws it solid.
+                DashStyle.DRAW, DashStyle.SOLID, DashStyle.NONE -> null
             }
     }
 
-    private fun addPolyline(
-        path: Path,
-        points: List<Point>,
-        transform: ViewTransform,
-    ) {
-        points.forEachIndexed { index, point ->
-            val x = transform.screenX(point.x).toFloat()
-            val y = transform.screenY(point.y).toFloat()
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-    }
-
-    private fun wobbly(
-        points: List<Point>,
-        closed: Boolean,
-        element: Element,
-    ): List<Point> = ShapeOutline.handDrawn(points, closed, element.id.hashCode(), element.style.size.strokeWidth * WOBBLE_PER_STROKE)
-
     private companion object {
-        // The hand-drawn wobble's reach, per unit of stroke width (world units).
-        const val WOBBLE_PER_STROKE = 0.6
         const val ARROWHEAD_PER_STROKE = 8f
         const val MIN_ARROWHEAD_PX = 10f
         const val MAX_ARROWHEAD_PX = 60f
@@ -242,5 +255,6 @@ internal class ElementPainter(
         const val DOT_GAP = 2.5f
         const val HATCH_SPACING_PX = 12f
         const val HATCH_WIDTH_PX = 2f
+        const val MISSING_IMAGE_FILL = 0xFFE6E6E6.toInt()
     }
 }

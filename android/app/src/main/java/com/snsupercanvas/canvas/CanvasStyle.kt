@@ -52,6 +52,9 @@ enum class DashStyle(
     DASHED("dashed"),
     DOTTED("dotted"),
     SOLID("solid"),
+
+    /** No outline: an image's frame can be left off (FR22). New elements never start without one. */
+    NONE("none"),
 }
 
 /** Stroke weights and text sizes in world units, so a PDF or a thumbnail matches the screen at 100% (tldraw's s/m/l/xl). */

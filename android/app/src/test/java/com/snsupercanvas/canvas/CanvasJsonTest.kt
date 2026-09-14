@@ -320,4 +320,21 @@ class CanvasJsonTest {
         val json = """{"version":1,"elements":[{"id":"nocols","type":"table","table":{"rows":1,"cells":[""]}}]}"""
         assertEquals(emptyList<Element>(), CanvasJson.deserializeElements(json))
     }
+
+    @Test
+    fun `an image round-trips with its file and pixel size`() {
+        val image =
+            Element(id = "i", type = "image", x = 1.0, y = 2.0, width = 40.0, height = 30.0, image = ImageData("img-1.png", 400, 300))
+        assertEquals(listOf(image), CanvasJson.deserializeElements(CanvasJson.serializeElements(listOf(image))))
+    }
+
+    @Test
+    fun `an image naming a file outside its folder, or missing its file or size, is skipped`() {
+        val json =
+            """{"version":1,"elements":[{"id":"out","type":"image","image":{"file":"../x.png","width":4,"height":3}},""" +
+                """{"id":"nosize","type":"image","image":{"file":"x.png"}},""" +
+                """{"id":"nofile","type":"image","image":{"width":4,"height":3}},""" +
+                """{"id":"ok","type":"image","image":{"file":"x.png","width":4,"height":3}}]}"""
+        assertEquals(listOf("ok"), CanvasJson.deserializeElements(json).map { it.id })
+    }
 }

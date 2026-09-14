@@ -68,6 +68,13 @@ object CanvasJson {
                     numbers("rowMinHeights", table.rowMinHeights.map { rounded(it, 1) })
                 }
             }
+            element.image?.let { image ->
+                obj("image") {
+                    string("file", image.file)
+                    number("width", image.pixelWidth.toDouble())
+                    number("height", image.pixelHeight.toDouble())
+                }
+            }
         }
         return sb.append('}').toString()
     }
@@ -126,6 +133,11 @@ object CanvasJson {
             // Absent in strokes saved before it existed, or unusable: the stroke then draws at its style's size.
             strokeWidth = obj.number("strokeWidth")?.takeIf { it.isFinite() && it > 0 },
             table = tableFromJson(obj.entries["table"] as? JsonValue.Obj),
+            // An image's file and pixel size; a name that isn't plain, or no size, throws, which skips just this element.
+            image =
+                (obj.entries["image"] as? JsonValue.Obj)?.let {
+                    ImageData(it.string("file").orEmpty(), it.number("width")?.toInt() ?: 0, it.number("height")?.toInt() ?: 0)
+                },
         )
 
     /** A stroke's [x, y, pressure, ...] triples; anything but whole triples of numbers drops them (the stroke then draws nothing). */

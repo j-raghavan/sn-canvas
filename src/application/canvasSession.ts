@@ -33,6 +33,7 @@ import {
   SHARED_CANVAS_DIR,
   canvasFilePath,
   canvasIdFromLassoedElements,
+  imagesPath,
   indexPath,
   installMarkerPath,
   privateCanvasDir,
@@ -49,8 +50,13 @@ export type NotePen = {type: number; width: number; color: number};
 export type CanvasStorePort = {
   /** Remembers the note's pen, for the canvas to set back as it gives the pen back to the note; false when it can't. */
   rememberNotePen: (pen: NotePen) => Promise<boolean>;
-  /** Shows the canvas saved at [path], replacing the view's content; a missing file shows an empty canvas and reports false. */
-  load: (path: string) => Promise<boolean>;
+  /**
+   * Shows the canvas saved at [path], its images in [imageDir], replacing the
+   * view's content; a missing file shows an empty canvas and reports false.
+   */
+  load: (path: string, imageDir: string) => Promise<boolean>;
+  /** Copies the image at [source] into [imageDir] and puts it on the canvas shown (FR22); false when it can't. */
+  importImage: (source: string, imageDir: string) => Promise<boolean>;
   save: (path: string) => Promise<boolean>;
   remove: (path: string) => Promise<boolean>;
   renderThumbnail: (path: string) => Promise<boolean>;
@@ -70,6 +76,8 @@ export type HostPort = {
   requestFileAccess: () => Promise<boolean>;
   /** The pen the note writes with; null when the host can't say. */
   notePen: () => Promise<NotePen | null>;
+  /** An image the user picks with the device's picker (FR22), by path; null when they cancel. */
+  pickImage: () => Promise<string | null>;
   lassoedElements: () => Promise<unknown[]>;
   insertImage: (path: string) => Promise<boolean>;
   /** The note page the user is on; null when the host can't say. */
@@ -96,6 +104,8 @@ export type CanvasSession = {
   open: (buttonId: number | null) => Promise<void>;
   /** Saves the canvas shown, then shows a new, empty one. */
   newCanvas: () => Promise<void>;
+  /** Puts an image the user picks on the canvas shown (FR22), copied into the canvas folder; true once it is there. */
+  insertImage: () => Promise<boolean>;
   /** Inserts the canvas into the note as a thumbnail that links back to it; true once inserted. Taps while one runs are ignored. */
   saveToNote: () => Promise<boolean>;
   /** Saves the canvas, then closes the plugin view whether or not the save worked. */
@@ -253,7 +263,7 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
     }
     canvasId = target;
     hasOpened = true;
-    await store.load(canvasFilePath(dir, canvasId));
+    await store.load(canvasFilePath(dir, canvasId), imagesPath(dir));
     await updateIndex(dir, current => withLastCanvas(current, canvasId));
   };
 
@@ -359,6 +369,28 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
     });
   };
 
+  const insertImage = async (): Promise<boolean> => {
+    // Picked outside the queue: the picker waits on the user, and must never hold up a save or a close.
+    const source = await host.pickImage();
+    if (source === null) {
+      return false;
+    }
+    let inserted = false;
+    await serially(async () => {
+      const dir = await resolveCanvasDir();
+      if (dir === null) {
+        return;
+      }
+      inserted = await store.importImage(source, imagesPath(dir));
+      if (inserted) {
+        logger.log(`${TAG}[IMAGE] inserted ${source}`);
+      } else {
+        logger.warn(`${TAG}[IMAGE] could not insert ${source}`);
+      }
+    });
+    return inserted;
+  };
+
   const close = (): Promise<void> =>
     serially(async () => {
       // Never saved before a canvas was opened: the view would not hold it, and saving would overwrite it.
@@ -369,5 +401,5 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
       host.closeView();
     });
 
-  return {open, newCanvas, saveToNote, close, currentCanvasId: () => canvasId};
+  return {open, newCanvas, saveToNote, insertImage, close, currentCanvasId: () => canvasId};
 }

@@ -41,6 +41,7 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   open: jest.fn().mockResolvedValue(undefined),
   saveToNote: jest.fn().mockResolvedValue(true),
   newCanvas: jest.fn().mockResolvedValue(undefined),
+  insertImage: jest.fn().mockResolvedValue(true),
   close: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
 });
@@ -256,4 +257,30 @@ test('New canvas in the ⋮ menu asks the session for one', async () => {
   await press('supercanvas-more');
   await press('supercanvas-menu-newCanvas');
   expect(session.newCanvas).toHaveBeenCalledTimes(1);
+});
+
+describe('image', () => {
+  test('the image button asks the session for one, and select becomes the tool that moves it', async () => {
+    const {session, press, isActive} = await render();
+    await press('supercanvas-tool-rectangle');
+    await press('supercanvas-insert-image');
+    expect(session.insertImage).toHaveBeenCalledTimes(1);
+    expect(isActive('select')).toBe(true);
+  });
+
+  test('a cancelled pick leaves the tool as it was', async () => {
+    const session = createFakeSession();
+    session.insertImage.mockResolvedValue(false);
+    const {press, isActive} = await render(session);
+    await press('supercanvas-tool-rectangle');
+    await press('supercanvas-insert-image');
+    expect(isActive('rectangle')).toBe(true);
+  });
+
+  test('with an image selected, the style panel offers no outline', async () => {
+    const {renderer, press, emitCanvasState} = await render();
+    await emitCanvasState({hasSelection: true, selectedType: 'image', style: {dash: 'none'}});
+    await press('style-toggle');
+    expect(renderer.root.findAllByProps({testID: 'style-dash-none'}).length).toBeGreaterThan(0);
+  });
 });

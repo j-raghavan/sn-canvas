@@ -22,12 +22,14 @@ import kotlin.math.abs
  * and pixels; *what* to draw is the view's call.
  *
  * A renderer draws on one thread at a time; the thumbnail, which renders off
- * the UI thread, gets a renderer of its own.
+ * the UI thread, gets a renderer of its own. Images come from [images], which
+ * both share (FR22).
  */
 internal class CanvasRenderer(
     measurer: TextMeasurer = AndroidTextMeasurer(),
+    images: ImageSource = ImageSource.NONE,
 ) {
-    private val painter = ElementPainter(measurer)
+    private val painter = ElementPainter(measurer, images)
 
     private val previewPaint =
         Paint().apply {
