@@ -1,6 +1,7 @@
 package com.snsupercanvas.canvas
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /** The versioned JSON persistence codec: round-trips, backward compatibility and never-throw parsing. */
@@ -280,5 +281,43 @@ class CanvasJsonTest {
     fun `a style without an opacity loads opaque`() {
         val json = """{"version":1,"elements":[{"id":"s","type":"rectangle","width":5,"height":5,"style":{"color":"red"}}]}"""
         assertEquals(ShapeStyle.LEGACY.copy(color = StyleColor.RED), CanvasJson.deserializeElements(json).single().style)
+    }
+
+    // --- text, strokes and tables (FR5/FR6/FR24) ---------------------------------------
+
+    @Test
+    fun `text, strokes and tables survive a save and load`() {
+        val text = Element(id = "t", type = "text", width = 320.0, height = 44.8, text = "Hello \"you\"\nline two")
+        val stroke = StrokeElements.fromSamples("s", listOf(StrokePoint(0.0, 0.0, 0.5), StrokePoint(10.0, 5.0, 1.0))) ?: error("no stroke")
+        val table = TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 96.0)).copy(table = TableData(2, 2, listOf("a", "", "", "d")))
+        val elements = listOf(text, stroke, table)
+        assertEquals(elements, CanvasJson.deserializeElements(CanvasJson.serializeElements(elements)))
+    }
+
+    @Test
+    fun `stroke points that are not whole triples of numbers are dropped`() {
+        fun pointsOf(points: String) =
+            CanvasJson.deserializeElements("""{"version":1,"elements":[{"id":"s","type":"draw","points":$points}]}""").single().points
+        assertEquals(listOf(StrokePoint(0.0, 0.5, 1.0)), pointsOf("[0,0.5,1]"))
+        assertNull(pointsOf("[0,0,1,5]"))
+        assertNull(pointsOf("""[0,"x",1]"""))
+    }
+
+    @Test
+    fun `a table whose grid does not add up skips just that element`() {
+        val json =
+            """{"version":1,"elements":[{"id":"bad","type":"table","table":{"rows":2,"cols":2,"cells":["a"]}},""" +
+                """{"id":"norows","type":"table","table":{"cols":1,"cells":[""]}},""" +
+                """{"id":"nocells","type":"table","table":{"rows":1,"cols":1}},""" +
+                """{"id":"ok","type":"table","table":{"rows":1,"cols":1,"cells":[5]}}]}"""
+        val loaded = CanvasJson.deserializeElements(json)
+        assertEquals(listOf("ok"), loaded.map { it.id })
+        assertEquals(listOf(""), loaded.single().table?.cells)
+    }
+
+    @Test
+    fun `a table without a column count is skipped`() {
+        val json = """{"version":1,"elements":[{"id":"nocols","type":"table","table":{"rows":1,"cells":[""]}}]}"""
+        assertEquals(emptyList<Element>(), CanvasJson.deserializeElements(json))
     }
 }

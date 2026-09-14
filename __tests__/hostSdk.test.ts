@@ -6,6 +6,7 @@ const mockGetPluginDirPath = jest.fn();
 const mockClosePluginView = jest.fn();
 const mockGetLassoElements = jest.fn();
 const mockInsertImage = jest.fn();
+const mockGetLastElement = jest.fn();
 
 jest.mock('sn-plugin-lib', () => ({
   PluginManager: {
@@ -14,6 +15,7 @@ jest.mock('sn-plugin-lib', () => ({
   },
   PluginCommAPI: {getLassoElements: () => mockGetLassoElements()},
   PluginNoteAPI: {insertImage: (path: string) => mockInsertImage(path)},
+  PluginFileAPI: {getLastElement: () => mockGetLastElement()},
 }));
 
 import {createHostSdk} from '../src/infrastructure/hostSdk';
@@ -56,6 +58,18 @@ test('insertImage is true only when the host reports success', async () => {
   expect(await host.insertImage('/t.png')).toBe(false);
   mockInsertImage.mockImplementationOnce(failure);
   expect(await host.insertImage('/t.png')).toBe(false);
+});
+
+test('lastElementUuid is the uuid of the last element on the page, or null when there is none to read', async () => {
+  const host = createHostSdk(createRecordingLogger());
+  mockGetLastElement.mockResolvedValueOnce({success: true, result: {uuid: 'u-1', type: 200}});
+  expect(await host.lastElementUuid()).toBe('u-1');
+  mockGetLastElement.mockResolvedValueOnce({success: true, result: {}});
+  expect(await host.lastElementUuid()).toBeNull();
+  mockGetLastElement.mockResolvedValueOnce({success: false});
+  expect(await host.lastElementUuid()).toBeNull();
+  mockGetLastElement.mockImplementationOnce(failure);
+  expect(await host.lastElementUuid()).toBeNull();
 });
 
 test('closeView closes the plugin view, and a failure to close is only logged', async () => {

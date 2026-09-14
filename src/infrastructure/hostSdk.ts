@@ -1,8 +1,9 @@
 // HostPort over sn-plugin-lib. It normalizes the SDK's loosely typed
 // {success, result} envelopes into plain values and never rejects.
 
-import {PluginCommAPI, PluginManager, PluginNoteAPI} from 'sn-plugin-lib';
+import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI} from 'sn-plugin-lib';
 import type {HostPort} from '../application/canvasSession';
+import {uuidOf} from '../domain/canvasIndex';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
 
 const TAG = '[SUPERCANVAS]';
@@ -25,6 +26,8 @@ export function createHostSdk(logger: Logger): HostPort {
         return Array.isArray(elements) ? elements : [];
       }),
     insertImage: path => attempt('insertImage', false, async () => succeeded(await PluginNoteAPI.insertImage(path))),
+    // insertImage doesn't hand back the element it made; the page's last element is it (sn-tables does the same).
+    lastElementUuid: () => attempt('getLastElement', null, async () => uuidOf(resultOf(await PluginFileAPI.getLastElement()))),
     closeView: () => {
       attempt('closePluginView', false, () => PluginManager.closePluginView());
     },

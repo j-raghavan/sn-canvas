@@ -19,6 +19,7 @@ jest.mock('react-native', () => {
     __esModule: true,
     View: actual.View,
     Text: actual.Text,
+    TextInput: actual.TextInput,
     Image: actual.Image,
     Pressable: actual.Pressable,
     StyleSheet: actual.StyleSheet,
@@ -39,6 +40,7 @@ import {SuperCanvasNativeView} from '../src/ui/nativeCanvasView';
 const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   open: jest.fn().mockResolvedValue(undefined),
   saveToNote: jest.fn().mockResolvedValue(true),
+  newCanvas: jest.fn().mockResolvedValue(undefined),
   close: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
 });
@@ -219,4 +221,39 @@ describe('session', () => {
     await press('supercanvas-close');
     expect(session.close).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('text editing', () => {
+  const request = {elementId: 't', cellIndex: -1, text: 'hi', left: 1, top: 2, width: 300, height: 40, fontSize: 24, isNote: false};
+  const isEditorOpen = (renderer: ReactTestRenderer.ReactTestRenderer) =>
+    renderer.root.findAllByProps({testID: 'text-editor-input'}).length > 0;
+
+  test('the editor opens where the canvas asks, and Done sends the text back and closes it', async () => {
+    const {renderer, press} = await render();
+    await act(async () => {
+      renderer.root.findByType(SuperCanvasNativeView).props.onEditText({nativeEvent: request});
+    });
+    expect(isEditorOpen(renderer)).toBe(true);
+    await act(async () => {
+      renderer.root.findByProps({testID: 'text-editor-input'}).props.onChangeText('hello');
+    });
+    await press('text-editor-done');
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'setText', ['hello']);
+    expect(isEditorOpen(renderer)).toBe(false);
+  });
+
+  test('an edit event that cannot place an editor opens nothing', async () => {
+    const {renderer} = await render();
+    await act(async () => {
+      renderer.root.findByType(SuperCanvasNativeView).props.onEditText({nativeEvent: {elementId: ''}});
+    });
+    expect(isEditorOpen(renderer)).toBe(false);
+  });
+});
+
+test('New canvas in the ⋮ menu asks the session for one', async () => {
+  const {session, press} = await render();
+  await press('supercanvas-more');
+  await press('supercanvas-menu-newCanvas');
+  expect(session.newCanvas).toHaveBeenCalledTimes(1);
 });

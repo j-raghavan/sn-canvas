@@ -136,4 +136,24 @@ class CanvasModelTest {
         assertEquals(3.0, back.x, 0.0001)
         assertEquals(7.0, back.y, 0.0001)
     }
+
+    // --- tools and tables (FR5/FR6/FR20/FR21/FR24) -------------------------------------
+
+    @Test
+    fun `CanvasTools sorts the pen tools, the text tools and the drag-to-outline tools`() {
+        val tools = listOf("select", "rectangle", "ellipse", "line", "arrow", "draw", "eraser", "text", "note", "table", "?")
+        assertEquals(listOf(false, true, true, true, true, true, true, true, true, true, false), tools.map(CanvasTools::usesPen))
+        assertEquals(listOf(false, false, false, false, false, false, false, true, true, false, false), tools.map(CanvasTools::placesText))
+        assertEquals(listOf(false, true, true, true, true, false, false, false, false, true, false), tools.map(CanvasTools::drawsElement))
+    }
+
+    @Test
+    fun `a table holds exactly rows times cols cells, read by row and column`() {
+        val table = TableData(2, 3, listOf("a", "b", "c", "d", "e", "f"))
+        assertEquals("f", table.cell(1, 2))
+        assertEquals(TableData(2, 2, listOf("", "", "", "")), TableData.empty(2, 2))
+        assertThrows(IllegalArgumentException::class.java) { TableData(0, 2, emptyList()) }
+        assertThrows(IllegalArgumentException::class.java) { TableData(2, 0, emptyList()) }
+        assertThrows(IllegalArgumentException::class.java) { TableData(1, 2, listOf("only one")) }
+    }
 }

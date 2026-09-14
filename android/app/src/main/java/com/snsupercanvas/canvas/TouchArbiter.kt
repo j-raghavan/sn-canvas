@@ -6,6 +6,10 @@ data class Contact(
     val isPen: Boolean,
     val x: Float,
     val y: Float,
+    /** Pen pressure 0..1; fingers report 1. */
+    val pressure: Float = 1f,
+    /** The pen's eraser end (FR20). */
+    val isEraser: Boolean = false,
 )
 
 /** What the canvas should do with the one contact it follows. */
@@ -17,6 +21,7 @@ sealed interface PointerInput {
     data class Move(
         val x: Float,
         val y: Float,
+        val pressure: Float = 1f,
     ) : PointerInput
 
     data class End(
@@ -47,6 +52,9 @@ class TouchArbiter {
     /** True while the pen drives the canvas; the view then keeps fingers away from pinch-zoom too. */
     val isPenActive: Boolean get() = active?.isPen == true
 
+    /** The pointer id of the contact driving the canvas, for reading its batched (historical) samples. */
+    val followedId: Int? get() = active?.id
+
     /** A new contact touched down. */
     fun down(contact: Contact): List<PointerInput> {
         val current = active
@@ -72,7 +80,7 @@ class TouchArbiter {
     /** Contacts moved; only the followed one matters. */
     fun move(contacts: List<Contact>): PointerInput? {
         val followed = contacts.find { it.id == active?.id }
-        return followed?.let { PointerInput.Move(it.x, it.y) }
+        return followed?.let { PointerInput.Move(it.x, it.y, it.pressure) }
     }
 
     /** A contact lifted; [isLastContact] is true when it was the last one on the screen. */

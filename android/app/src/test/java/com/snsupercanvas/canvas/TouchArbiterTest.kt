@@ -81,4 +81,15 @@ class TouchArbiterTest {
         assertEquals(PointerInput.Abandon, arbiter.cancel())
         assertNull(arbiter.up(finger, isLastContact = true))
     }
+
+    @Test
+    fun `moves carry pen pressure, and the followed pointer is known while it drives`() {
+        val arbiter = TouchArbiter()
+        assertNull(arbiter.followedId)
+        arbiter.down(pen.copy(isEraser = true))
+        assertEquals(2, arbiter.followedId)
+        assertEquals(PointerInput.Move(1f, 2f, 0.4f), arbiter.move(listOf(pen.copy(x = 1f, y = 2f, pressure = 0.4f))))
+        arbiter.up(pen, isLastContact = true)
+        assertNull(arbiter.followedId)
+    }
 }

@@ -16,6 +16,9 @@ jest.mock('react-native', () => ({
       saveCanvas: jest.fn().mockResolvedValue(true),
       deleteCanvas: jest.fn().mockResolvedValue(true),
       generateThumbnail: (path: string) => mockGenerateThumbnail(path),
+      readText: jest.fn().mockResolvedValue(null),
+      writeText: jest.fn().mockResolvedValue(true),
+      listCanvasFiles: jest.fn().mockResolvedValue([]),
     },
   },
 }));
@@ -27,6 +30,7 @@ jest.mock('sn-plugin-lib', () => ({
   },
   PluginCommAPI: {getLassoElements: jest.fn()},
   PluginNoteAPI: {insertImage: (path: string) => mockInsertImage(path)},
+  PluginFileAPI: {getLastElement: jest.fn().mockResolvedValue({success: true, result: {uuid: 'u-1'}})},
 }));
 
 import {buildCanvasSession, hostButtonEvents} from '../src/wiring';

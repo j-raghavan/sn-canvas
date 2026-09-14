@@ -304,4 +304,20 @@ class SuperCanvasCoreTest {
         val box = SuperCanvasCore.boxFromDrag("n", "ellipse", from = Point(30.0, 5.0), to = Point(10.0, 25.0))
         assertEquals(Element(id = "n", type = "ellipse", x = 10.0, y = 5.0, width = 20.0, height = 20.0), box)
     }
+
+    // --- the eraser's hit test, and freehand strokes -----------------------------------
+
+    @Test
+    fun `hitsAt returns every element under the point, bottom to top`() {
+        assertEquals(listOf("a", "b"), SuperCanvasCore.hitsAt(7.0, 7.0, baseState.elements).map { it.id })
+        assertEquals(emptyList<Element>(), SuperCanvasCore.hitsAt(100.0, 100.0, baseState.elements))
+    }
+
+    @Test
+    fun `a freehand stroke is hit near its line, not anywhere in its bounds`() {
+        val stroke =
+            StrokeElements.fromSamples("s", listOf(StrokePoint(0.0, 0.0, 1.0), StrokePoint(100.0, 100.0, 1.0))) ?: error("no stroke")
+        assertEquals("s", SuperCanvasCore.hitTest(50.0, 50.0, listOf(stroke))?.id)
+        assertNull(SuperCanvasCore.hitTest(90.0, 10.0, listOf(stroke)))
+    }
 }

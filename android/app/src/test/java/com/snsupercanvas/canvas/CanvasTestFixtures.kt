@@ -46,3 +46,20 @@ internal fun pointAtAngleFromUp(
     val a = Math.toRadians(degreesClockwise)
     return Point(cx + 100.0 * Math.sin(a), cy - 100.0 * Math.cos(a))
 }
+
+/** A deterministic stand-in for StaticLayout: every character is half the font size wide, lines wrap to the width. */
+internal val fakeMeasurer =
+    TextMeasurer { text, width, fontSize ->
+        val lines = maxOf(1, kotlin.math.ceil(text.length * fontSize * 0.5 / width).toInt())
+        lines * fontSize * TextElements.LINE_SPACING
+    }
+
+/** A controller listener that ignores everything, for tests that only read what the controller holds. */
+internal val silentListener =
+    object : CanvasController.Listener {
+        override fun onChanged() = Unit
+
+        override fun onUiState(uiState: CanvasUiState) = Unit
+
+        override fun onEditText(target: CanvasController.EditTarget) = Unit
+    }

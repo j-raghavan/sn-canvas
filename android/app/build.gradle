@@ -255,6 +255,11 @@ kover {
                     "com.snsupercanvas.MainApplication*",
                     "com.snsupercanvas.BuildConfig",
                     "com.snsupercanvas.canvas.SuperCanvasView*",
+                    "com.snsupercanvas.canvas.CanvasGesture*",
+                    // Firmware pen ink, and reading MotionEvents: device-only glue, verified on the device.
+                    "com.snsupercanvas.canvas.FirmwareInk*",
+                    "com.snsupercanvas.canvas.LiveInk*",
+                    "com.snsupercanvas.canvas.MotionSamples*",
                     "com.snsupercanvas.canvas.SuperCanvasViewManager*",
                     "com.snsupercanvas.canvas.SuperCanvasModule*",
                     "com.snsupercanvas.canvas.SuperCanvasPackage*",
@@ -262,6 +267,8 @@ kover {
                     // they draw with (fit/rotation) is covered in SuperCanvasCore/ViewTransforms.
                     "com.snsupercanvas.canvas.CanvasRenderer*",
                     "com.snsupercanvas.canvas.ElementPainter*",
+                    "com.snsupercanvas.canvas.TextPainter*",
+                    "com.snsupercanvas.canvas.AndroidTextMeasurer*",
                     "com.snsupercanvas.canvas.MinimapRenderer*",
                     "com.snsupercanvas.canvas.ShapeDrawingKt",
                     // RN autolinking-generated (app:generateAutolinkingPackageList) — not our

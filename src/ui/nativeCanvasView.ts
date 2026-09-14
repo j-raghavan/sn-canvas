@@ -12,7 +12,17 @@ import {
 } from 'react-native';
 
 /** The toolbar's tools; the same ids as CanvasTools in CanvasModel.kt. */
-export type ToolMode = 'select' | 'rectangle' | 'ellipse' | 'line' | 'arrow';
+export type ToolMode =
+  | 'select'
+  | 'rectangle'
+  | 'ellipse'
+  | 'line'
+  | 'arrow'
+  | 'draw'
+  | 'eraser'
+  | 'text'
+  | 'note'
+  | 'table';
 
 export type CanvasCommand =
   | 'deleteSelected'
@@ -23,12 +33,19 @@ export type CanvasCommand =
   | 'sendToBack'
   | 'zoomToFit'
   | 'zoomTo100'
-  | 'setStyle';
+  | 'setStyle'
+  | 'setText'
+  | 'tableAddRow'
+  | 'tableAddColumn'
+  | 'tableRemoveRow'
+  | 'tableRemoveColumn';
 
 type NativeProps = ViewProps & {
   toolMode: ToolMode;
   /** The canvas-state event (FR18/FR19); validate its body with parseUiState. */
   onCanvasState?: (event: NativeSyntheticEvent<unknown>) => void;
+  /** Text editing began (FR6/FR24); validate its body with parseTextEditRequest. */
+  onEditText?: (event: NativeSyntheticEvent<unknown>) => void;
 };
 
 const NATIVE_NAME = 'SuperCanvasView';

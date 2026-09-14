@@ -1,6 +1,7 @@
 package com.snsupercanvas.canvas
 
 import android.graphics.Bitmap
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -11,7 +12,7 @@ import java.io.IOException
 
 /**
  * RN bridge for the infrequent file operations on the live canvas: save, load,
- * delete and thumbnail rendering (PRD §9 — everything that is not per-frame gesture or
+ * delete, thumbnail rendering, and the canvas link index beside them (PRD §9 — everything that is not per-frame gesture or
  * render state, which lives in [SuperCanvasView]). It holds no canvas logic of
  * its own: persistence is [CanvasJson], rendering is the view.
  *
@@ -122,6 +123,56 @@ class SuperCanvasModule(
                 }
             }.start()
         }
+    }
+
+    /** The text at [path], or null when there is no such file (the canvas link index, which the JS session reads). */
+    @ReactMethod
+    fun readText(
+        path: String,
+        promise: Promise,
+    ) {
+        Thread {
+            try {
+                val file = File(path)
+                promise.resolve(if (file.exists()) file.readText() else null)
+            } catch (e: IOException) {
+                promise.reject(ERR_IO, e.message, e)
+            }
+        }.start()
+    }
+
+    /** Writes [text] to [path], creating parent directories as needed. */
+    @ReactMethod
+    fun writeText(
+        path: String,
+        text: String,
+        promise: Promise,
+    ) {
+        Thread {
+            try {
+                val file = File(path)
+                file.parentFile?.mkdirs()
+                file.writeText(text)
+                promise.resolve(true)
+            } catch (e: IOException) {
+                promise.reject(ERR_IO, e.message, e)
+            }
+        }.start()
+    }
+
+    /** The names of the canvas files (`*.json`) in [dir], most recently saved first; none when there is no such folder. */
+    @ReactMethod
+    fun listCanvasFiles(
+        dir: String,
+        promise: Promise,
+    ) {
+        val names = Arguments.createArray()
+        File(dir)
+            .listFiles { file -> file.isFile && file.name.endsWith(".json") }
+            .orEmpty()
+            .sortedByDescending { it.lastModified() }
+            .forEach { names.pushString(it.name) }
+        promise.resolve(names)
     }
 
     companion object {

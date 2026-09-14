@@ -61,7 +61,8 @@ object SuperCanvasCore {
         return shape.toWorld(center.x + dx * scale, center.y + dy * scale)
     }
 
-    private fun distanceToSegment(
+    /** The distance from [p] to the segment from [a] to [b]. */
+    internal fun distanceToSegment(
         point: Point,
         segmentStart: Point,
         segmentEnd: Point,
@@ -161,22 +162,36 @@ object SuperCanvasCore {
 
     /**
      * Returns the topmost element (last in list, matching typical z-order-by-insertion)
-     * containing the given world-space point: bbox containment for rectangle/ellipse,
-     * near-the-stroke distance for line/arrow (a zero-width shape can't use bbox
-     * containment). Returns null if none does.
+     * under the given world-space point: bbox containment for bbox elements,
+     * near-the-line distance for lines, arrows and freehand strokes (a thin or
+     * zero-width shape can't use bbox containment). Returns null if none is.
      */
     fun hitTest(
         worldX: Double,
         worldY: Double,
         elements: List<Element>,
-    ): Element? =
-        elements.lastOrNull { element ->
-            if (element.hasEndpoints()) {
+    ): Element? = elements.lastOrNull { isHit(it, worldX, worldY, elements) }
+
+    /** Every element under the world point, bottom to top: what the eraser takes (FR20). */
+    fun hitsAt(
+        worldX: Double,
+        worldY: Double,
+        elements: List<Element>,
+    ): List<Element> = elements.filter { isHit(it, worldX, worldY, elements) }
+
+    private fun isHit(
+        element: Element,
+        worldX: Double,
+        worldY: Double,
+        elements: List<Element>,
+    ): Boolean =
+        when {
+            element.hasEndpoints() -> {
                 val (start, end) = resolveArrowEndpoints(element, elements)
                 distanceToSegment(Point(worldX, worldY), start, end) <= LINE_HIT_TOLERANCE_WORLD
-            } else {
-                element.containsPoint(worldX, worldY)
             }
+            element.points != null -> StrokeElements.isNear(element, worldX, worldY, LINE_HIT_TOLERANCE_WORLD)
+            else -> element.containsPoint(worldX, worldY)
         }
 
     /**

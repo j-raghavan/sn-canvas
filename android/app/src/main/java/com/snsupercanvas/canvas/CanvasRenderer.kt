@@ -7,21 +7,26 @@ import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.RectF
+import android.text.TextPaint
+import kotlin.math.abs
 
 /**
  * Draws canvas content through a [ViewTransform]: the elements, each in its
  * own style via [ElementPainter], the selection frame and handles, and the
- * drag-to-draw preview for [SuperCanvasView]'s live frame, plus the same
- * elements into a bitmap for the note thumbnail (FR12). One draw path serves
- * both, so a thumbnail always looks like the canvas; the live view paints
- * through the e-ink palette and the thumbnail in true colour (FR19). This
- * class owns only paints and pixels; *what* to draw is the view's call.
+ * drag-to-draw preview for [SuperCanvasView]'s live frame; the same elements
+ * into a bitmap for the note thumbnail (FR12); and a snapshot of the canvas
+ * for the pencil to draw over. One draw path serves them all, so a thumbnail
+ * always looks like the canvas; the live view paints through the e-ink
+ * palette and the thumbnail in true colour (FR19). This class owns only paints
+ * and pixels; *what* to draw is the view's call.
  *
  * A renderer draws on one thread at a time; the thumbnail, which renders off
  * the UI thread, gets a renderer of its own.
  */
-internal class CanvasRenderer {
-    private val painter = ElementPainter()
+internal class CanvasRenderer(
+    measurer: TextMeasurer = AndroidTextMeasurer(),
+) {
+    private val painter = ElementPainter(measurer)
 
     private val previewPaint =
         Paint().apply {
@@ -30,6 +35,12 @@ internal class CanvasRenderer {
             color = Color.DKGRAY
             isAntiAlias = true
             pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
+        }
+
+    private val labelPaint =
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = LABEL_TEXT_PX
+            color = Color.BLACK
         }
 
     private val backgroundPaint =
@@ -68,20 +79,22 @@ internal class CanvasRenderer {
         canvas.drawRect(0f, 0f, width, height, backgroundPaint)
     }
 
-    /** Draws [elements] in z-order, each in its own style through [palette]. */
+    /** Draws [elements] in z-order, each in its own style through [palette], leaving out the text being [editing]. */
     fun drawElements(
         canvas: Canvas,
         elements: List<Element>,
         transform: ViewTransform,
         palette: StylePalette,
+        editing: CanvasController.EditTarget? = null,
     ) {
-        for (element in elements) painter.draw(canvas, element, elements, transform, palette)
+        val context = ElementPainter.Context(transform, palette, editing)
+        for (element in elements) painter.draw(canvas, element, elements, context)
     }
 
     /**
      * The selected element's frame and handles (FR9): two endpoint handles for a
-     * line or arrow; for a shape, a frame around it, four corner handles and the
-     * rotate handle.
+     * line or arrow; for anything else, a frame around it, four corner handles
+     * and the rotate handle.
      */
     fun drawSelectionHandles(
         canvas: Canvas,
@@ -102,20 +115,24 @@ internal class CanvasRenderer {
         }
     }
 
-    /** The dashed outline of what [tool] would draw for a drag from [from] to [to] (screen space). */
+    /** The dashed outline of what [tool] would draw for a drag from [from] to [to] (screen space), at [zoom]. */
     fun drawDragPreview(
         canvas: Canvas,
         tool: String,
         from: PointF,
         to: PointF,
+        zoom: Double,
     ) {
-        if (CanvasTools.isConnector(tool)) {
-            canvas.drawLine(from.x, from.y, to.x, to.y, previewPaint)
-            if (tool == CanvasTools.ARROW) drawArrowhead(canvas, from, to, previewPaint, PREVIEW_ARROWHEAD_PX)
-            return
-        }
         val bounds = RectF(minOf(from.x, to.x), minOf(from.y, to.y), maxOf(from.x, to.x), maxOf(from.y, to.y))
-        if (tool == CanvasTools.ELLIPSE) canvas.drawOval(bounds, previewPaint) else canvas.drawRect(bounds, previewPaint)
+        when {
+            tool == CanvasTools.TABLE -> drawTablePreview(canvas, bounds, to, zoom)
+            CanvasTools.isConnector(tool) -> {
+                canvas.drawLine(from.x, from.y, to.x, to.y, previewPaint)
+                if (tool == CanvasTools.ARROW) drawArrowhead(canvas, from, to, previewPaint, PREVIEW_ARROWHEAD_PX)
+            }
+            tool == CanvasTools.ELLIPSE -> canvas.drawOval(bounds, previewPaint)
+            else -> canvas.drawRect(bounds, previewPaint)
+        }
     }
 
     /**
@@ -137,6 +154,57 @@ internal class CanvasRenderer {
         return bitmap
     }
 
+    /**
+     * The canvas as the view shows it, into [reuse] when that is the right size:
+     * the backdrop the pencil's live stroke is drawn over, so a pen move redraws
+     * one bitmap and the stroke rather than every element.
+     */
+    fun renderSnapshot(
+        elements: List<Element>,
+        transform: ViewTransform,
+        width: Int,
+        height: Int,
+        reuse: Bitmap?,
+    ): Bitmap {
+        val bitmap =
+            reuse?.takeIf { it.width == width && it.height == height } ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawBackground(canvas, width.toFloat(), height.toFloat())
+        drawElements(canvas, elements, transform, StylePalette.EINK)
+        return bitmap
+    }
+
+    /** The grid a table drag makes (FR24), in whole cells from the drag's corner, labelled with its size by the pen. */
+    private fun drawTablePreview(
+        canvas: Canvas,
+        drag: RectF,
+        pen: PointF,
+        zoom: Double,
+    ) {
+        val (rows, cols) = TableElements.gridForDrag(abs(drag.width()) / zoom, abs(drag.height()) / zoom)
+        val cellWidth = (TableElements.CELL_WIDTH * zoom).toFloat()
+        val cellHeight = (TableElements.MIN_ROW_HEIGHT * zoom).toFloat()
+        for (row in 0..rows) {
+            canvas.drawLine(
+                drag.left,
+                drag.top + row * cellHeight,
+                drag.left + cols * cellWidth,
+                drag.top + row * cellHeight,
+                previewPaint,
+            )
+        }
+        for (col in 0..cols) {
+            canvas.drawLine(
+                drag.left + col * cellWidth,
+                drag.top,
+                drag.left + col * cellWidth,
+                drag.top + rows * cellHeight,
+                previewPaint,
+            )
+        }
+        canvas.drawText("$rows × $cols", pen.x + LABEL_OFFSET_PX, pen.y - LABEL_OFFSET_PX, labelPaint)
+    }
+
     private fun drawHandle(
         canvas: Canvas,
         center: PointF,
@@ -145,7 +213,7 @@ internal class CanvasRenderer {
         canvas.drawRect(center.x - half, center.y - half, center.x + half, center.y + half, handlePaint)
     }
 
-    /** A circular-arrow handle above the shape's top-center (rotated with it), joined to the shape by a short stem. */
+    /** A circular-arrow handle above the element's top-center (rotated with it), joined to it by a short stem. */
     private fun drawRotateHandle(
         canvas: Canvas,
         element: Element,
@@ -164,5 +232,7 @@ internal class CanvasRenderer {
         const val HANDLE_DRAW_SIZE_PX = 24f
         const val ROTATE_HANDLE_RADIUS_PX = 22f
         const val PREVIEW_ARROWHEAD_PX = 28f
+        const val LABEL_TEXT_PX = 28f
+        const val LABEL_OFFSET_PX = 16f
     }
 }

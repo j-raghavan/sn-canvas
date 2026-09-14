@@ -1,5 +1,5 @@
 // The action bar (FR18), above the toolbar as in tldraw: undo, redo, delete,
-// duplicate and a ⋮ menu. Each action is enabled only when the canvas says it
+// duplicate and a ⋮ menu, which also starts a new canvas. Each action is enabled only when the canvas says it
 // applies (the canvas-state event), so nothing looks tappable that isn't.
 
 import React, {useState} from 'react';
@@ -46,11 +46,26 @@ const ACTIONS: readonly Action[] = [
   },
 ];
 
-const MENU: readonly {command: CanvasCommand; label: string; needsSelection: boolean}[] = [
-  {command: 'bringToFront', label: 'Bring to front', needsSelection: true},
-  {command: 'sendToBack', label: 'Send to back', needsSelection: true},
-  {command: 'zoomToFit', label: 'Zoom to fit', needsSelection: false},
-  {command: 'zoomTo100', label: 'Zoom to 100%', needsSelection: false},
+type MenuItem = {
+  /** A canvas command, or 'newCanvas', which the screen's session handles. */
+  action: CanvasCommand | 'newCanvas';
+  label: string;
+  /** Greyed out with nothing selected. */
+  needsSelection?: boolean;
+  /** Listed only while a table is selected (FR24). */
+  tableOnly?: boolean;
+};
+
+const MENU: readonly MenuItem[] = [
+  {action: 'bringToFront', label: 'Bring to front', needsSelection: true},
+  {action: 'sendToBack', label: 'Send to back', needsSelection: true},
+  {action: 'tableAddRow', label: 'Add row', tableOnly: true},
+  {action: 'tableAddColumn', label: 'Add column', tableOnly: true},
+  {action: 'tableRemoveRow', label: 'Remove last row', tableOnly: true},
+  {action: 'tableRemoveColumn', label: 'Remove last column', tableOnly: true},
+  {action: 'zoomToFit', label: 'Zoom to fit'},
+  {action: 'zoomTo100', label: 'Zoom to 100%'},
+  {action: 'newCanvas', label: 'New canvas'},
 ];
 
 const MORE_ICON = require('../../assets/icons/action-more.png');
@@ -58,27 +73,33 @@ const MORE_ICON = require('../../assets/icons/action-more.png');
 type Props = {
   ui: CanvasUiState;
   onCommand: (command: CanvasCommand) => void;
+  /** Saves the canvas shown and starts a new, empty one. */
+  onNewCanvas: () => void;
 };
 
-export default function ActionBar({ui, onCommand}: Props): React.JSX.Element {
+export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
   return (
     // box-none: taps beside the bar and menu still reach the canvas underneath.
     <View style={styles.wrapper} pointerEvents="box-none">
       {isMenuOpen && (
         <View style={styles.menu}>
-          {MENU.map(item => {
+          {MENU.filter(item => !item.tableOnly || ui.selectedType === 'table').map(item => {
             const enabled = !item.needsSelection || ui.hasSelection;
             return (
               <Pressable
-                key={item.command}
-                testID={`supercanvas-menu-${item.command}`}
+                key={item.action}
+                testID={`supercanvas-menu-${item.action}`}
                 accessibilityLabel={item.label}
                 disabled={!enabled}
                 style={styles.menuItem}
                 onPress={() => {
                   setMenuOpen(false);
-                  onCommand(item.command);
+                  if (item.action === 'newCanvas') {
+                    onNewCanvas();
+                  } else {
+                    onCommand(item.action);
+                  }
                 }}>
                 <Text style={[styles.menuText, !enabled && styles.disabled]}>{item.label}</Text>
               </Pressable>

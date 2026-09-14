@@ -61,4 +61,14 @@ class EditHistoryTest {
         history.undo()
         assertEquals(listOf(false, true), listOf(history.canUndo, history.canRedo))
     }
+
+    @Test
+    fun `current is the snapshot the canvas is at`() {
+        val history = EditHistory()
+        history.commit(one)
+        history.commit(two)
+        assertEquals(two, history.current)
+        history.undo()
+        assertEquals(one, history.current)
+    }
 }

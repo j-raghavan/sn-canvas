@@ -120,6 +120,50 @@ def chevron(name, up):
     save(image, name)
 
 
+def tool_draw():
+    """A pencil: freehand drawing (FR5)."""
+    image, draw = new_canvas()
+    polyline(draw, [(24, 104), (24, 82), (82, 24), (104, 46), (46, 104), (24, 104)])
+    polyline(draw, [(70, 36), (92, 58)])
+    save(image, "tool-draw")
+
+
+def tool_eraser():
+    """An eraser block on its base line (FR20)."""
+    image, draw = new_canvas()
+    polyline(draw, [(44, 104), (22, 82), (76, 28), (106, 58), (60, 104), (44, 104)])
+    polyline(draw, [(49, 55), (79, 85)])
+    polyline(draw, [(60, 104), (106, 104)])
+    save(image, "tool-eraser")
+
+
+def tool_text():
+    """A T: text boxes (FR6)."""
+    image, draw = new_canvas()
+    polyline(draw, [(30, 28), (98, 28)])
+    polyline(draw, [(64, 28), (64, 104)])
+    save(image, "tool-text")
+
+
+def tool_note():
+    """A sticky note with its corner turned up (FR21)."""
+    image, draw = new_canvas()
+    polyline(draw, [(24, 24), (104, 24), (104, 76), (76, 104), (24, 104), (24, 24)])
+    polyline(draw, [(104, 76), (76, 76), (76, 104)])
+    save(image, "tool-note")
+
+
+def tool_table():
+    """A 3 by 3 grid: tables (FR24)."""
+    image, draw = new_canvas()
+    draw.rounded_rectangle(scaled((20, 24, 108, 104)), radius=8 * SCALE, outline="black", width=STROKE * SCALE)
+    for y in (51, 77):
+        polyline(draw, [(20, y), (108, y)], width=7)
+    for x in (49, 79):
+        polyline(draw, [(x, 24), (x, 104)], width=7)
+    save(image, "tool-table")
+
+
 ICONS = [
     action_save_to_note,
     action_duplicate,
@@ -134,6 +178,11 @@ ICONS = [
     lambda: dash_icon("dash-solid", "solid"),
     lambda: chevron("chevron-up", up=True),
     lambda: chevron("chevron-down", up=False),
+    tool_draw,
+    tool_eraser,
+    tool_text,
+    tool_note,
+    tool_table,
 ]
 
 if __name__ == "__main__":

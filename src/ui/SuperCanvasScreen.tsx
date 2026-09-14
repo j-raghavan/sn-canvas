@@ -1,6 +1,7 @@
 // The plugin's one screen (PRD §3 step 3, §9): the native canvas full-screen,
-// under a header (Save to Note, Close), with the style panel top right and the
-// action bar above the floating toolbar (FR16-FR19). Thin by design: the canvas
+// under a header (Save to Note, Close), with the style panel top right, the
+// action bar above the floating toolbar (FR16-FR19), and the keyboard text
+// editor over whatever text the canvas is editing (FR6/FR24). Thin by design: the canvas
 // session and the button presses are injected (wiring.ts, via App.tsx), and
 // the action bar and style panel follow the state the canvas reports.
 
@@ -8,8 +9,10 @@ import React, {useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
 import type {CanvasSession} from '../application/canvasSession';
 import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
+import {parseTextEditRequest, type TextEditRequest} from '../domain/textEdit';
 import ActionBar from './ActionBar';
 import StylePanel from './StylePanel';
+import TextEditor from './TextEditor';
 import Toolbar from './Toolbar';
 import {
   SuperCanvasNativeView,
@@ -46,6 +49,7 @@ export default function SuperCanvasScreen({createSession, buttonEvents}: Props):
   const [toolMode, setToolMode] = useState<ToolMode>('select');
   const [ui, setUi] = useState<CanvasUiState>(INITIAL_UI_STATE);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editing, setEditing] = useState<TextEditRequest | null>(null);
   const canvasRef = useRef<CanvasViewRef>(null);
 
   // The plugin runtime stays warm between opens, so this screen can stay
@@ -90,14 +94,26 @@ export default function SuperCanvasScreen({createSession, buttonEvents}: Props):
           style={StyleSheet.absoluteFill}
           toolMode={toolMode}
           onCanvasState={event => setUi(parseUiState(event.nativeEvent))}
+          onEditText={event => setEditing(parseTextEditRequest(event.nativeEvent))}
         />
         <StylePanel
           style={ui.style}
           swatch={color => swatchColor(color, einkGrays)}
           onChange={(property, value) => runCommand('setStyle', [property, value])}
         />
-        <ActionBar ui={ui} onCommand={runCommand} />
+        <ActionBar ui={ui} onCommand={runCommand} onNewCanvas={session.newCanvas} />
         <Toolbar toolMode={toolMode} onToolChange={setToolMode} />
+        {editing !== null && (
+          <TextEditor
+            // A fresh editor, with its own text, for every edit.
+            key={`${editing.elementId}:${editing.cellIndex}`}
+            request={editing}
+            onDone={text => {
+              runCommand('setText', [text]);
+              setEditing(null);
+            }}
+          />
+        )}
         {notice !== null && (
           <View style={styles.notice} pointerEvents="none">
             <Text style={styles.noticeText}>{notice}</Text>

@@ -62,4 +62,9 @@ class CanvasStyleTest {
         assertEquals(7f, ShapeStyle.DEFAULT.strokeWidthPx(2.0), 0f)
         assertEquals(ShapeStyle.MIN_STROKE_PX, ShapeStyle(size = SizeStyle.S).strokeWidthPx(0.1), 0f)
     }
+
+    @Test
+    fun `each size has a text size for text boxes, notes and tables`() {
+        assertEquals(listOf(18.0, 24.0, 36.0, 44.0), SizeStyle.entries.map { it.fontSize })
+    }
 }

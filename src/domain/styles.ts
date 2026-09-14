@@ -39,10 +39,23 @@ export type StyleProperty = keyof CanvasStyle;
 /** tldraw's defaults, which the native canvas also starts with. */
 export const DEFAULT_STYLE: CanvasStyle = {color: 'black', opacity: 1, fill: 'none', dash: 'draw', size: 'm'};
 
-/** What the action bar and style panel show, as the canvas reports it. */
-export type CanvasUiState = {canUndo: boolean; canRedo: boolean; hasSelection: boolean; style: CanvasStyle};
+/** What the action bar and style panel show, as the canvas reports it; a selected table brings its row and column actions. */
+export type CanvasUiState = {
+  canUndo: boolean;
+  canRedo: boolean;
+  hasSelection: boolean;
+  /** The selected element's type (such as 'table'), or null with nothing selected. */
+  selectedType: string | null;
+  style: CanvasStyle;
+};
 
-export const INITIAL_UI_STATE: CanvasUiState = {canUndo: false, canRedo: false, hasSelection: false, style: DEFAULT_STYLE};
+export const INITIAL_UI_STATE: CanvasUiState = {
+  canUndo: false,
+  canRedo: false,
+  hasSelection: false,
+  selectedType: null,
+  style: DEFAULT_STYLE,
+};
 
 const COLOR_IDS: readonly ColorId[] = COLORS.map(color => color.id);
 
@@ -59,6 +72,7 @@ export function parseUiState(payload: unknown): CanvasUiState {
     canUndo: body.canUndo === true,
     canRedo: body.canRedo === true,
     hasSelection: body.hasSelection === true,
+    selectedType: typeof body.selectedType === 'string' && body.selectedType !== '' ? body.selectedType : null,
     style: {
       color: oneOf(COLOR_IDS, style.color, DEFAULT_STYLE.color),
       opacity: isOpacity(style.opacity) ? style.opacity : DEFAULT_STYLE.opacity,

@@ -3,9 +3,11 @@
 // assert outcomes (what got saved where) rather than call sequences.
 
 import type {CanvasStorePort, HostPort} from '../../src/application/canvasSession';
+import {isCanvasId} from '../../src/domain/canvasLink';
 import type {Logger} from '../../src/sdk/types';
 
 export type FakeStore = CanvasStorePort & {
+  /** In the order written, so the last entry is the newest file. */
   files: Map<string, string>;
   shown: string;
   failing: Set<keyof CanvasStorePort>;
@@ -14,6 +16,10 @@ export type FakeStore = CanvasStorePort & {
 export const createFakeStore = (initial: Record<string, string> = {}): FakeStore => {
   const files = new Map(Object.entries(initial));
   const failing = new Set<keyof CanvasStorePort>();
+  const write = (path: string, content: string) => {
+    files.delete(path);
+    files.set(path, content);
+  };
   const store: FakeStore = {
     files,
     failing,
@@ -26,7 +32,7 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       if (failing.has('save')) {
         return false;
       }
-      files.set(path, store.shown);
+      write(path, store.shown);
       return true;
     },
     async remove(path) {
@@ -36,8 +42,22 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       if (failing.has('renderThumbnail')) {
         return false;
       }
-      files.set(path, `png:${store.shown}`);
+      write(path, `png:${store.shown}`);
       return true;
+    },
+    async readText(path) {
+      return files.get(path) ?? null;
+    },
+    async writeText(path, text) {
+      write(path, text);
+      return true;
+    },
+    async savedCanvasIds(canvasDir) {
+      return [...files.keys()]
+        .reverse()
+        .filter(path => path.startsWith(`${canvasDir}/`) && path.endsWith('.json'))
+        .map(path => path.slice(canvasDir.length + 1, -'.json'.length))
+        .filter(isCanvasId);
     },
   };
   return store;
@@ -48,6 +68,8 @@ export type FakeHost = HostPort & {
   lassoed: unknown[];
   inserted: string[];
   insertSucceeds: boolean;
+  /** What getLastElement reports for the image just inserted. */
+  lastUuid: string | null;
   closeCount: number;
 };
 
@@ -57,6 +79,7 @@ export const createFakeHost = (): FakeHost => {
     lassoed: [],
     inserted: [],
     insertSucceeds: true,
+    lastUuid: 'u-1',
     closeCount: 0,
     async pluginDir() {
       return host.dir;
@@ -70,6 +93,9 @@ export const createFakeHost = (): FakeHost => {
       }
       host.inserted.push(path);
       return true;
+    },
+    async lastElementUuid() {
+      return host.lastUuid;
     },
     closeView() {
       host.closeCount += 1;

@@ -11,6 +11,9 @@ class EditHistory(
     private val snapshots = mutableListOf(initial)
     private var index = 0
 
+    /** The snapshot the canvas is at now. */
+    val current: List<Element> get() = snapshots[index]
+
     val canUndo: Boolean get() = index > 0
 
     val canRedo: Boolean get() = index < snapshots.lastIndex

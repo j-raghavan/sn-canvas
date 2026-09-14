@@ -9,8 +9,10 @@ import kotlin.math.sin
  * transforms in ViewTransforms and CanvasJson's persistence are all plain-JUnit
  * testable.
  *
- * An Element is either a bbox shape (rectangle/ellipse: x/y/width/height, with an
- * optional rotation about its center) or an endpoint shape (line/arrow). A
+ * An Element is either a bbox element (x/y/width/height, with an optional
+ * rotation about its center: a rectangle or ellipse, a text box, sticky note or
+ * table, whose height follows its text, or a freehand stroke, whose points are
+ * normalized to the box) or an endpoint shape (line/arrow). A
  * line/arrow endpoint may be bound to another element by id (FR7); bound
  * positions are resolved live by SuperCanvasCore.resolveArrowEndpoints and never
  * stored, which is what makes connectors re-route for free when a shape moves.
@@ -62,12 +64,62 @@ object CanvasTools {
     const val ELLIPSE = "ellipse"
     const val LINE = "line"
     const val ARROW = "arrow"
+    const val DRAW = "draw"
+    const val ERASER = "eraser"
+    const val TEXT = "text"
+    const val NOTE = "note"
+    const val TABLE = "table"
+
+    private val PEN_TOOLS = setOf(RECTANGLE, ELLIPSE, LINE, ARROW, DRAW, ERASER, TEXT, NOTE, TABLE)
 
     /** True for the endpoint-defined tools, whose drag draws a line/arrow. */
     fun isConnector(tool: String): Boolean = tool == LINE || tool == ARROW
 
-    /** True for every tool whose drag draws a new element; false for select and for unknown ids. */
-    fun drawsElement(tool: String): Boolean = tool == RECTANGLE || tool == ELLIPSE || isConnector(tool)
+    /** True for the tools whose drag outlines a new element: rectangle, ellipse, line, arrow and table. */
+    fun drawsElement(tool: String): Boolean = tool == RECTANGLE || tool == ELLIPSE || tool == TABLE || isConnector(tool)
+
+    /** True for the tools that act on the pen alone (FR15); select, and unknown ids, take fingers too. */
+    fun usesPen(tool: String): Boolean = tool in PEN_TOOLS
+
+    /** True for the tools that place text: a text box or a sticky note. */
+    fun placesText(tool: String): Boolean = tool == TEXT || tool == NOTE
+}
+
+/** One freehand sample (FR5): its position normalized to 0..1 within the stroke's bounds, and pen pressure 0..1. */
+data class StrokePoint(
+    val x: Double,
+    val y: Double,
+    val pressure: Double,
+)
+
+/**
+ * A table's grid (FR24): [rows] × [cols] cells of text, row by row, and the
+ * height each row was given ([rowMinHeights], world units). A row is that
+ * tall, or taller when its text needs more (see [TableElements]).
+ */
+data class TableData(
+    val rows: Int,
+    val cols: Int,
+    val cells: List<String>,
+    val rowMinHeights: List<Double> = List(rows) { TableElements.MIN_ROW_HEIGHT },
+) {
+    init {
+        require(rows >= 1 && cols >= 1) { "a table needs at least one row and one column" }
+        require(cells.size == rows * cols) { "a table needs exactly rows × cols cells" }
+        require(rowMinHeights.size == rows) { "a table needs one height per row" }
+    }
+
+    fun cell(
+        row: Int,
+        col: Int,
+    ): String = cells[row * cols + col]
+
+    companion object {
+        fun empty(
+            rows: Int,
+            cols: Int,
+        ): TableData = TableData(rows, cols, List(rows * cols) { "" })
+    }
 }
 
 /** An axis-aligned world-space rectangle — content bounds, or the currently visible viewport (minimap). */
@@ -120,11 +172,21 @@ data class Element(
     val rotation: Double = 0.0,
     // FR19. The default is the look elements had before styles existed.
     val style: ShapeStyle = ShapeStyle.LEGACY,
+    // FR6/FR21: a text box's or sticky note's text; see TextElements.
+    val text: String? = null,
+    // FR5: a freehand stroke's samples, normalized to x/y/width/height, so moving,
+    // resizing and rotating a stroke are the same bbox operations as for any shape.
+    val points: List<StrokePoint>? = null,
+    // FR5: a freehand stroke's line width in world units, set by the pen that drew it; null draws it at its style's size.
+    val strokeWidth: Double? = null,
+    // FR24: a table's grid and cell text; see TableElements.
+    val table: TableData? = null,
 ) {
     init {
         require(rotation.isFinite()) { "rotation must be finite" }
         require(width >= 0) { "width must be >= 0" }
         require(height >= 0) { "height must be >= 0" }
+        require(strokeWidth == null || (strokeWidth.isFinite() && strokeWidth > 0)) { "strokeWidth must be positive" }
         val endpointFields = listOf(startX, startY, endX, endY)
         require(endpointFields.all { it == null } || endpointFields.none { it == null }) {
             "startX/startY/endX/endY must be all null (bbox element) or all non-null (line/arrow element)"

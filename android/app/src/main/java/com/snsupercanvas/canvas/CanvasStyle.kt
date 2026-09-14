@@ -54,15 +54,16 @@ enum class DashStyle(
     SOLID("solid"),
 }
 
-/** Stroke weights in world units, so a PDF or a thumbnail matches the screen at 100% (tldraw's s/m/l/xl). */
+/** Stroke weights and text sizes in world units, so a PDF or a thumbnail matches the screen at 100% (tldraw's s/m/l/xl). */
 enum class SizeStyle(
     override val id: String,
     val strokeWidth: Double,
+    val fontSize: Double,
 ) : StyleOption {
-    S("s", 2.0),
-    M("m", 3.5),
-    L("l", 5.0),
-    XL("xl", 10.0),
+    S("s", 2.0, 18.0),
+    M("m", 3.5, 24.0),
+    L("l", 5.0, 36.0),
+    XL("xl", 10.0, 44.0),
 }
 
 /** An element's look (FR19): colour, opacity, fill, dash and size. */

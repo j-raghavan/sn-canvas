@@ -109,6 +109,9 @@ object ViewTransforms {
                     SuperCanvasCore.cornerPoints(element)
                 }
             }
-        return points.fold(NO_BOUNDS) { bounds, p -> bounds.union(WorldRect(p.x, p.y, p.x, p.y)) }
+        return boundsOf(points)
     }
+
+    /** The smallest rect holding every one of [points]; inside-out (and so empty) for none. */
+    fun boundsOf(points: List<Point>): WorldRect = points.fold(NO_BOUNDS) { bounds, p -> bounds.union(WorldRect(p.x, p.y, p.x, p.y)) }
 }

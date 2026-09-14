@@ -54,6 +54,20 @@ object CanvasJson {
                 string("dash", element.style.dash.id)
                 string("size", element.style.size.id)
             }
+            element.text?.let { string("text", it) }
+            // Flat [x, y, pressure, ...] triples, rounded: 1/10000 of the stroke's bounds is finer than any pen.
+            element.points?.let { points ->
+                numbers("points", points.flatMap { listOf(rounded(it.x, 4), rounded(it.y, 4), rounded(it.pressure, 2)) })
+            }
+            element.strokeWidth?.let { number("strokeWidth", rounded(it, 3)) }
+            element.table?.let { table ->
+                obj("table") {
+                    number("rows", table.rows.toDouble())
+                    number("cols", table.cols.toDouble())
+                    strings("cells", table.cells)
+                    numbers("rowMinHeights", table.rowMinHeights.map { rounded(it, 1) })
+                }
+            }
         }
         return sb.append('}').toString()
     }
@@ -107,7 +121,53 @@ object CanvasJson {
             startElementId = obj.string("startElementId"),
             endElementId = obj.string("endElementId"),
             style = styleFromJson(obj.entries["style"] as? JsonValue.Obj),
+            text = obj.string("text"),
+            points = pointsFromJson(obj.entries["points"] as? JsonValue.Arr),
+            // Absent in strokes saved before it existed, or unusable: the stroke then draws at its style's size.
+            strokeWidth = obj.number("strokeWidth")?.takeIf { it.isFinite() && it > 0 },
+            table = tableFromJson(obj.entries["table"] as? JsonValue.Obj),
         )
+
+    /** A stroke's [x, y, pressure, ...] triples; anything but whole triples of numbers drops them (the stroke then draws nothing). */
+    private fun pointsFromJson(arr: JsonValue.Arr?): List<StrokePoint>? {
+        if (arr == null) return null
+        val items = arr.items
+        val values = items.mapNotNull { (it as? JsonValue.Num)?.value }
+        return if (values.size == items.size &&
+            values.size % 3 == 0
+        ) {
+            values.chunked(3) { (x, y, pressure) -> StrokePoint(x, y, pressure) }
+        } else {
+            null
+        }
+    }
+
+    /** A table's grid; a grid that doesn't add up throws, which skips just this element (see [deserializeElements]). */
+    private fun tableFromJson(obj: JsonValue.Obj?): TableData? {
+        if (obj == null) return null
+        val rows = obj.number("rows")?.toInt() ?: 0
+        val cells = (obj.entries["cells"] as? JsonValue.Arr)?.items.orEmpty().map { (it as? JsonValue.Str)?.value.orEmpty() }
+        // Absent in canvases saved before rows could be resized, or not one per row: every row starts at the minimum.
+        val heights =
+            (obj.entries["rowMinHeights"] as? JsonValue.Arr)?.items.orEmpty().map {
+                (it as? JsonValue.Num)?.value ?: TableElements.MIN_ROW_HEIGHT
+            }
+        val rowMinHeights =
+            if (heights.size == rows) {
+                heights.map { it.coerceIn(TableElements.MIN_ROW_HEIGHT, TableElements.MAX_ROW_HEIGHT) }
+            } else {
+                List(rows) { TableElements.MIN_ROW_HEIGHT }
+            }
+        return TableData(rows, obj.number("cols")?.toInt() ?: 0, cells, rowMinHeights)
+    }
+
+    private fun rounded(
+        value: Double,
+        places: Int,
+    ): Double {
+        val scale = Math.pow(10.0, places.toDouble())
+        return Math.round(value * scale) / scale
+    }
 
     /** Absent in canvases saved before styles existed, which keep their original look; unknown ids fall back the same way. */
     private fun styleFromJson(obj: JsonValue.Obj?): ShapeStyle {
@@ -355,6 +415,16 @@ private class JsonObjectWriter(
         key: String,
         value: Double?,
     ) = field(key, if (value == null) "null" else value.toString())
+
+    fun numbers(
+        key: String,
+        values: List<Double>,
+    ) = field(key, values.joinToString(",", "[", "]"))
+
+    fun strings(
+        key: String,
+        values: List<String>,
+    ) = field(key, values.joinToString(",", "[", "]") { quote(it) })
 
     fun obj(
         key: String,

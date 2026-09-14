@@ -170,4 +170,9 @@ class ViewTransformsTest {
         assertEquals(200.0, fit.screenX(10.0), 1e-9)
         assertEquals(200.0, fit.screenY(100.0), 1e-9)
     }
+
+    @Test
+    fun `boundsOf is the smallest rect holding every point`() {
+        assertEquals(WorldRect(-3.0, 2.0, 1.0, 5.0), ViewTransforms.boundsOf(listOf(Point(1.0, 2.0), Point(-3.0, 5.0))))
+    }
 }

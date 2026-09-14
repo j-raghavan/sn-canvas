@@ -1,4 +1,5 @@
-// The floating, centered tool pill. Icons are drawn PNGs (assets/icons/)
+// The floating, centered tool pill: shapes, connectors, the pencil and eraser,
+// text, sticky notes and tables (FR16). Icons are drawn PNGs (assets/icons/)
 // rather than Unicode glyphs, which rendered badly in the device font. They
 // are black on transparent, so tintColor can invert the active tool.
 
@@ -12,6 +13,11 @@ const TOOLS: ReadonlyArray<{id: ToolMode; label: string; icon: ImageSourcePropTy
   {id: 'ellipse', label: 'Ellipse', icon: require('../../assets/icons/tool-ellipse.png')},
   {id: 'line', label: 'Line', icon: require('../../assets/icons/tool-line.png')},
   {id: 'arrow', label: 'Arrow', icon: require('../../assets/icons/action-arrow.png')},
+  {id: 'draw', label: 'Pencil', icon: require('../../assets/icons/tool-draw.png')},
+  {id: 'eraser', label: 'Eraser', icon: require('../../assets/icons/tool-eraser.png')},
+  {id: 'text', label: 'Text', icon: require('../../assets/icons/tool-text.png')},
+  {id: 'note', label: 'Sticky note', icon: require('../../assets/icons/tool-note.png')},
+  {id: 'table', label: 'Table', icon: require('../../assets/icons/tool-table.png')},
 ];
 
 type Props = {
