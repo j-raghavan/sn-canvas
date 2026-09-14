@@ -198,8 +198,12 @@ object CanvasJson {
 
     private fun JsonValue.Obj.number(key: String): Double? = (entries[key] as? JsonValue.Num)?.value
 
-    /** Minimal JSON value tree — only what [deserializeElements] needs to walk. */
-    private sealed class JsonValue {
+    /**
+     * Minimal JSON value tree — only what [deserializeElements] needs to walk. `internal` (not `private`) so
+     * [JsonParser] doubles as the plain-JUnit-safe JSON reader for tests that need one (e.g. loading the shared
+     * style-catalog fixture in `CanvasStyleTest`) instead of each growing its own hand-rolled parser.
+     */
+    internal sealed class JsonValue {
         data class Str(
             val value: String,
         ) : JsonValue()
@@ -235,7 +239,7 @@ object CanvasJson {
      * hand-edited or foreign-tool-written files, not only its own output.
      */
     @Suppress("TooManyFunctions") // one small function per JSON grammar rule
-    private class JsonParser(
+    internal class JsonParser(
         private val text: String,
     ) {
         private var pos = 0

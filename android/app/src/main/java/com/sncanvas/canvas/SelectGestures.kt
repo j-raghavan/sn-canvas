@@ -6,10 +6,14 @@ package com.sncanvas.canvas
  * edge, which wins over the element's body, which wins over panning. The live
  * preview and the commit on release both come from [edit], so what the user
  * sees while dragging is what they get. Pure: [CanvasView] feeds it world
- * points and draws or commits what it returns.
+ * points, [state] and [selected] read the controller's current values (not a
+ * snapshot: a gesture spans many calls), and it draws or commits what [edit]
+ * returns — no [CanvasController] reference, so nothing here can command it.
  */
 internal class SelectGestures(
-    private val controller: CanvasController,
+    private val state: () -> CanvasState,
+    private val selected: () -> Element?,
+    private val fitted: (CanvasState, String) -> CanvasState,
     private val measurer: TextMeasurer,
 ) {
     /** The drag a select-tool touch at [world] starts; [tolerance] is the handles' reach in world units. */
@@ -17,8 +21,8 @@ internal class SelectGestures(
         world: Point,
         tolerance: Double,
     ): CanvasGesture {
-        val element = controller.selected ?: return CanvasGesture.Pan
-        return when (val handle = CanvasCore.handleAt(controller.state, element.id, world.x, world.y, tolerance)) {
+        val element = selected() ?: return CanvasGesture.Pan
+        return when (val handle = CanvasCore.handleAt(state(), element.id, world.x, world.y, tolerance)) {
             is HandleTarget.CornerHandle -> CanvasGesture.Resize(handle.corner)
             is HandleTarget.EndpointHandle -> CanvasGesture.DragEndpoint(handle.which)
             HandleTarget.RotateHandle -> CanvasGesture.Rotate
@@ -35,16 +39,16 @@ internal class SelectGestures(
         id: String,
         pointer: Point,
     ): CanvasState? {
-        val state = controller.state
+        val current = state()
         return when (active) {
-            is CanvasGesture.Move -> CanvasCore.moveElement(state, id, active.dx, active.dy)
-            is CanvasGesture.Resize -> controller.fitted(CanvasCore.resizeElement(state, id, active.corner, pointer.x, pointer.y), id)
-            is CanvasGesture.ResizeRow -> TableEdits.dragRowEdge(state, id, active.row, pointer, measurer)
+            is CanvasGesture.Move -> CanvasCore.moveElement(current, id, active.dx, active.dy)
+            is CanvasGesture.Resize -> fitted(CanvasCore.resizeElement(current, id, active.corner, pointer.x, pointer.y), id)
+            is CanvasGesture.ResizeRow -> TableEdits.dragRowEdge(current, id, active.row, pointer, measurer)
             is CanvasGesture.DragEndpoint -> {
-                val target = CanvasCore.bindingTargetAt(pointer, state.elements)
-                CanvasCore.moveEndpoint(state, id, active.which, pointer, target?.id)
+                val target = CanvasCore.bindingTargetAt(pointer, current.elements)
+                CanvasCore.moveEndpoint(current, id, active.which, pointer, target?.id)
             }
-            CanvasGesture.Rotate -> CanvasCore.rotateElement(state, id, pointer)
+            CanvasGesture.Rotate -> CanvasCore.rotateElement(current, id, pointer)
             else -> null
         }
     }
@@ -56,7 +60,7 @@ internal class SelectGestures(
         tolerance: Double,
     ): CanvasGesture {
         val rowEdge = TableElements.rowEdgeAt(element, element.toLocal(world.x, world.y), tolerance * ROW_EDGE_REACH, measurer)
-        val hit = CanvasCore.hitTest(world.x, world.y, controller.state.elements)
+        val hit = CanvasCore.hitTest(world.x, world.y, state().elements)
         return when {
             rowEdge != null -> CanvasGesture.ResizeRow(rowEdge)
             hit?.id == element.id && !element.hasEndpoints() -> CanvasGesture.Move()

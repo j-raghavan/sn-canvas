@@ -120,6 +120,22 @@ def chevron(name, up):
     save(image, name)
 
 
+def tool_help():
+    """A bold question mark, no ring (its round button is the ring): toggles the onboarding hints."""
+    import math
+
+    image, draw = new_canvas()
+    # The hook, swept clockwise from 9 o'clock over the top to 5 o'clock (sampled as dash_icon's hand-drawn circle is),
+    # then in to the middle and down the stem.
+    points = []
+    for degrees in range(180, 425, 5):
+        angle = math.radians(degrees)
+        points.append((64 + 24 * math.cos(angle), 40 + 24 * math.sin(angle)))
+    polyline(draw, points + [(64, 74), (64, 84)], width=13)
+    draw.ellipse(scaled((56, 96, 72, 112)), fill="black")
+    save(image, "tool-help")
+
+
 def tool_draw():
     """A pencil: freehand drawing (FR5)."""
     image, draw = new_canvas()
@@ -178,6 +194,7 @@ ICONS = [
     lambda: dash_icon("dash-solid", "solid"),
     lambda: chevron("chevron-up", up=True),
     lambda: chevron("chevron-down", up=False),
+    tool_help,
     tool_draw,
     tool_eraser,
     tool_text,

@@ -44,6 +44,9 @@ class CanvasView(
             view: CanvasView,
             request: TextEditRequest,
         )
+
+        /** The canvas was touched, by pen or finger: once per touch, at its first contact (the onboarding hints go). */
+        fun onTouched(view: CanvasView)
     }
 
     private val measurer = AndroidTextMeasurer()
@@ -68,7 +71,7 @@ class CanvasView(
                 override fun onEditText(target: CanvasController.EditTarget) = requestTextEditor(target)
             },
         )
-    private val selectGestures = SelectGestures(controller, measurer)
+    private val selectGestures = SelectGestures({ controller.state }, { controller.selected }, controller::fitted, measurer)
 
     private var toolMode = CanvasTools.SELECT
     private val isPencil: Boolean get() = toolMode == CanvasTools.DRAW
@@ -80,6 +83,12 @@ class CanvasView(
     private val downTouch = PointF()
     private val lastTouch = PointF()
     private val dragCurrent = PointF()
+
+    // A cached frame taken when a pan begins, blitted with a translate/scale while it's dragged (NFR1/NFR3)
+    // instead of repainting every element on each move sample: fewer full-surface e-ink repaints while panning.
+    // Reused across pans, as LiveInk's stroke backdrop already is; self-heals on a size change (renderSnapshot).
+    private var panSnapshot: Bitmap? = null
+    private var panSnapshotTransform: ViewTransform? = null
 
     // Minimap: this view decides when it shows (during pan/zoom); MinimapRenderer draws it.
     private val minimapRenderer = MinimapRenderer()
@@ -232,6 +241,8 @@ class CanvasView(
     private fun newElementId(): String = "el-" + System.currentTimeMillis() + "-" + (0..9999).random()
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // One coarse event per touch, never per sample (NFR5): it only tells the UI the canvas was touched.
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) events.onTouched(this)
         // Pinch-zoom is a two-finger gesture; a palm beside the drawing pen must not zoom.
         if (!arbiter.isPenActive) scaleGestureDetector.onTouchEvent(event)
         val inputs =
@@ -286,6 +297,7 @@ class CanvasView(
                 CanvasTools.placesText(toolMode) -> CanvasGesture.PlaceText
                 else -> CanvasGesture.DrawShape
             }
+        if (gesture == CanvasGesture.Pan) beginPanSnapshot()
         Log.d(
             LOG_TAG,
             "touch start pen=${contact.isPen} eraser=${contact.isEraser} tool=$toolMode gesture=${gesture?.javaClass?.simpleName}",
@@ -378,6 +390,37 @@ class CanvasView(
      */
     private fun needsRedraw(): Boolean = gesture != null && (gesture !is CanvasGesture.Freehand || liveInk.drawsLiveStroke)
 
+    /** Caches the current frame so [onDraw] can blit it, cheaply transformed, while the pan being started drags (NFR1/NFR3). */
+    private fun beginPanSnapshot() {
+        if (width == 0 || height == 0) return
+        panSnapshotTransform = controller.state.transform
+        panSnapshot = renderer.renderSnapshot(controller.state.elements, controller.state.transform, width, height, panSnapshot)
+    }
+
+    /**
+     * The fast pass while panning (NFR1): blits [panSnapshot] under a matrix that maps the transform it was taken at
+     * onto [transform], instead of repainting every element. False if there's no snapshot to blit, so the caller
+     * falls back to a full repaint.
+     */
+    private fun drawPanPreview(
+        canvas: Canvas,
+        transform: ViewTransform,
+    ): Boolean {
+        val base = panSnapshotTransform
+        val snapshot = panSnapshot
+        if (base == null || snapshot == null) return false
+        val scale = (transform.zoom / base.zoom).toFloat()
+        val dx = ((base.viewportX - transform.viewportX) * transform.zoom).toFloat()
+        val dy = ((base.viewportY - transform.viewportY) * transform.zoom).toFloat()
+        canvas.save()
+        canvas.translate(dx, dy)
+        canvas.scale(scale, scale)
+        canvas.drawBitmap(snapshot, 0f, 0f, null)
+        canvas.restore()
+        if (isMinimapVisible) minimapRenderer.draw(canvas, controller.state, width, height)
+        return true
+    }
+
     /** Commits the pencil's stroke, keeping its firmware ink: that is what the user just drew. Too short for a stroke, it goes. */
     private fun commitStroke(freehand: CanvasGesture.Freehand) {
         val stroke = StrokeElements.fromSamples(newElementId(), freehand.samples, controller.state.zoom)
@@ -460,14 +503,18 @@ class CanvasView(
         }
     }
 
+    /** [controller.editing] as the painter's own [ElementPainter.HiddenText], so it never needs [CanvasController]'s type. */
+    private fun hiddenText(): ElementPainter.HiddenText? = controller.editing?.let { ElementPainter.HiddenText(it.elementId, it.cellIndex) }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val transform = controller.state.transform
         val freehand = gesture as? CanvasGesture.Freehand
         if (freehand != null && liveInk.drawLive(canvas, liveStroke(freehand), transform)) return
+        if (gesture == CanvasGesture.Pan && drawPanPreview(canvas, transform)) return
         renderer.drawBackground(canvas, width.toFloat(), height.toFloat())
         val elements = elementsForDrawing()
-        renderer.drawElements(canvas, elements, transform, StylePalette.EINK, controller.editing)
+        renderer.drawElements(canvas, elements, transform, StylePalette.EINK, hiddenText())
         controller.selectedId?.let { renderer.drawSelectionHandles(canvas, elements, it, transform) }
         if (gesture == CanvasGesture.DrawShape) renderer.drawDragPreview(canvas, toolMode, downTouch, dragCurrent, transform.zoom)
         if (isMinimapVisible) minimapRenderer.draw(canvas, controller.state, width, height)

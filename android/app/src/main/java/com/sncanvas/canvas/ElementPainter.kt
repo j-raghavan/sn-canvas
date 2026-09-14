@@ -26,7 +26,16 @@ internal class ElementPainter(
     data class Context(
         val transform: ViewTransform,
         val palette: StylePalette,
-        val editing: CanvasController.EditTarget? = null,
+        val editing: HiddenText? = null,
+    )
+
+    /**
+     * The text or table cell the keyboard editor is showing in place, so [TextPainter] leaves it blank rather than
+     * draw over it. Its own type, not [CanvasController.EditTarget]: painting stays on the model, not the controller.
+     */
+    data class HiddenText(
+        val elementId: String,
+        val cellIndex: Int? = null,
     )
 
     private val textPainter = TextPainter(measurer)

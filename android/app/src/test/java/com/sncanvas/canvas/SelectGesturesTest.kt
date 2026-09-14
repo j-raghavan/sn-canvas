@@ -8,7 +8,7 @@ import org.junit.Test
 /** The select tool's drags (FR7/FR9/FR24): what a touch on the selected element starts, and the edit each drag makes. */
 class SelectGesturesTest {
     private val controller = CanvasController(fakeMeasurer, { "new" }, silentListener)
-    private val gestures = SelectGestures(controller, fakeMeasurer)
+    private val gestures = SelectGestures({ controller.state }, { controller.selected }, controller::fitted, fakeMeasurer)
     private val box = Element(id = "box", type = "rectangle", width = 100.0, height = 100.0)
     private val line = Element(id = "line", type = "line", startX = 300.0, startY = 0.0, endX = 400.0, endY = 0.0)
 

@@ -46,6 +46,8 @@ type NativeProps = ViewProps & {
   onCanvasState?: (event: NativeSyntheticEvent<unknown>) => void;
   /** Text editing began (FR6/FR24); validate its body with parseTextEditRequest. */
   onEditText?: (event: NativeSyntheticEvent<unknown>) => void;
+  /** The canvas was touched, by pen or finger: once per touch, with no body. */
+  onCanvasTouch?: (event: NativeSyntheticEvent<unknown>) => void;
 };
 
 const NATIVE_NAME = 'CanvasView';

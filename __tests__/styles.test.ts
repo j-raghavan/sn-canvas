@@ -2,19 +2,39 @@
  * The style domain (FR19): the canvas-state event validated at the bridge,
  * colour names, and what a swatch shows.
  */
+import fs from 'fs';
+import path from 'path';
 import {
   COLORS,
+  DASHES,
   DEFAULT_STYLE,
+  FILLS,
+  IMAGE_DASHES,
   INITIAL_UI_STATE,
+  OPACITY_STEPS,
+  SIZES,
   colorName,
   opacityStepIndex,
   parseUiState,
   swatchColor,
 } from '../src/domain/styles';
 
-test("tldraw's 12 colours, with tldraw's defaults", () => {
-  expect(COLORS).toHaveLength(12);
-  expect(DEFAULT_STYLE).toEqual({color: 'black', opacity: 1, fill: 'none', dash: 'draw', size: 'm'});
+/**
+ * The style panel's catalog also lives, independently, as CanvasStyle.kt's enums (FR19) — the two must
+ * agree on ids and values. style-catalog.json at the repo root is the golden fixture both this test and
+ * CanvasStyleTest.kt assert their own copy against, so the two can't silently drift apart (see its
+ * `_comment`). Read from disk, not imported, since resolveJsonModule isn't set for this project.
+ */
+const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'style-catalog.json'), 'utf8'));
+
+test("tldraw's 12 colours, with tldraw's defaults, matching the shared style-catalog.json fixture", () => {
+  expect(COLORS).toEqual(catalog.colors);
+  expect([...FILLS]).toEqual(catalog.fills);
+  expect([...DASHES]).toEqual(catalog.dashes);
+  expect([...IMAGE_DASHES]).toEqual(catalog.imageDashes);
+  expect([...SIZES]).toEqual(catalog.sizes.map((size: {id: string}) => size.id));
+  expect([...OPACITY_STEPS]).toEqual(catalog.opacitySteps);
+  expect(DEFAULT_STYLE).toEqual(catalog.defaultStyle);
 });
 
 test('parseUiState reads a well-formed event body', () => {

@@ -76,7 +76,7 @@ internal class TextPainter(
                 )
             }
             for (index in table.cells.indices) {
-                if (context.editing == CanvasController.EditTarget(element.id, index)) continue
+                if (context.editing == ElementPainter.HiddenText(element.id, index)) continue
                 val row = index / table.cols
                 val left = bounds.left + index % table.cols * columnWidth
                 val cell = RectF(left, bounds.top + rowTops[row], left + columnWidth, bounds.top + rowTops[row + 1])

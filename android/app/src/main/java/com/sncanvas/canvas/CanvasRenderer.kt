@@ -110,7 +110,7 @@ internal class CanvasRenderer(
         elements: List<Element>,
         transform: ViewTransform,
         palette: StylePalette,
-        editing: CanvasController.EditTarget? = null,
+        editing: ElementPainter.HiddenText? = null,
     ) {
         val context = ElementPainter.Context(transform, palette, editing)
         for (element in elements) painter.draw(canvas, element, elements, context)

@@ -1,9 +1,9 @@
 // The floating, centered tool pill: shapes, connectors, the pencil and eraser,
 // text, sticky notes and tables (FR16), then the image button, which picks an
-// image to insert rather than being a tool (FR22). Icons are drawn PNGs
-// (assets/icons/) rather than Unicode glyphs, which rendered badly in the
-// device font. They are black on transparent, so tintColor can invert the
-// active tool.
+// image to insert rather than being a tool (FR22), and the help button, which
+// shows or hides the onboarding hints. Icons are drawn PNGs (assets/icons/)
+// rather than Unicode glyphs, which rendered badly in the device font. They are
+// black on transparent, so tintColor can invert the active tool.
 
 import React from 'react';
 import {Image, Pressable, StyleSheet, View, type ImageSourcePropType} from 'react-native';
@@ -23,14 +23,37 @@ const TOOLS: ReadonlyArray<{id: ToolMode; label: string; icon: ImageSourcePropTy
 ];
 
 const IMAGE_ICON = require('../../assets/icons/tool-image.png');
+const HELP_ICON = require('../../assets/icons/tool-help.png');
+
+// The pill's measures, which HelpHints also uses to land its arrows on these buttons.
+const BOTTOM = 24;
+const BUTTON = 40;
+const BUTTON_MARGIN = 2;
+const SLOT = BUTTON + 2 * BUTTON_MARGIN;
+const PADDING_H = 10;
+const PADDING_V = 8;
+const BORDER = 1;
+const SEPARATOR_MARGIN = 6;
+// Every tool, then the image and help buttons, the separator between those two, and the pill's padding and border.
+const HALF_WIDTH = ((TOOLS.length + 2) * SLOT + 1 + 2 * SEPARATOR_MARGIN + 2 * (PADDING_H + BORDER)) / 2;
+
+/** Where the pill's buttons sit, in dp: its top above the screen's bottom, and button centres from the middle. */
+export const TOOLBAR_GEOMETRY = {
+  top: BOTTOM + BUTTON + 2 * (PADDING_V + BORDER),
+  toolCenterX: (tool: ToolMode) => -HALF_WIDTH + BORDER + PADDING_H + SLOT * (TOOLS.findIndex(t => t.id === tool) + 0.5),
+  helpCenterX: HALF_WIDTH - BORDER - PADDING_H - SLOT / 2,
+};
 
 type Props = {
   toolMode: ToolMode;
   onToolChange: (tool: ToolMode) => void;
   onInsertImage: () => void;
+  /** Whether the onboarding hints overlay is showing (CanvasScreen), so this button reflects it. */
+  showHints: boolean;
+  onToggleHints: () => void;
 };
 
-export default function Toolbar({toolMode, onToolChange, onInsertImage}: Props): React.JSX.Element {
+export default function Toolbar({toolMode, onToolChange, onInsertImage, showHints, onToggleHints}: Props): React.JSX.Element {
   // box-none: the wrapper spans the width so the pill can center itself, but
   // taps beside the pill must still reach the canvas underneath.
   return (
@@ -52,6 +75,14 @@ export default function Toolbar({toolMode, onToolChange, onInsertImage}: Props):
         <Pressable testID="canvas-insert-image" accessibilityLabel="Image" style={styles.button} onPress={onInsertImage}>
           <Image source={IMAGE_ICON} style={styles.icon} />
         </Pressable>
+        <View style={styles.separator} />
+        <Pressable
+          testID="canvas-help"
+          accessibilityLabel="Help"
+          style={[styles.button, showHints && styles.buttonActive]}
+          onPress={onToggleHints}>
+          <Image source={HELP_ICON} style={[styles.icon, showHints && styles.iconActive]} />
+        </Pressable>
       </View>
     </View>
   );
@@ -62,16 +93,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 24,
+    bottom: BOTTOM,
     alignItems: 'center',
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: PADDING_H,
+    paddingVertical: PADDING_V,
     borderRadius: 28,
-    borderWidth: 1,
+    borderWidth: BORDER,
     borderColor: '#cccccc',
     backgroundColor: '#ffffff',
     // E-ink has no soft shadow; this is a cheap separation hint where one renders.
@@ -82,12 +113,18 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   button: {
-    width: 40,
-    height: 40,
-    marginHorizontal: 2,
-    borderRadius: 20,
+    width: BUTTON,
+    height: BUTTON,
+    marginHorizontal: BUTTON_MARGIN,
+    borderRadius: BUTTON / 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  separator: {
+    width: 1,
+    height: 24,
+    marginHorizontal: SEPARATOR_MARGIN,
+    backgroundColor: '#cccccc',
   },
   buttonActive: {
     backgroundColor: '#000000',

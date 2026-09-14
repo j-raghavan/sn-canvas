@@ -11,6 +11,7 @@ import type {CanvasSession} from '../application/canvasSession';
 import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
 import {parseTextEditRequest, type TextEditRequest} from '../domain/textEdit';
 import ActionBar from './ActionBar';
+import HelpHints from './HelpHints';
 import StylePanel from './StylePanel';
 import TextEditor from './TextEditor';
 import Toolbar from './Toolbar';
@@ -54,13 +55,18 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   const [ui, setUi] = useState<CanvasUiState>(INITIAL_UI_STATE);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<TextEditRequest | null>(null);
+  // The onboarding hints (HelpHints): on by default each time the plugin opens, off once the canvas is
+  // touched (pen or finger) or a toolbar action is taken; the (?) button in Toolbar's dock brings them back.
+  const [showHints, setShowHints] = useState(true);
   const canvasRef = useRef<CanvasViewRef>(null);
 
   // The plugin runtime stays warm between opens, so this screen can stay
-  // mounted across them: every press re-resolves which canvas to show.
+  // mounted across them: every press re-resolves which canvas to show, and the hints show again too.
   useEffect(() => {
+    setShowHints(true);
     session.open(buttonEvents.lastButtonId());
     return buttonEvents.onButton(buttonId => {
+      setShowHints(true);
       session.open(buttonId);
     });
   }, [session, buttonEvents]);
@@ -78,9 +84,15 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
 
   // FR22: a new image arrives selected, so select is the tool that moves and resizes it.
   const insertImage = async () => {
+    setShowHints(false);
     if (await session.insertImage()) {
       setToolMode('select');
     }
+  };
+
+  const changeTool = (tool: ToolMode) => {
+    setShowHints(false);
+    setToolMode(tool);
   };
 
   // FR11: say where the PDF went, since nothing on the canvas shows it; or that it didn't.
@@ -113,7 +125,10 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           toolMode={toolMode}
           onCanvasState={event => setUi(parseUiState(event.nativeEvent))}
           onEditText={event => setEditing(parseTextEditRequest(event.nativeEvent))}
+          onCanvasTouch={() => setShowHints(false)}
         />
+        {/* Under the controls, so an opened style panel or menu covers the hints rather than the reverse. */}
+        {showHints && <HelpHints />}
         <StylePanel
           style={ui.style}
           selectedType={ui.selectedType}
@@ -121,7 +136,13 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           onChange={(property, value) => runCommand('setStyle', [property, value])}
         />
         <ActionBar ui={ui} onCommand={runCommand} onNewCanvas={session.newCanvas} />
-        <Toolbar toolMode={toolMode} onToolChange={setToolMode} onInsertImage={insertImage} />
+        <Toolbar
+          toolMode={toolMode}
+          onToolChange={changeTool}
+          onInsertImage={insertImage}
+          showHints={showHints}
+          onToggleHints={() => setShowHints(current => !current)}
+        />
         {editing !== null && (
           <TextEditor
             // A fresh editor, with its own text, for every edit.

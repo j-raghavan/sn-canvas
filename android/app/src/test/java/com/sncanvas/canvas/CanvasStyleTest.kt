@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import java.io.File
 
 /** Style options by id, the single-property updates the style panel sends, and the two starting styles (FR19). */
 class CanvasStyleTest {
@@ -14,12 +15,28 @@ class CanvasStyleTest {
         assertEquals(SizeStyle.M, SizeStyle.entries.byId(null, SizeStyle.M))
     }
 
+    /**
+     * The style panel's catalog also lives, independently, as src/domain/styles.ts (FR19) — the two must
+     * agree on ids and values. style-catalog.json at the repo root is the golden fixture both this test
+     * and styles.test.ts assert their own copy against, so the two can't silently drift apart (see its
+     * `_comment`). Read with CanvasJson's own JSON parser (widened to `internal` for exactly this) rather
+     * than a second hand-rolled one, or org.json, stubbed under this plain-JUnit setup (see CanvasJson.kt).
+     */
     @Test
-    fun `tldraw's 12 colours, 4 fills, 4 dashes and 4 sizes, and an image's outline of none`() {
-        assertEquals(12, StyleColor.entries.size)
-        assertEquals(listOf("none", "semi", "solid", "pattern"), FillStyle.entries.map { it.id })
-        assertEquals(listOf("draw", "dashed", "dotted", "solid", "none"), DashStyle.entries.map { it.id })
-        assertEquals(listOf(2.0, 3.5, 5.0, 10.0), SizeStyle.entries.map { it.strokeWidth })
+    fun `tldraw's 12 colours, 4 fills, 4 dashes and 4 sizes, matching the shared style-catalog fixture`() {
+        val catalog = styleCatalogFixture()
+        assertEquals(catalog.array("colors").map { it.obj().string("id") }, StyleColor.entries.map { it.id })
+        assertEquals(catalog.array("colors").map { it.obj().string("hex") }, StyleColor.entries.map { it.rgb.toHexColor() })
+        assertEquals(catalog.array("fills").map { it.str() }, FillStyle.entries.map { it.id })
+        assertEquals(catalog.array("imageDashes").map { it.str() }, DashStyle.entries.map { it.id })
+        assertEquals(catalog.array("sizes").map { it.obj().string("id") }, SizeStyle.entries.map { it.id })
+        assertEquals(catalog.array("sizes").map { it.obj().number("strokeWidth") }, SizeStyle.entries.map { it.strokeWidth })
+        assertEquals(catalog.array("sizes").map { it.obj().number("fontSize") }, SizeStyle.entries.map { it.fontSize })
+        assertEquals(catalog.obj("defaultStyle").string("color"), ShapeStyle.DEFAULT.color.id)
+        assertEquals(catalog.obj("defaultStyle").string("fill"), ShapeStyle.DEFAULT.fill.id)
+        assertEquals(catalog.obj("defaultStyle").string("dash"), ShapeStyle.DEFAULT.dash.id)
+        assertEquals(catalog.obj("defaultStyle").string("size"), ShapeStyle.DEFAULT.size.id)
+        assertEquals(catalog.number("minOpacity"), ShapeStyle.MIN_OPACITY, 0.0)
     }
 
     @Test
@@ -68,3 +85,32 @@ class CanvasStyleTest {
         assertEquals(listOf(18.0, 24.0, 36.0, 44.0), SizeStyle.entries.map { it.fontSize })
     }
 }
+
+/** Finds style-catalog.json above the test's working directory (Gradle's module dir, or an IDE's), and parses it. */
+private fun styleCatalogFixture(): CanvasJson.JsonValue.Obj {
+    var dir: File? = File(".").absoluteFile
+    while (dir != null) {
+        val candidate = File(dir, "style-catalog.json")
+        if (candidate.isFile) return CanvasJson.JsonParser(candidate.readText()).parseDocument() as CanvasJson.JsonValue.Obj
+        dir = dir.parentFile
+    }
+    error("style-catalog.json not found above ${File(".").absoluteFile}")
+}
+
+// Thin accessors over CanvasJson.JsonValue, for the fixture's own shape only; CanvasJson.kt owns the actual grammar.
+private fun CanvasJson.JsonValue.obj(): CanvasJson.JsonValue.Obj = this as CanvasJson.JsonValue.Obj
+
+private fun CanvasJson.JsonValue.str(): String = (this as CanvasJson.JsonValue.Str).value
+
+private fun CanvasJson.JsonValue.Obj.array(key: String): List<CanvasJson.JsonValue> =
+    (entries.getValue(key) as CanvasJson.JsonValue.Arr).items
+
+private fun CanvasJson.JsonValue.Obj.obj(key: String): CanvasJson.JsonValue.Obj = entries.getValue(key) as CanvasJson.JsonValue.Obj
+
+private fun CanvasJson.JsonValue.Obj.string(key: String): String = (entries.getValue(key) as CanvasJson.JsonValue.Str).value
+
+private fun CanvasJson.JsonValue.Obj.number(key: String): Double = (entries.getValue(key) as CanvasJson.JsonValue.Num).value
+
+private fun Int.toHexColor(): String = "#" + toString(16).padStart(HEX_COLOR_DIGITS, '0')
+
+private const val HEX_COLOR_DIGITS = 6

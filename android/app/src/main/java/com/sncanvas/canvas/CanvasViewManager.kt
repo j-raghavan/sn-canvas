@@ -15,9 +15,10 @@ import com.facebook.react.uimanager.events.Event
  * src/ui/nativeCanvasView.ts). Registered through [CanvasPackage].
  *
  * Deliberately thin: it only marshals the `toolMode` prop, the commands (to
- * the view's [CanvasController]), and two events: `onCanvasState`, which keeps
- * the action bar and style panel in step with the canvas (FR18/FR19), and
- * `onEditText`, which opens the keyboard editor over text (FR6/FR24). It also
+ * the view's [CanvasController]), and three events: `onCanvasState`, which keeps
+ * the action bar and style panel in step with the canvas (FR18/FR19),
+ * `onEditText`, which opens the keyboard editor over text (FR6/FR24), and
+ * `onCanvasTouch`, once per touch, which dismisses the onboarding hints. It also
  * exports each colour's e-ink gray, so the style panel's swatches match what
  * the canvas draws.
  *
@@ -49,6 +50,8 @@ class CanvasViewManager(
                     view: CanvasView,
                     request: TextEditRequest,
                 ) = dispatch(reactContext, view, EVENT_EDIT_TEXT, request.toPayload())
+
+                override fun onTouched(view: CanvasView) = dispatch(reactContext, view, EVENT_TOUCH, emptyMap())
             },
             images,
         )
@@ -84,6 +87,7 @@ class CanvasViewManager(
         mutableMapOf(
             EVENT_CANVAS_STATE to mapOf("registrationName" to "onCanvasState"),
             EVENT_EDIT_TEXT to mapOf("registrationName" to "onEditText"),
+            EVENT_TOUCH to mapOf("registrationName" to "onCanvasTouch"),
         )
 
     override fun getExportedViewConstants(): MutableMap<String, Any> =
@@ -127,6 +131,7 @@ class CanvasViewManager(
         const val NAME = "CanvasView"
         private const val EVENT_CANVAS_STATE = "topCanvasState"
         private const val EVENT_EDIT_TEXT = "topEditText"
+        private const val EVENT_TOUCH = "topCanvasTouch"
 
         // The commands that take no arguments, as the view runs them.
         private val SIMPLE_COMMANDS: Map<String, (CanvasView) -> Unit> =

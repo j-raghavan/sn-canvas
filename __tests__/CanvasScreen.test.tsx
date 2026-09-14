@@ -76,10 +76,13 @@ const render = async (session = createFakeSession(), buttons = createFakeButtons
       renderer.root.findByType(CanvasNativeView).props.onCanvasState({nativeEvent: payload});
     });
   };
-  const isActive = (tool: string) => Boolean(renderer.root.findByProps({testID: `canvas-tool-${tool}`}).props.style[1]);
+  const isPressed = (testID: string) => Boolean(renderer.root.findByProps({testID}).props.style[1]);
+  const isActive = (tool: string) => isPressed(`canvas-tool-${tool}`);
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const shows = (text: string) => renderer.root.findAllByProps({children: text}).length > 0;
-  return {renderer: renderer!, session, buttons, press, emitCanvasState, isActive, isDisabled, shows};
+  const has = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
+  const labelled = (label: string) => renderer.root.findAllByProps({accessibilityLabel: label}).length > 0;
+  return {renderer: renderer!, session, buttons, press, emitCanvasState, isActive, isPressed, isDisabled, shows, has, labelled};
 };
 
 beforeEach(() => {
@@ -103,6 +106,57 @@ describe('toolbar', () => {
       expect(renderer.root.findByType(CanvasNativeView).props.toolMode).toBe(tool);
     },
   );
+});
+
+describe('help hints', () => {
+  const CAPTIONS = ['Export, save to note & close', 'Colours & styles', 'Pick a tool & start drawing!', 'Show or hide these hints'];
+
+  test('show by default, one for each control, and the help button reflects that', async () => {
+    const {has, labelled, isPressed} = await render();
+    expect(has('canvas-hints')).toBe(true);
+    expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true]);
+    expect(isPressed('canvas-help')).toBe(true);
+  });
+
+  test('a tool press dismisses them', async () => {
+    const {press, has} = await render();
+    await press('canvas-tool-rectangle');
+    expect(has('canvas-hints')).toBe(false);
+  });
+
+  test('inserting an image dismisses them', async () => {
+    const {press, has} = await render();
+    await press('canvas-insert-image');
+    expect(has('canvas-hints')).toBe(false);
+  });
+
+  test('a touch on the canvas, by pen or finger, dismisses them', async () => {
+    const {renderer, has} = await render();
+    await act(async () => {
+      renderer.root.findByType(CanvasNativeView).props.onCanvasTouch({nativeEvent: {}});
+    });
+    expect(has('canvas-hints')).toBe(false);
+  });
+
+  test('the help button toggles them back on, and off again', async () => {
+    const {press, has, isPressed} = await render();
+    await press('canvas-tool-rectangle');
+    expect(has('canvas-hints')).toBe(false);
+    await press('canvas-help');
+    expect(has('canvas-hints')).toBe(true);
+    expect(isPressed('canvas-help')).toBe(true);
+    await press('canvas-help');
+    expect(has('canvas-hints')).toBe(false);
+    expect(isPressed('canvas-help')).toBe(false);
+  });
+
+  test('a later open (a lasso-toolbar press) shows them again', async () => {
+    const {press, has, buttons} = await render();
+    await press('canvas-tool-rectangle');
+    expect(has('canvas-hints')).toBe(false);
+    await act(async () => buttons.press(500));
+    expect(has('canvas-hints')).toBe(true);
+  });
 });
 
 describe('action bar', () => {
