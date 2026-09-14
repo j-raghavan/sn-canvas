@@ -3,6 +3,7 @@
 [![CI](https://github.com/j-raghavan/sn-canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/j-raghavan/sn-canvas/actions/workflows/ci.yml)
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Supernote-blue)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/j-raghavan/sn-canvas?include_prereleases)](https://github.com/j-raghavan/sn-canvas/releases)
 
 An infinite canvas inside your Supernote notes. Sketch diagrams, build tables and sticky-note boards, drop in images, then save a thumbnail of the canvas into your page. Tap that thumbnail later and the canvas opens again exactly as you left it, still fully editable.
@@ -172,6 +173,10 @@ docs/images/          README images
 
 - The hints and labels use **Virgil**, Excalidraw's hand-drawn font, under the SIL Open Font License 1.1 (see `scripts/fonts/Virgil-OFL.txt`).
 - The colour palette and style options follow [tldraw](https://tldraw.com)'s.
+
+## License
+
+[MIT](LICENSE). The Virgil font in `scripts/fonts` keeps its own licence, the SIL Open Font License 1.1.
 
 ---
 
