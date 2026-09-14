@@ -377,8 +377,10 @@ class CanvasView(
             is CanvasGesture.Resize, is CanvasGesture.DragEndpoint, CanvasGesture.Rotate -> commitGestureEdit(finished, end)
             null -> Unit
         }
-        // Whatever else the pen did (the eraser end, with the pencil) leaves no firmware ink behind.
-        if (finished !is CanvasGesture.Freehand) liveInk.wipe()
+        // Whatever else the pen did (the eraser end, with the pencil) leaves no firmware ink behind. A touch that
+        // started nothing (a palm resting while writing) leaves it alone: wiping there erased strokes the canvas only
+        // redraws once the pen rests, which in a light colour's pale gray looked like the writing had vanished.
+        if (finished != null && finished !is CanvasGesture.Freehand) liveInk.wipe()
         gesture = null
         if (isMinimapVisible) scheduleMinimapHide()
         if (redraw) invalidate()
