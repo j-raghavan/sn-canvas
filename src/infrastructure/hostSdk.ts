@@ -1,14 +1,25 @@
 // HostPort over sn-plugin-lib. It normalizes the SDK's loosely typed
 // {success, result} envelopes into plain values and never rejects.
+//
+// File access is the one shared request from wiring.ts (see
+// infrastructure/filePermissions.ts), injected so index.js and the session ask
+// through the same one.
 
 import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI} from 'sn-plugin-lib';
-import type {HostPort} from '../application/canvasSession';
-import {uuidOf} from '../domain/canvasIndex';
+import type {HostPort, NotePen} from '../application/canvasSession';
+import {elementSummary, notePageOf, pictureNumbersOf, picturesOf} from '../domain/canvasIndex';
+import {taggedPicture} from '../domain/canvasTag';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
 
 const TAG = '[SUPERCANVAS]';
 
-export function createHostSdk(logger: Logger): HostPort {
+/** True for a getPenInfo result with a number for each of the pen's codes. */
+const isNotePen = (pen: unknown): pen is NotePen =>
+  typeof pen === 'object' &&
+  pen !== null &&
+  (['type', 'width', 'color'] as const).every(code => Number.isFinite((pen as Record<string, unknown>)[code]));
+
+export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<boolean>): HostPort {
   const attempt = async <T>(call: string, fallback: T, run: () => Promise<T>): Promise<T> => {
     try {
       return await run();
@@ -18,16 +29,51 @@ export function createHostSdk(logger: Logger): HostPort {
     }
   };
 
+  const listOf = (response: unknown): unknown[] => {
+    const items = resultOf<unknown[]>(response);
+    return Array.isArray(items) ? items : [];
+  };
+
   return {
     pluginDir: () => attempt('getPluginDirPath', null, async () => (await PluginManager.getPluginDirPath()) || null),
-    lassoedElements: () =>
-      attempt('getLassoElements', [], async () => {
-        const elements = resultOf<unknown[]>(await PluginCommAPI.getLassoElements());
-        return Array.isArray(elements) ? elements : [];
+    requestFileAccess,
+    notePen: () =>
+      attempt('getPenInfo', null, async () => {
+        const pen = resultOf<unknown>(await PluginCommAPI.getPenInfo());
+        logger.log(`${TAG}[PEN] note pen=${JSON.stringify(pen ?? null)}`);
+        return isNotePen(pen) ? {type: pen.type, width: pen.width, color: pen.color} : null;
       }),
+    lassoedElements: () => attempt('getLassoElements', [], async () => listOf(await PluginCommAPI.getLassoElements())),
     insertImage: path => attempt('insertImage', false, async () => succeeded(await PluginNoteAPI.insertImage(path))),
-    // insertImage doesn't hand back the element it made; the page's last element is it (sn-tables does the same).
-    lastElementUuid: () => attempt('getLastElement', null, async () => uuidOf(resultOf(await PluginFileAPI.getLastElement()))),
+    currentPage: () =>
+      attempt('getCurrentFilePath/getCurrentPageNum', null, async () => {
+        const [notePath, page] = await Promise.all([PluginCommAPI.getCurrentFilePath(), PluginCommAPI.getCurrentPageNum()]);
+        return notePageOf(resultOf(notePath), resultOf(page));
+      }),
+    // getElements takes (page, notePath), the other way round from the rest of PluginFileAPI (as sn-drafting-pen notes).
+    pagePictureNumbers: at =>
+      attempt('getElements', [], async () => {
+        const response = await PluginFileAPI.getElements(at.page, at.notePath);
+        if (!succeeded(response)) {
+          // A refused read (reading a note's file needs plugin.permission.FILE:READ) is an error envelope, not a throw.
+          logger.warn(`${TAG} getElements failed: ${JSON.stringify(response)}`);
+        }
+        const pictures = picturesOf(listOf(response));
+        logger.log(`${TAG}[LINK] page=${at.page} pictures=${JSON.stringify(pictures.map(elementSummary))}`);
+        return pictureNumbersOf(pictures);
+      }),
+    // The same call sn-tables edits its placed tables with; the note finds the element by its number in the page.
+    tagPicture: (picture, canvasId, at, imagePath) =>
+      attempt('modifyElements', false, async () => {
+        const tagged = taggedPicture(picture, canvasId, at.page, imagePath);
+        const response = await PluginFileAPI.modifyElements(at.notePath, at.page, [tagged]);
+        const modified = resultOf<unknown[]>(response);
+        if (!Array.isArray(modified) || modified.length === 0) {
+          logger.warn(`${TAG} modifyElements failed: ${JSON.stringify(response)}`);
+          return false;
+        }
+        return true;
+      }),
     closeView: () => {
       attempt('closePluginView', false, () => PluginManager.closePluginView());
     },

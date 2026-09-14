@@ -7,6 +7,7 @@ import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.PointF
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.text.TextPaint
 import kotlin.math.abs
 
@@ -41,6 +42,28 @@ internal class CanvasRenderer(
         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = LABEL_TEXT_PX
             color = Color.BLACK
+        }
+
+    // The note thumbnail's hand-drawn frame (FR12, [ThumbnailFrame]): dark, so it stays crisp on e-ink.
+    private val thumbnailFramePaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+
+    private val thumbnailTabPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.BLACK
+        }
+
+    private val thumbnailTabTextPaint =
+        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = THUMBNAIL_TAG_TEXT_PX
+            color = Color.WHITE
+            // Dancing Script on the Supernote: a hand-lettered label to match the sketched frame.
+            typeface = Typeface.create("cursive", Typeface.BOLD)
         }
 
     private val backgroundPaint =
@@ -137,10 +160,12 @@ internal class CanvasRenderer(
 
     /**
      * Renders [elements] into a fresh [sizePx]-square bitmap in true colour,
-     * fitted by [ViewTransforms.computeThumbnailTransform]: the image "Save to
-     * Note" embeds (FR12). No selection and no preview, since a saved image has
-     * no live gesture to show. It draws only into its own bitmap, never an
-     * attached surface, which is what makes it safe off the UI thread.
+     * fitted by [ViewTransforms.computeThumbnailTransform] inside a hand-drawn
+     * frame with a "Canvas" tag: the image "Save to Note" embeds (FR12), which has to
+     * stand out from the handwriting around it as something to open. No
+     * selection and no preview, since a saved image has no live gesture to
+     * show. It draws only into its own bitmap, never an attached surface, which
+     * is what makes it safe off the UI thread.
      */
     fun renderThumbnail(
         elements: List<Element>,
@@ -151,7 +176,31 @@ internal class CanvasRenderer(
         drawBackground(canvas, sizePx.toFloat(), sizePx.toFloat())
         val fit = ViewTransforms.computeThumbnailTransform(elements, sizePx.toDouble(), THUMBNAIL_PADDING_PX)
         drawElements(canvas, elements, fit, StylePalette.TRUE_COLOR)
+        drawThumbnailFrame(canvas, sizePx.toFloat())
         return bitmap
+    }
+
+    /** The thumbnail's hand-drawn frame ([ThumbnailFrame]) and its "Canvas" tag, tilted over the top-left corner like a stamp. */
+    private fun drawThumbnailFrame(
+        canvas: Canvas,
+        size: Float,
+    ) {
+        ThumbnailFrame.passes(size.toDouble()).forEachIndexed { pass, sides ->
+            // A bold line, then a finer one just inside it, like a pencil box gone over twice.
+            thumbnailFramePaint.strokeWidth = if (pass == 0) THUMBNAIL_FRAME_BOLD_PX else THUMBNAIL_FRAME_FINE_PX
+            thumbnailFramePaint.color = if (pass == 0) Color.BLACK else Color.DKGRAY
+            sides.forEach { side -> canvas.drawPath(polylinePath(side), thumbnailFramePaint) }
+        }
+        val tagWidth = thumbnailTabTextPaint.measureText(THUMBNAIL_TAG_LABEL) + 2 * THUMBNAIL_TAG_PADDING_PX
+        val tagHeight = THUMBNAIL_TAG_TEXT_PX + 2 * THUMBNAIL_TAG_PADDING_PX
+        canvas.save()
+        canvas.translate(THUMBNAIL_TAG_X_PX, THUMBNAIL_TAG_Y_PX)
+        canvas.rotate(THUMBNAIL_TAG_TILT_DEGREES)
+        canvas.drawPath(polylinePath(ThumbnailFrame.tag(tagWidth.toDouble(), tagHeight.toDouble()), closed = true), thumbnailTabPaint)
+        // Centred on the tag's middle: ascent is negative, descent positive.
+        val baseline = tagHeight / 2 - (thumbnailTabTextPaint.ascent() + thumbnailTabTextPaint.descent()) / 2
+        canvas.drawText(THUMBNAIL_TAG_LABEL, THUMBNAIL_TAG_PADDING_PX, baseline, thumbnailTabTextPaint)
+        canvas.restore()
     }
 
     /**
@@ -228,7 +277,19 @@ internal class CanvasRenderer(
     private companion object {
         /** The note thumbnail's size (FR12): a square PNG, independent of the live view's size. */
         const val THUMBNAIL_SIZE_PX = 400
-        const val THUMBNAIL_PADDING_PX = 24.0
+
+        // Clear of the frame and the tag, so the drawing never touches either.
+        const val THUMBNAIL_PADDING_PX = 56.0
+        const val THUMBNAIL_FRAME_BOLD_PX = 3.5f
+        const val THUMBNAIL_FRAME_FINE_PX = 1.5f
+        const val THUMBNAIL_TAG_TEXT_PX = 22f
+        const val THUMBNAIL_TAG_PADDING_PX = 8f
+
+        // The tag sits over the frame's top-left corner, tilted a little, like a stamp.
+        const val THUMBNAIL_TAG_X_PX = 6f
+        const val THUMBNAIL_TAG_Y_PX = 10f
+        const val THUMBNAIL_TAG_TILT_DEGREES = -4f
+        const val THUMBNAIL_TAG_LABEL = "Canvas"
         const val HANDLE_DRAW_SIZE_PX = 24f
         const val ROTATE_HANDLE_RADIUS_PX = 22f
         const val PREVIEW_ARROWHEAD_PX = 28f

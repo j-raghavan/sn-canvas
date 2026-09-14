@@ -6,26 +6,39 @@ const mockGetPluginDirPath = jest.fn();
 const mockClosePluginView = jest.fn();
 const mockGetLassoElements = jest.fn();
 const mockInsertImage = jest.fn();
-const mockGetLastElement = jest.fn();
+const mockGetCurrentFilePath = jest.fn();
+const mockGetCurrentPageNum = jest.fn();
+const mockGetElements = jest.fn();
+const mockModifyElements = jest.fn();
+const mockGetPenInfo = jest.fn();
 
 jest.mock('sn-plugin-lib', () => ({
   PluginManager: {
     getPluginDirPath: () => mockGetPluginDirPath(),
     closePluginView: () => mockClosePluginView(),
   },
-  PluginCommAPI: {getLassoElements: () => mockGetLassoElements()},
+  PluginCommAPI: {
+    getPenInfo: () => mockGetPenInfo(),
+    getLassoElements: () => mockGetLassoElements(),
+    getCurrentFilePath: () => mockGetCurrentFilePath(),
+    getCurrentPageNum: () => mockGetCurrentPageNum(),
+  },
   PluginNoteAPI: {insertImage: (path: string) => mockInsertImage(path)},
-  PluginFileAPI: {getLastElement: () => mockGetLastElement()},
+  PluginFileAPI: {
+    getElements: (page: number, notePath: string) => mockGetElements(page, notePath),
+    modifyElements: (notePath: string, page: number, elements: unknown[]) => mockModifyElements(notePath, page, elements),
+  },
 }));
 
 import {createHostSdk} from '../src/infrastructure/hostSdk';
 import {createRecordingLogger} from './helpers/fakePorts';
 
 const failure = () => Promise.reject(new Error('host said no'));
+const requestAccess = jest.fn().mockResolvedValue(true);
 
 test('pluginDir is the host path, or null when it has none or the call fails', async () => {
   const logger = createRecordingLogger();
-  const host = createHostSdk(logger);
+  const host = createHostSdk(logger, requestAccess);
   mockGetPluginDirPath.mockResolvedValueOnce('/plugin');
   expect(await host.pluginDir()).toBe('/plugin');
   mockGetPluginDirPath.mockResolvedValueOnce('');
@@ -35,8 +48,13 @@ test('pluginDir is the host path, or null when it has none or the call fails', a
   expect(logger.lines).toEqual(['warn [SUPERCANVAS] getPluginDirPath failed: Error: host said no']);
 });
 
+test('requestFileAccess is the shared file-permission request it is given', async () => {
+  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestFileAccess()).toBe(true);
+  expect(requestAccess).toHaveBeenCalledTimes(1);
+});
+
 test('lassoedElements unwraps the element list, and is empty for anything else', async () => {
-  const host = createHostSdk(createRecordingLogger());
+  const host = createHostSdk(createRecordingLogger(), requestAccess);
   mockGetLassoElements.mockResolvedValueOnce({success: true, result: [{id: 1}]});
   expect(await host.lassoedElements()).toEqual([{id: 1}]);
   mockGetLassoElements.mockResolvedValueOnce({success: false, error: {code: 1, message: 'no lasso'}});
@@ -48,7 +66,7 @@ test('lassoedElements unwraps the element list, and is empty for anything else',
 });
 
 test('insertImage is true only when the host reports success', async () => {
-  const host = createHostSdk(createRecordingLogger());
+  const host = createHostSdk(createRecordingLogger(), requestAccess);
   mockInsertImage.mockResolvedValueOnce({success: true, result: true});
   expect(await host.insertImage('/t.png')).toBe(true);
   expect(mockInsertImage).toHaveBeenCalledWith('/t.png');
@@ -60,21 +78,81 @@ test('insertImage is true only when the host reports success', async () => {
   expect(await host.insertImage('/t.png')).toBe(false);
 });
 
-test('lastElementUuid is the uuid of the last element on the page, or null when there is none to read', async () => {
-  const host = createHostSdk(createRecordingLogger());
-  mockGetLastElement.mockResolvedValueOnce({success: true, result: {uuid: 'u-1', type: 200}});
-  expect(await host.lastElementUuid()).toBe('u-1');
-  mockGetLastElement.mockResolvedValueOnce({success: true, result: {}});
-  expect(await host.lastElementUuid()).toBeNull();
-  mockGetLastElement.mockResolvedValueOnce({success: false});
-  expect(await host.lastElementUuid()).toBeNull();
-  mockGetLastElement.mockImplementationOnce(failure);
-  expect(await host.lastElementUuid()).toBeNull();
+test('currentPage is the note and page the host reports, or null when either is missing', async () => {
+  const host = createHostSdk(createRecordingLogger(), requestAccess);
+  mockGetCurrentFilePath.mockResolvedValueOnce({success: true, result: '/n.note'});
+  mockGetCurrentPageNum.mockResolvedValueOnce({success: true, result: 2});
+  expect(await host.currentPage()).toEqual({notePath: '/n.note', page: 2});
+  mockGetCurrentFilePath.mockResolvedValueOnce({success: false});
+  mockGetCurrentPageNum.mockResolvedValueOnce({success: true, result: 2});
+  expect(await host.currentPage()).toBeNull();
+  mockGetCurrentFilePath.mockImplementationOnce(failure);
+  mockGetCurrentPageNum.mockResolvedValueOnce({success: true, result: 2});
+  expect(await host.currentPage()).toBeNull();
+});
+
+test('pagePictureNumbers reads the page, page first as the SDK wants, and keeps only its pictures', async () => {
+  const logger = createRecordingLogger();
+  const host = createHostSdk(logger, requestAccess);
+  mockGetElements.mockResolvedValueOnce({
+    success: true,
+    result: [
+      {uuid: 'stroke', type: 0, numInPage: 1},
+      {uuid: 'pic', type: 200, numInPage: 2},
+    ],
+  });
+  expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([2]);
+  expect(mockGetElements).toHaveBeenCalledWith(3, '/n.note');
+  expect(logger.lines).toEqual(['log [SUPERCANVAS][LINK] page=3 pictures=[{"uuid":"pic","type":200,"num":2}]']);
+  // A refused read comes back as an error envelope: logged, so the reason reaches the plugin's own log.
+  mockGetElements.mockResolvedValueOnce({success: false, error: {code: 403, message: 'sdcard_no_read'}});
+  expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([]);
+  expect(logger.lines).toContain(
+    'warn [SUPERCANVAS] getElements failed: {"success":false,"error":{"code":403,"message":"sdcard_no_read"}}',
+  );
+  mockGetElements.mockImplementationOnce(failure);
+  expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([]);
+});
+
+test('tagPicture writes the canvas into the picture as the lasso gave it, on its page, and is true once the note modified it', async () => {
+  const logger = createRecordingLogger();
+  const host = createHostSdk(logger, requestAccess);
+  const at = {notePath: '/n.note', page: 2};
+  const lassoed = {uuid: 'copy', type: 200, numInPage: 42, pageNum: -1, angles: {}, contoursSrc: {}};
+  mockModifyElements.mockResolvedValueOnce({success: true, result: [42]});
+  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(true);
+  expect(mockModifyElements).toHaveBeenCalledWith('/n.note', 2, [
+    {uuid: 'copy', type: 200, numInPage: 42, pageNum: 2, userData: 'snsupercanvas:c-1', picture: {picturePath: '/c/thumbnails/c-1.png'}},
+  ]);
+  mockModifyElements.mockResolvedValueOnce({success: true, result: []});
+  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
+  mockModifyElements.mockResolvedValueOnce({success: false, error: {code: 107, message: 'bad element'}});
+  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
+  expect(logger.lines).toContain('warn [SUPERCANVAS] modifyElements failed: {"success":false,"error":{"code":107,"message":"bad element"}}');
+  mockModifyElements.mockImplementationOnce(failure);
+  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
+});
+
+test("notePen is the note's pen, logged as the host reported it, and null for anything but three numbers", async () => {
+  const logger = createRecordingLogger();
+  const host = createHostSdk(logger, requestAccess);
+  mockGetPenInfo.mockResolvedValueOnce({success: true, result: {type: 14, width: 700, color: 0, extra: 1}});
+  expect(await host.notePen()).toEqual({type: 14, width: 700, color: 0});
+  expect(logger.lines).toEqual(['log [SUPERCANVAS][PEN] note pen={"type":14,"width":700,"color":0,"extra":1}']);
+  mockGetPenInfo.mockResolvedValueOnce({success: true, result: {type: 14, width: '700', color: 0}});
+  expect(await host.notePen()).toBeNull();
+  mockGetPenInfo.mockResolvedValueOnce({success: true, result: null});
+  expect(await host.notePen()).toBeNull();
+  mockGetPenInfo.mockResolvedValueOnce({success: false});
+  expect(await host.notePen()).toBeNull();
+  expect(logger.lines).toContain('log [SUPERCANVAS][PEN] note pen=null');
+  mockGetPenInfo.mockImplementationOnce(failure);
+  expect(await host.notePen()).toBeNull();
 });
 
 test('closeView closes the plugin view, and a failure to close is only logged', async () => {
   const logger = createRecordingLogger();
-  const host = createHostSdk(logger);
+  const host = createHostSdk(logger, requestAccess);
   mockClosePluginView.mockImplementationOnce(failure);
   host.closeView();
   await new Promise(resolve => setImmediate(resolve));

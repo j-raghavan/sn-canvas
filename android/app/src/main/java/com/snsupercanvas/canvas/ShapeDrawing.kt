@@ -30,6 +30,18 @@ internal fun screenBounds(
         transform.screenY(element.y + element.height).toFloat(),
     )
 
+/** A path through [points], already in pixels, closed back to the first when [closed]. */
+internal fun polylinePath(
+    points: List<Point>,
+    closed: Boolean = false,
+): Path =
+    Path().apply {
+        points.forEachIndexed { index, point ->
+            if (index == 0) moveTo(point.x.toFloat(), point.y.toFloat()) else lineTo(point.x.toFloat(), point.y.toFloat())
+        }
+        if (closed) close()
+    }
+
 /**
  * Runs [draw] with [canvas] rotated by [element]'s rotation about [bounds]'
  * center. Every world->screen transform in this plugin is a uniform scale +

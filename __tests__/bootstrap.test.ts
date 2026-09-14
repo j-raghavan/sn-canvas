@@ -7,6 +7,8 @@
  *   4. The lasso-toolbar "Open Canvas" button is registered (id 501),
  *      scoped to image selections so it only appears on a lassoed
  *      SuperCanvas note thumbnail.
+ *   5. File access is asked for as soon as the plugin loads (at install),
+ *      as in sn-shapes and sn-mindmap.
  *
  * App is mocked: this file is about host registration, not rendering
  * (SuperCanvasScreen has its own tests).
@@ -15,6 +17,8 @@ const mockRegisterComponent = jest.fn();
 const mockInit = jest.fn();
 const mockRegisterButton = jest.fn();
 const mockRegisterButtonListener = jest.fn();
+const mockHasPermission = jest.fn().mockResolvedValue(0);
+const mockRequestPermission = jest.fn().mockResolvedValue(2);
 
 jest.mock('react-native', () => ({
   AppRegistry: {
@@ -29,13 +33,24 @@ jest.mock('sn-plugin-lib', () => ({
     registerButton: (...args: unknown[]) => mockRegisterButton(...args),
     registerButtonListener: (...args: unknown[]) =>
       mockRegisterButtonListener(...args),
+    hasPermission: (name: string) => mockHasPermission(name),
+    requestPermission: (name: string) => mockRequestPermission(name),
   },
 }));
 
 jest.mock('../App', () => ({__esModule: true, default: () => null}));
 
-beforeAll(() => {
+let warn: jest.SpyInstance;
+
+beforeAll(async () => {
+  warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
   require('../index');
+  // The file-permission request runs asynchronously.
+  await new Promise(resolve => setImmediate(resolve));
+});
+
+afterAll(() => {
+  warn.mockRestore();
 });
 
 test('registers the app component under the app.json name', () => {
@@ -74,4 +89,12 @@ test('registers the lasso "Open Canvas" button, scoped to image selections', () 
     editDataTypes: [2],
     regionType: 3,
   });
+});
+
+test('asks for read, write and delete access as soon as the plugin loads, as sn-shapes and sn-mindmap do', () => {
+  expect(mockRequestPermission.mock.calls.map(([name]) => name)).toEqual([
+    'plugin.permission.FILE:READ',
+    'plugin.permission.FILE:WRITE',
+    'plugin.permission.FILE:DELETE',
+  ]);
 });

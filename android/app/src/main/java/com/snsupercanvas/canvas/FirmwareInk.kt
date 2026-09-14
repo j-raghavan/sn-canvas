@@ -28,7 +28,7 @@ internal class FirmwareInk(
     // The firmware only takes clears and releases from the app that claimed the pen.
     private var claimed = false
 
-    /** Claims the pen for this window, inking everywhere; safe to repeat. False when the firmware service is not reachable. */
+    /** Claims the pen for this window, inking everywhere with the canvas's pencil; safe to repeat. False without the firmware service. */
     fun setup(): Boolean {
         if (binder() == null) return false
         send(TX_WRITE_APP_INFO) { parcel ->
@@ -38,11 +38,7 @@ internal class FirmwareInk(
         enableFullUiAuto(true)
         // No disabled areas.
         send(TX_DISABLE_AREA) { parcel -> parcel.writeInt(0) }
-        send(TX_PEN) { parcel ->
-            parcel.writeInt(PEN_NEEDLE)
-            parcel.writeInt(SIZE_EMR)
-            parcel.writeInt(COLOR_BLACK)
-        }
+        sendPen(FirmwarePen.CANVAS)
         claimed = true
         return true
     }
@@ -67,17 +63,28 @@ internal class FirmwareInk(
     }
 
     /**
-     * Gives the pen back to the note: clears the overlay and turns ink back on,
-     * as the note had it. When a plugin closes, the note restores only its
-     * disabled areas, never ink itself (it never turned ink off), so a pen left
-     * off here would stop writing in the note.
+     * Gives the pen back to the note: clears the overlay, sets the note's own
+     * [pen] back when it is known, and turns ink back on, as the note had it.
+     * When a plugin closes, the note restores only its disabled areas, never
+     * ink itself (it never turned ink off) or its pen (it sends that only when
+     * a tool is tapped), so a pen left off here would stop writing in the note,
+     * and one left as the canvas's would write with the canvas's pencil.
      */
-    fun teardown() {
+    fun teardown(pen: FirmwarePen?) {
         if (!claimed) return
         clearAll()
+        pen?.let(::sendPen)
         setWritable(true)
         enableFullUiAuto(false)
         claimed = false
+    }
+
+    private fun sendPen(pen: FirmwarePen) {
+        send(TX_PEN) { parcel ->
+            parcel.writeInt(pen.type)
+            parcel.writeInt(pen.size)
+            parcel.writeInt(pen.color)
+        }
     }
 
     /** Resolves (and caches) the firmware binder through the hidden ServiceManager.getService. */
@@ -127,9 +134,6 @@ internal class FirmwareInk(
         const val TX_PEN = 2
         const val TX_DRAW_BUFFER = 6
 
-        const val PEN_NEEDLE = 10
-        const val SIZE_EMR = 1000
-        const val COLOR_BLACK = 0
         const val CLEAR_ALL = 255
 
         // HandWriteClient's sentinel rect edges: ink on everywhere, and off everywhere.

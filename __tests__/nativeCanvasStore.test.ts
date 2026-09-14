@@ -14,6 +14,17 @@ const createNative = (): jest.Mocked<NativeCanvasModule> => ({
   readText: jest.fn().mockResolvedValue(null),
   writeText: jest.fn().mockResolvedValue(true),
   listCanvasFiles: jest.fn().mockResolvedValue([]),
+  adoptFolder: jest.fn().mockResolvedValue(0),
+  setNotePen: jest.fn().mockResolvedValue(true),
+});
+
+test("the note's pen reaches the native view as its three codes, and only a native true is true", async () => {
+  const native = createNative();
+  const store = createNativeCanvasStore(createRecordingLogger(), native);
+  expect(await store.rememberNotePen({type: 14, width: 700, color: 0})).toBe(true);
+  expect(native.setNotePen).toHaveBeenCalledWith(14, 700, 0);
+  native.setNotePen.mockResolvedValueOnce(false);
+  expect(await store.rememberNotePen({type: 99, width: 700, color: 0})).toBe(false);
 });
 
 test('each port call reaches its native method with the path', async () => {
@@ -57,6 +68,16 @@ test('saved canvases list by id, newest first, leaving out the index and anythin
   expect(await store.savedCanvasIds('/p/SuperCanvas')).toEqual([]);
 });
 
+test('adopting a folder reports how many files moved, and anything but a number as none', async () => {
+  const native = createNative();
+  const store = createNativeCanvasStore(createRecordingLogger(), native);
+  native.adoptFolder.mockResolvedValueOnce(3);
+  expect(await store.adoptFolder('/plugin/SuperCanvas', '/shared')).toBe(3);
+  expect(native.adoptFolder).toHaveBeenCalledWith('/plugin/SuperCanvas', '/shared');
+  native.adoptFolder.mockResolvedValueOnce(null as unknown as number);
+  expect(await store.adoptFolder('/plugin/SuperCanvas', '/shared')).toBe(0);
+});
+
 test('a native rejection is logged and reported as false', async () => {
   const native = createNative();
   native.saveCanvas.mockRejectedValue(new Error('E_NO_ACTIVE_VIEW'));
@@ -72,5 +93,6 @@ test('without the native module every call falls back, with an error saying why'
   expect(await store.readText('/links.json')).toBeNull();
   expect(await store.writeText('/links.json', '{}')).toBe(false);
   expect(await store.savedCanvasIds('/p/SuperCanvas')).toEqual([]);
+  expect(await store.adoptFolder('/a', '/b')).toBe(0);
   expect(logger.lines[0]).toMatch(/^error \[SUPERCANVAS\] loadCanvas: NativeModules\.SuperCanvasModule is missing/);
 });

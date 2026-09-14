@@ -5,6 +5,7 @@
 import {createCanvasSession, type CanvasSession} from './application/canvasSession';
 import {mintCanvasId} from './domain/canvasLink';
 import {infoLog} from './diagnostics/log';
+import {createFileAccess} from './infrastructure/filePermissions';
 import {createHostSdk} from './infrastructure/hostSdk';
 import {createNativeCanvasStore} from './infrastructure/nativeCanvasStore';
 import {getLastButtonEvent, subscribeToButtonEvents} from './infrastructure/pluginRouter';
@@ -19,11 +20,17 @@ const logger: Logger = {
   error: msg => console.error(msg),
 };
 
+/**
+ * Canvas's file permissions, asked for once: index.js calls it as the plugin
+ * loads, and each session awaits the same request before it opens a canvas.
+ */
+export const requestFileAccess = createFileAccess(logger);
+
 /** A session over the real host and native canvas; the screen builds one per mount. */
 export function buildCanvasSession(): CanvasSession {
   return createCanvasSession({
     store: createNativeCanvasStore(logger),
-    host: createHostSdk(logger),
+    host: createHostSdk(logger, requestFileAccess),
     newCanvasId: () => mintCanvasId(Date.now(), Math.random),
     logger,
   });

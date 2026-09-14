@@ -1,21 +1,28 @@
 // How a canvas is identified and where its files live (PRD FR12/FR13).
 //
-// A canvas is a JSON file in the plugin's private directory, beside the link
-// index (domain/canvasIndex.ts) that says which note thumbnail opens which
-// canvas. "Save to Note" names its PNG thumbnail after the canvas, and "Open
-// Canvas" still reads an id from a lassoed picture's path when it names one;
-// but this firmware hands a lassoed picture back as a renamed temporary copy,
-// so the element's uuid, recorded in the index, is the link that holds.
+// A canvas is a JSON file in the canvas folder, beside its PNG thumbnail and
+// the link index (domain/canvasIndex.ts) that says which note thumbnail opens
+// which canvas. The folder is MyStyle/SnSuperCanvas in shared storage, so
+// canvases outlast an uninstall (which deletes the plugin's own directory) and
+// sync with the rest of MyStyle; without file write access they stay in the
+// plugin's own directory instead. "Open Canvas" still reads an id from a
+// lassoed picture's path when it names one, but this firmware hands a lassoed
+// picture back as a renamed temporary copy, so the element's uuid, recorded in
+// the index, is the link that holds.
 
 /** The scratch canvas a first sidebar open shows. "Save to Note" moves its content to a canvas id of its own. */
 export const DEFAULT_CANVAS_ID = 'default';
 
-const CANVAS_DIR = 'SuperCanvas';
+/** Where canvases live with file write access: beside the plugin file in MyStyle, outlasting an uninstall. */
+export const SHARED_CANVAS_DIR = '/storage/emulated/0/MyStyle/SnSuperCanvas';
+
+// The canvas folder inside the plugin's own directory.
+const PRIVATE_CANVAS_DIR = 'SuperCanvas';
 
 // Ids are only ever minted by mintCanvasId (or are DEFAULT_CANVAS_ID). Anything
-// else is rejected, so neither a lassoed picture nor a stray file can steer a load outside CANVAS_DIR.
+// else is rejected, so neither a lassoed picture nor a stray file can steer a load outside the canvas folder.
 const CANVAS_ID = /^(default|c-[a-z0-9-]+)$/;
-const THUMBNAIL_PATH = new RegExp(`/${CANVAS_DIR}/thumbnails/([A-Za-z0-9-]+)\\.png$`);
+const THUMBNAIL_PATH = /\/thumbnails\/([A-Za-z0-9-]+)\.png$/;
 
 /** A fresh canvas id such as `c-lx2k3j9a-0f3q`; the clock and randomness are injected so tests are deterministic. */
 export function mintCanvasId(now: number, random: () => number): string {
@@ -30,22 +37,36 @@ export function isCanvasId(value: unknown): value is string {
   return typeof value === 'string' && CANVAS_ID.test(value);
 }
 
-/** The folder holding every canvas, their thumbnails and the link index. */
-export function canvasDirPath(pluginDir: string): string {
-  return `${pluginDir}/${CANVAS_DIR}`;
+/**
+ * The canvas folder inside the plugin's own directory: where canvases stay
+ * without file write access, and where builds before shared storage kept
+ * them. Uninstalling Canvas deletes it.
+ */
+export function privateCanvasDir(pluginDir: string): string {
+  return `${pluginDir}/${PRIVATE_CANVAS_DIR}`;
 }
 
-export function canvasFilePath(pluginDir: string, canvasId: string): string {
-  return `${canvasDirPath(pluginDir)}/${canvasId}.json`;
+/**
+ * A marker left in the plugin's own directory once Canvas has opened. Installing
+ * or reinstalling the plugin replaces that directory, marker and all, so a
+ * missing marker means the first open since an install. It sits outside the
+ * canvas folder, so moving old canvases to MyStyle never carries it along.
+ */
+export function installMarkerPath(pluginDir: string): string {
+  return `${pluginDir}/canvas-opened`;
 }
 
-export function thumbnailPath(pluginDir: string, canvasId: string): string {
-  return `${canvasDirPath(pluginDir)}/thumbnails/${canvasId}.png`;
+export function canvasFilePath(canvasDir: string, canvasId: string): string {
+  return `${canvasDir}/${canvasId}.json`;
+}
+
+export function thumbnailPath(canvasDir: string, canvasId: string): string {
+  return `${canvasDir}/thumbnails/${canvasId}.png`;
 }
 
 /** The link index (domain/canvasIndex.ts); `links` is not a canvas id, so it never lists as a canvas. */
-export function indexPath(pluginDir: string): string {
-  return `${canvasDirPath(pluginDir)}/links.json`;
+export function indexPath(canvasDir: string): string {
+  return `${canvasDir}/links.json`;
 }
 
 /** The canvas id a thumbnail path names, or null when [path] is not a SuperCanvas thumbnail. */

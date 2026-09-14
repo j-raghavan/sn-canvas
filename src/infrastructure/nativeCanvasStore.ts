@@ -1,9 +1,9 @@
 // CanvasStorePort over the native SuperCanvasModule
 // (android/app/src/main/java/com/snsupercanvas/canvas/SuperCanvasModule.kt).
 // Like sn-copilot's CopilotOverlay facade it never rejects: a missing module,
-// a rejection or a malformed result all come back as false, null or empty,
-// logged here, so the session branches on plain values instead of wrapping
-// calls in try/catch.
+// a rejection or a malformed result all come back as false, null, zero or
+// empty, logged here, so the session branches on plain values instead of
+// wrapping calls in try/catch.
 
 import {NativeModules} from 'react-native';
 import type {CanvasStorePort} from '../application/canvasSession';
@@ -17,6 +17,8 @@ export type NativeCanvasModule = Record<PathMethod, (path: string) => Promise<bo
   writeText: (path: string, text: string) => Promise<boolean>;
   /** The `*.json` file names in a folder, most recently saved first. */
   listCanvasFiles: (dir: string) => Promise<string[]>;
+  adoptFolder: (from: string, to: string) => Promise<number>;
+  setNotePen: (type: number, width: number, color: number) => Promise<boolean>;
 };
 
 const TAG = '[SUPERCANVAS]';
@@ -42,6 +44,8 @@ export function createNativeCanvasStore(
     invoke(method, false, async module => (await module[method](path)) === true);
 
   return {
+    rememberNotePen: pen =>
+      invoke('setNotePen', false, async module => (await module.setNotePen(pen.type, pen.width, pen.color)) === true),
     load: path => call('loadCanvas', path),
     save: path => call('saveCanvas', path),
     remove: path => call('deleteCanvas', path),
@@ -57,6 +61,11 @@ export function createNativeCanvasStore(
       invoke('listCanvasFiles', [], async module => {
         const names: unknown = await module.listCanvasFiles(canvasDir);
         return (Array.isArray(names) ? names : []).map(name => String(name).replace(/\.json$/, '')).filter(isCanvasId);
+      }),
+    adoptFolder: (from, to) =>
+      invoke('adoptFolder', 0, async module => {
+        const moved: unknown = await module.adoptFolder(from, to);
+        return typeof moved === 'number' ? moved : 0;
       }),
   };
 }

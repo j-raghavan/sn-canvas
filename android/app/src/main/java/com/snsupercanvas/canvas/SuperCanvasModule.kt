@@ -12,17 +12,22 @@ import java.io.IOException
 
 /**
  * RN bridge for the infrequent file operations on the live canvas: save, load,
- * delete, thumbnail rendering, and the canvas link index beside them (PRD §9 — everything that is not per-frame gesture or
- * render state, which lives in [SuperCanvasView]). It holds no canvas logic of
- * its own: persistence is [CanvasJson], rendering is the view.
+ * delete, thumbnail rendering, and the canvas folder's own files (the link
+ * index, the canvas list, taking in an older folder; see [CanvasFolder]). It
+ * also hands the live canvas the note's pen, to set back as it closes
+ * ([FirmwarePen]). Everything that is per-frame gesture or render state lives in
+ * [SuperCanvasView] (PRD §9). It holds no canvas logic of its own:
+ * persistence is [CanvasJson], rendering is the view.
  *
- * Paths always arrive fully resolved from the JS side (built from the host's
- * plugin directory); this module never derives storage locations itself. The
- * live view comes from the injected [registry] (see [SuperCanvasPackage]).
+ * Paths always arrive fully resolved from the JS side (the canvas folder in
+ * MyStyle, or the plugin's own directory); this module never derives storage
+ * locations itself. The live view comes from the injected [registry] (see
+ * [SuperCanvasPackage]).
  *
- * Threading: view state is read and written on the UI thread (via `post`) and
- * file I/O runs on a background thread, so neither races the view nor blocks
- * the bridge.
+ * Threading: view state is read on the UI thread (via `post`) and file I/O
+ * runs on a background thread, so neither races the view nor blocks the
+ * bridge. Every file call settles its promise, even when the firmware refuses
+ * the file (see [inBackground]).
  */
 class SuperCanvasModule(
     reactContext: ReactApplicationContext,
@@ -36,23 +41,15 @@ class SuperCanvasModule(
         path: String,
         promise: Promise,
     ) {
-        val view = registry.current()
-        if (view == null) {
-            promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to save from")
-            return
-        }
+        val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to save from")
         view.post {
             val elements = view.getState().elements
-            Thread {
-                try {
-                    val file = File(path)
-                    file.parentFile?.mkdirs()
-                    file.writeText(CanvasJson.serializeElements(elements))
-                    promise.resolve(true)
-                } catch (e: IOException) {
-                    promise.reject(ERR_IO, e.message, e)
-                }
-            }.start()
+            inBackground(promise) {
+                val file = File(path)
+                file.parentFile?.mkdirs()
+                file.writeText(CanvasJson.serializeElements(elements))
+                true
+            }
         }
     }
 
@@ -66,18 +63,12 @@ class SuperCanvasModule(
     fun loadCanvas(
         path: String,
         promise: Promise,
-    ) {
-        Thread {
-            try {
-                val file = File(path)
-                val exists = file.exists()
-                val elements = if (exists) CanvasJson.deserializeElements(file.readText()) else emptyList()
-                registry.current()?.let { view -> view.post { view.setElements(elements) } }
-                promise.resolve(exists)
-            } catch (e: IOException) {
-                promise.reject(ERR_IO, e.message, e)
-            }
-        }.start()
+    ) = inBackground(promise) {
+        val file = File(path)
+        val exists = file.exists()
+        val elements = if (exists) CanvasJson.deserializeElements(file.readText()) else emptyList()
+        registry.current()?.let { view -> view.post { view.setElements(elements) } }
+        exists
     }
 
     /** Deletes the file at [path]; resolves `true` once it is gone, including when it never existed. */
@@ -85,9 +76,9 @@ class SuperCanvasModule(
     fun deleteCanvas(
         path: String,
         promise: Promise,
-    ) {
+    ) = inBackground(promise) {
         val file = File(path)
-        promise.resolve(file.delete() || !file.exists())
+        file.delete() || !file.exists()
     }
 
     /**
@@ -100,28 +91,20 @@ class SuperCanvasModule(
         path: String,
         promise: Promise,
     ) {
-        val view = registry.current()
-        if (view == null) {
-            promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to render a thumbnail from")
-            return
-        }
+        val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to render a thumbnail from")
         view.post {
             val elements = view.getState().elements
-            Thread {
+            inBackground(promise) {
+                val bitmap = view.renderThumbnailBitmap(elements)
                 try {
-                    val bitmap = view.renderThumbnailBitmap(elements)
-                    try {
-                        val file = File(path)
-                        file.parentFile?.mkdirs()
-                        FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out) }
-                        promise.resolve(true)
-                    } finally {
-                        bitmap.recycle()
-                    }
-                } catch (e: IOException) {
-                    promise.reject(ERR_IO, e.message, e)
+                    val file = File(path)
+                    file.parentFile?.mkdirs()
+                    FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, out) }
+                } finally {
+                    bitmap.recycle()
                 }
-            }.start()
+                true
+            }
         }
     }
 
@@ -130,16 +113,7 @@ class SuperCanvasModule(
     fun readText(
         path: String,
         promise: Promise,
-    ) {
-        Thread {
-            try {
-                val file = File(path)
-                promise.resolve(if (file.exists()) file.readText() else null)
-            } catch (e: IOException) {
-                promise.reject(ERR_IO, e.message, e)
-            }
-        }.start()
-    }
+    ) = inBackground(promise) { File(path).takeIf { it.exists() }?.readText() }
 
     /** Writes [text] to [path], creating parent directories as needed. */
     @ReactMethod
@@ -147,17 +121,11 @@ class SuperCanvasModule(
         path: String,
         text: String,
         promise: Promise,
-    ) {
-        Thread {
-            try {
-                val file = File(path)
-                file.parentFile?.mkdirs()
-                file.writeText(text)
-                promise.resolve(true)
-            } catch (e: IOException) {
-                promise.reject(ERR_IO, e.message, e)
-            }
-        }.start()
+    ) = inBackground(promise) {
+        val file = File(path)
+        file.parentFile?.mkdirs()
+        file.writeText(text)
+        true
     }
 
     /** The names of the canvas files (`*.json`) in [dir], most recently saved first; none when there is no such folder. */
@@ -165,20 +133,62 @@ class SuperCanvasModule(
     fun listCanvasFiles(
         dir: String,
         promise: Promise,
+    ) = inBackground(promise) {
+        Arguments.createArray().apply { CanvasFolder.canvasFiles(File(dir)).forEach(::pushString) }
+    }
+
+    /** Moves the files under [from] into [to], keeping any [to] already has; resolves how many moved. */
+    @ReactMethod
+    fun adoptFolder(
+        from: String,
+        to: String,
+        promise: Promise,
+    ) = inBackground(promise) { CanvasFolder.adopt(File(from), File(to)) }
+
+    /**
+     * Remembers the pen the note writes with, as the SDK's getPenInfo reports
+     * it, for the live canvas to set back as it gives the pen back
+     * ([FirmwarePen.ofNotePen]); resolves whether the firmware has a code for it.
+     */
+    @ReactMethod
+    fun setNotePen(
+        type: Double,
+        width: Double,
+        color: Double,
+        promise: Promise,
     ) {
-        val names = Arguments.createArray()
-        File(dir)
-            .listFiles { file -> file.isFile && file.name.endsWith(".json") }
-            .orEmpty()
-            .sortedByDescending { it.lastModified() }
-            .forEach { names.pushString(it.name) }
-        promise.resolve(names)
+        val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to hand the note's pen to")
+        val pen = FirmwarePen.ofNotePen(type.toInt(), width.toInt(), color.toInt())
+        view.post { view.setNotePen(pen) }
+        promise.resolve(pen != null)
     }
 
     companion object {
         const val NAME = "SuperCanvasModule"
         const val ERR_NO_ACTIVE_VIEW = "E_NO_ACTIVE_VIEW"
         const val ERR_IO = "E_IO"
+        const val ERR_DENIED = "E_DENIED"
         private const val PNG_QUALITY = 100
     }
+}
+
+/**
+ * Runs [work] off the bridge thread and settles [promise] with what it
+ * returns. A failure rejects the promise rather than escaping the thread,
+ * which would kill the plugin: an I/O error, or the firmware refusing a file
+ * in shared storage (SecurityException) when a file permission is missing.
+ */
+private fun inBackground(
+    promise: Promise,
+    work: () -> Any?,
+) {
+    Thread {
+        try {
+            promise.resolve(work())
+        } catch (e: IOException) {
+            promise.reject(SuperCanvasModule.ERR_IO, e.message, e)
+        } catch (e: SecurityException) {
+            promise.reject(SuperCanvasModule.ERR_DENIED, e.message, e)
+        }
+    }.start()
 }

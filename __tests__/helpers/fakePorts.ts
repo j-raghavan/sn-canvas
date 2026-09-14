@@ -2,7 +2,8 @@
 // plugin directory and `shown` for what the native view displays, so tests
 // assert outcomes (what got saved where) rather than call sequences.
 
-import type {CanvasStorePort, HostPort} from '../../src/application/canvasSession';
+import type {CanvasStorePort, HostPort, NotePen} from '../../src/application/canvasSession';
+import type {NotePage} from '../../src/domain/canvasIndex';
 import {isCanvasId} from '../../src/domain/canvasLink';
 import type {Logger} from '../../src/sdk/types';
 
@@ -11,6 +12,8 @@ export type FakeStore = CanvasStorePort & {
   files: Map<string, string>;
   shown: string;
   failing: Set<keyof CanvasStorePort>;
+  /** The note's pen the canvas would set back. */
+  notePen: NotePen | null;
 };
 
 export const createFakeStore = (initial: Record<string, string> = {}): FakeStore => {
@@ -24,6 +27,14 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
     files,
     failing,
     shown: '',
+    notePen: null,
+    async rememberNotePen(pen) {
+      if (failing.has('rememberNotePen')) {
+        return false;
+      }
+      store.notePen = pen;
+      return true;
+    },
     async load(path) {
       store.shown = files.get(path) ?? '';
       return files.has(path);
@@ -52,6 +63,18 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       write(path, text);
       return true;
     },
+    async adoptFolder(from, to) {
+      let moved = 0;
+      for (const [path, content] of [...files]) {
+        const target = `${to}${path.slice(from.length)}`;
+        if (path.startsWith(`${from}/`) && !files.has(target)) {
+          files.delete(path);
+          write(target, content);
+          moved += 1;
+        }
+      }
+      return moved;
+    },
     async savedCanvasIds(canvasDir) {
       return [...files.keys()]
         .reverse()
@@ -68,21 +91,44 @@ export type FakeHost = HostPort & {
   lassoed: unknown[];
   inserted: string[];
   insertSucceeds: boolean;
-  /** What getLastElement reports for the image just inserted. */
-  lastUuid: string | null;
+  /** Whether the user grants file write access (else canvases stay in the plugin folder). */
+  fileWrite: boolean;
+  accessRequests: number;
+  /** The note page the user is on. */
+  page: NotePage | null;
+  /** The numbers in the page of the pictures on that page, as getElements reports them. */
+  pictures: number[];
+  tagSucceeds: boolean;
+  /** The pictures tagged with a canvas, in order. */
+  tagged: Array<{canvasId: string; picture: unknown; imagePath: string}>;
   closeCount: number;
+  /** The pen the note writes with, as getPenInfo reports it. */
+  pen: NotePen | null;
 };
 
 export const createFakeHost = (): FakeHost => {
   const host: FakeHost = {
     dir: '/plugin',
+    pen: null,
+    async notePen() {
+      return host.pen;
+    },
     lassoed: [],
     inserted: [],
     insertSucceeds: true,
-    lastUuid: 'u-1',
+    fileWrite: false,
+    accessRequests: 0,
+    page: {notePath: '/note.note', page: 0},
+    pictures: [],
+    tagSucceeds: true,
+    tagged: [],
     closeCount: 0,
     async pluginDir() {
       return host.dir;
+    },
+    async requestFileAccess() {
+      host.accessRequests += 1;
+      return host.fileWrite;
     },
     async lassoedElements() {
       return host.lassoed;
@@ -94,8 +140,18 @@ export const createFakeHost = (): FakeHost => {
       host.inserted.push(path);
       return true;
     },
-    async lastElementUuid() {
-      return host.lastUuid;
+    async currentPage() {
+      return host.page;
+    },
+    async pagePictureNumbers() {
+      return host.pictures;
+    },
+    async tagPicture(picture, canvasId, _at, imagePath) {
+      if (!host.tagSucceeds) {
+        return false;
+      }
+      host.tagged.push({canvasId, picture, imagePath});
+      return true;
     },
     closeView() {
       host.closeCount += 1;

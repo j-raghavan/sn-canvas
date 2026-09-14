@@ -4,14 +4,16 @@
  */
 import {
   DEFAULT_CANVAS_ID,
-  canvasDirPath,
+  SHARED_CANVAS_DIR,
   canvasFilePath,
   canvasIdFromLassoedElements,
   canvasIdFromThumbnailPath,
   indexPath,
+  installMarkerPath,
   isCanvasId,
   mintCanvasId,
   picturePathOf,
+  privateCanvasDir,
   thumbnailPath,
 } from '../src/domain/canvasLink';
 import {BUTTON_ID_OPEN_LINKED, BUTTON_ID_SIDEBAR} from '../src/domain/entryPoints';
@@ -20,11 +22,14 @@ test('the entry points are the button ids index.js registers', () => {
   expect([BUTTON_ID_SIDEBAR, BUTTON_ID_OPEN_LINKED]).toEqual([500, 501]);
 });
 
-test('canvases, thumbnails and the link index live in one folder under the plugin directory', () => {
-  expect(canvasDirPath('/plugin')).toBe('/plugin/SuperCanvas');
-  expect(canvasFilePath('/plugin', DEFAULT_CANVAS_ID)).toBe('/plugin/SuperCanvas/default.json');
-  expect(thumbnailPath('/plugin', 'c-1')).toBe('/plugin/SuperCanvas/thumbnails/c-1.png');
-  expect(indexPath('/plugin')).toBe('/plugin/SuperCanvas/links.json');
+test('canvases, thumbnails and the link index share one folder: in MyStyle, or the plugin directory without write access', () => {
+  expect(SHARED_CANVAS_DIR).toBe('/storage/emulated/0/MyStyle/SnSuperCanvas');
+  expect(privateCanvasDir('/plugin')).toBe('/plugin/SuperCanvas');
+  expect(canvasFilePath(SHARED_CANVAS_DIR, DEFAULT_CANVAS_ID)).toBe('/storage/emulated/0/MyStyle/SnSuperCanvas/default.json');
+  expect(thumbnailPath('/plugin/SuperCanvas', 'c-1')).toBe('/plugin/SuperCanvas/thumbnails/c-1.png');
+  expect(indexPath('/plugin/SuperCanvas')).toBe('/plugin/SuperCanvas/links.json');
+  // The first-open marker lives outside the canvas folder, so it never moves to MyStyle with the canvases.
+  expect(installMarkerPath('/plugin')).toBe('/plugin/canvas-opened');
 });
 
 test('mintCanvasId is deterministic for a given clock and randomness', () => {

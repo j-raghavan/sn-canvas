@@ -149,6 +149,11 @@ class SuperCanvasView(
         liveInk.update(isPencil)
     }
 
+    /** The pen the note writes with, set back as the canvas gives the pen back; null when unknown. */
+    internal fun setNotePen(pen: FirmwarePen?) {
+        liveInk.notePen = pen
+    }
+
     /** Replaces the canvas content (after `loadCanvas`), restarts the undo history from it, and frames it (FR13). */
     fun setElements(elements: List<Element>) {
         controller.load(elements)

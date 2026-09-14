@@ -6,6 +6,7 @@ import {BUTTON_ID_OPEN_LINKED, BUTTON_ID_SIDEBAR} from './src/domain/entryPoints
 // Installs the single PluginManager.registerButtonListener that fans button
 // presses out to the screen (see src/infrastructure/pluginRouter.ts).
 import {installPluginRouter} from './src/infrastructure/pluginRouter';
+import {requestFileAccess} from './src/wiring';
 
 const BUTTON_TYPE_SIDEBAR = 1;
 const BUTTON_TYPE_LASSO = 2;
@@ -19,14 +20,17 @@ const REGION_TYPE_FULLSCREEN_PERSISTENT = 3;
 // when the lasso holds a picture, such as a SuperCanvas thumbnail.
 const EDIT_DATA_TYPE_IMAGE = 2;
 
-// No file permission is declared (PluginConfig.json has no uses-permissions):
-// canvases and thumbnails live in the plugin's private directory and are
-// written natively by SuperCanvasModule.
+// File permissions (read notes; write and delete the canvas folder in MyStyle)
+// are declared in PluginConfig.json and asked for as soon as the plugin loads,
+// at install and at each start, as sn-shapes and sn-mindmap do. The session
+// awaits the same request before it opens a canvas, so each dialog shows once
+// (see src/infrastructure/filePermissions.ts).
 
 AppRegistry.registerComponent(appName, () => App);
 
 PluginManager.init();
 installPluginRouter();
+requestFileAccess();
 
 const icon = Image.resolveAssetSource(require('./assets/icon.png')).uri;
 

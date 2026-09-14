@@ -1,22 +1,70 @@
-// Which canvas each "Save to Note" thumbnail opens, and which canvas the
-// sidebar reopens (PRD FR12/FR13). The note keeps nothing of an inserted
-// picture's path: it hands a lassoed picture back as a temporary copy named by
-// the time. What lasts is the element's uuid, so "Save to Note" reads it back
-// with PluginFileAPI.getLastElement (as sn-tables does for its tables) and
-// records it here, and "Open Canvas" matches lassoed uuids against it. Kept as
-// JSON beside the canvases (canvasLink.indexPath) and read defensively: a
-// missing or damaged index is an empty one, and only canvas ids get through.
+// Which canvas the sidebar reopens, and the links waiting for "Save to Note"
+// thumbnails to be placed (PRD FR12/FR13). The note hands Canvas nothing
+// lasting about an inserted picture: it places it only once its placement
+// lasso closes, and a lasso hands back a copy with a fresh uuid and a
+// temporary file. What a lasso's copy keeps is the picture's number in its
+// page. So "Save to Note" leaves a pending link that remembers the numbers of
+// the pictures already on the page, and the first "Open Canvas" on a picture
+// that wasn't among them claims it; the session then tags the picture itself
+// with its canvas (domain/canvasTag.ts), which every later lasso carries.
+// Kept as JSON beside the canvases (canvasLink.indexPath) and read
+// defensively: a missing or damaged index is an empty one, and only
+// well-formed entries get through (entries from builds that recorded uuids
+// are dropped).
 
-import {isCanvasId} from './canvasLink';
+import {isCanvasId, picturePathOf} from './canvasLink';
 
-export type CanvasIndex = {
-  /** Note element uuid → the canvas its thumbnail opens. */
-  readonly links: Readonly<Record<string, string>>;
-  /** The canvas the sidebar reopens; null before one was recorded. */
-  readonly lastCanvasId: string | null;
+/** A page of a note. */
+export type NotePage = {readonly notePath: string; readonly page: number};
+
+/** A thumbnail inserted into a note, waiting to be placed and claimed. */
+export type PendingLink = NotePage & {
+  readonly canvasId: string;
+  /** The numbers in the page of the pictures already there when it was inserted: the thumbnail is a picture that isn't one of them. */
+  readonly knownPictureNumbers: readonly number[];
 };
 
-export const EMPTY_INDEX: CanvasIndex = {links: {}, lastCanvasId: null};
+export type CanvasIndex = {
+  /** The canvas the sidebar reopens; null before one was recorded. */
+  readonly lastCanvasId: string | null;
+  /** Oldest first. */
+  readonly pending: readonly PendingLink[];
+};
+
+/** A pending link a lassoed picture claims: the index without it, its canvas, and the picture to tag with it. */
+export type Claim = {readonly index: CanvasIndex; readonly canvasId: string; readonly picture: unknown};
+
+export const EMPTY_INDEX: CanvasIndex = {lastCanvasId: null, pending: []};
+
+/** Pending links kept, the newest: one for a thumbnail deleted before it was ever opened would otherwise wait for good. */
+export const MAX_PENDING = 20;
+
+// sn-plugin-lib's Element.TYPE_PICTURE.
+const PICTURE_TYPE = 200;
+
+/** A note page from the host's current file path and page number; null unless both are usable. */
+export function notePageOf(notePath: unknown, page: unknown): NotePage | null {
+  return typeof notePath === 'string' && notePath !== '' && Number.isInteger(page) && (page as number) >= 0
+    ? {notePath, page: page as number}
+    : null;
+}
+
+/** A note element's number in its page (sn-plugin-lib `Element.numInPage`, from 1), or null when it has none. */
+export function numberOf(element: unknown): number | null {
+  const num = (element as {numInPage?: unknown} | null | undefined)?.numInPage;
+  return Number.isInteger(num) && (num as number) >= 1 ? (num as number) : null;
+}
+
+const pendingLinkOf = (value: unknown): PendingLink | null => {
+  const saved = (value ?? {}) as {canvasId?: unknown; notePath?: unknown; page?: unknown; knownPictureNumbers?: unknown};
+  const at = notePageOf(saved.notePath, saved.page);
+  const known = saved.knownPictureNumbers;
+  const knownPictureNumbers =
+    Array.isArray(known) && known.every(num => numberOf({numInPage: num}) !== null) ? (known as number[]) : null;
+  return at !== null && isCanvasId(saved.canvasId) && knownPictureNumbers !== null
+    ? {...at, canvasId: saved.canvasId, knownPictureNumbers}
+    : null;
+};
 
 /** The index saved as [json]; the empty index for no file or anything unreadable. */
 export function parseCanvasIndex(json: string | null): CanvasIndex {
@@ -29,25 +77,18 @@ export function parseCanvasIndex(json: string | null): CanvasIndex {
   } catch {
     return EMPTY_INDEX;
   }
-  const saved = (raw ?? {}) as {links?: unknown; lastCanvasId?: unknown};
-  const links: Record<string, string> = {};
-  if (saved.links && typeof saved.links === 'object') {
-    for (const [uuid, canvasId] of Object.entries(saved.links as Record<string, unknown>)) {
-      if (isCanvasId(canvasId)) {
-        links[uuid] = canvasId;
-      }
-    }
-  }
-  return {links, lastCanvasId: isCanvasId(saved.lastCanvasId) ? saved.lastCanvasId : null};
+  const saved = (raw ?? {}) as {lastCanvasId?: unknown; pending?: unknown};
+  const pending = Array.isArray(saved.pending)
+    ? saved.pending
+        .map(pendingLinkOf)
+        .filter((link): link is PendingLink => link !== null)
+        .slice(-MAX_PENDING)
+    : [];
+  return {lastCanvasId: isCanvasId(saved.lastCanvasId) ? saved.lastCanvasId : null, pending};
 }
 
 export function serializeCanvasIndex(index: CanvasIndex): string {
   return JSON.stringify(index);
-}
-
-/** [index] with the note element [uuid] opening [canvasId]. */
-export function withLink(index: CanvasIndex, uuid: string, canvasId: string): CanvasIndex {
-  return {...index, links: {...index.links, [uuid]: canvasId}};
 }
 
 /** [index] with [canvasId] as the canvas the sidebar reopens. */
@@ -55,19 +96,65 @@ export function withLastCanvas(index: CanvasIndex, canvasId: string): CanvasInde
   return {...index, lastCanvasId: canvasId};
 }
 
-/** A note element's uuid (sn-plugin-lib `Element.uuid`), or null when it has none. */
-export function uuidOf(element: unknown): string | null {
-  const uuid = (element as {uuid?: unknown} | null | undefined)?.uuid;
-  return typeof uuid === 'string' && uuid !== '' ? uuid : null;
+/** [index] with [link] waiting for its thumbnail; only the newest [MAX_PENDING] are kept. */
+export function withPending(index: CanvasIndex, link: PendingLink): CanvasIndex {
+  return {...index, pending: [...index.pending, link].slice(-MAX_PENDING)};
 }
 
-/** The canvas opened by the first of [elements] the index links, or null when none is linked. */
-export function linkedCanvasIdOf(elements: readonly unknown[], index: CanvasIndex): string | null {
-  for (const element of elements) {
-    const uuid = uuidOf(element);
-    if (uuid !== null && Object.prototype.hasOwnProperty.call(index.links, uuid)) {
-      return index.links[uuid];
+/**
+ * The claim a lassoed picture makes: the newest link pending on page [at] that
+ * didn't know the picture's number. Newest first matters with two thumbnails
+ * on one page: the newer one's link knew the older picture, so each claims its
+ * own. Null when nothing lassoed can claim a pending link.
+ */
+export function claimPending(index: CanvasIndex, lassoed: readonly unknown[], at: NotePage): Claim | null {
+  for (const picture of picturesOf(lassoed)) {
+    const num = numberOf(picture);
+    const claimant = [...index.pending]
+      .reverse()
+      .find(
+        link => link.notePath === at.notePath && link.page === at.page && (num === null || !link.knownPictureNumbers.includes(num)),
+      );
+    if (claimant !== undefined) {
+      return {index: {...index, pending: index.pending.filter(link => link !== claimant)}, canvasId: claimant.canvasId, picture};
     }
   }
   return null;
+}
+
+const isPicture = (element: unknown): boolean => {
+  if ((element as {type?: unknown} | null | undefined)?.type === PICTURE_TYPE) {
+    return true;
+  }
+  const path = picturePathOf(element);
+  return path !== undefined && path !== null;
+};
+
+/** The pictures among note [elements], in their order. */
+export function picturesOf(elements: readonly unknown[]): unknown[] {
+  return elements.filter(isPicture);
+}
+
+/** The numbers in the page of the pictures among note [elements], in their order. */
+export function pictureNumbersOf(elements: readonly unknown[]): number[] {
+  return picturesOf(elements)
+    .map(numberOf)
+    .filter((num): num is number => num !== null);
+}
+
+/**
+ * A note element in brief, for the log: which element it is and where it sits
+ * (uuid, type, number in its page, page, picture rect, user data), never what
+ * it shows.
+ */
+export function elementSummary(element: unknown): Record<string, unknown> {
+  const e = (element ?? {}) as {
+    uuid?: unknown;
+    type?: unknown;
+    numInPage?: unknown;
+    pageNum?: unknown;
+    userData?: unknown;
+    picture?: {rect?: unknown} | null;
+  };
+  return {uuid: e.uuid, type: e.type, num: e.numInPage, page: e.pageNum, rect: e.picture?.rect, userData: e.userData};
 }
