@@ -24,12 +24,12 @@ test('the entry points are the button ids index.js registers', () => {
 });
 
 test('canvases, thumbnails and the link index share one folder: in MyStyle, or the plugin directory without write access', () => {
-  expect(SHARED_CANVAS_DIR).toBe('/storage/emulated/0/MyStyle/SnSuperCanvas');
-  expect(privateCanvasDir('/plugin')).toBe('/plugin/SuperCanvas');
-  expect(canvasFilePath(SHARED_CANVAS_DIR, DEFAULT_CANVAS_ID)).toBe('/storage/emulated/0/MyStyle/SnSuperCanvas/default.json');
-  expect(thumbnailPath('/plugin/SuperCanvas', 'c-1')).toBe('/plugin/SuperCanvas/thumbnails/c-1.png');
-  expect(imagesPath('/plugin/SuperCanvas')).toBe('/plugin/SuperCanvas/images');
-  expect(indexPath('/plugin/SuperCanvas')).toBe('/plugin/SuperCanvas/links.json');
+  expect(SHARED_CANVAS_DIR).toBe('/storage/emulated/0/MyStyle/SnCanvas');
+  expect(privateCanvasDir('/plugin')).toBe('/plugin/Canvas');
+  expect(canvasFilePath(SHARED_CANVAS_DIR, DEFAULT_CANVAS_ID)).toBe('/storage/emulated/0/MyStyle/SnCanvas/default.json');
+  expect(thumbnailPath('/plugin/Canvas', 'c-1')).toBe('/plugin/Canvas/thumbnails/c-1.png');
+  expect(imagesPath('/plugin/Canvas')).toBe('/plugin/Canvas/images');
+  expect(indexPath('/plugin/Canvas')).toBe('/plugin/Canvas/links.json');
   // The first-open marker lives outside the canvas folder, so it never moves to MyStyle with the canvases.
   expect(installMarkerPath('/plugin')).toBe('/plugin/canvas-opened');
 });
@@ -59,26 +59,26 @@ test.each([
 describe('canvasIdFromThumbnailPath', () => {
   test.each([
     ['a non-string', 42],
-    ['a picture that is not a SuperCanvas thumbnail', '/note/images/photo.png'],
-    ['a path that climbs out of the thumbnails folder', '/plugin/SuperCanvas/thumbnails/../../x.png'],
-    ['a thumbnail with a different extension', '/plugin/SuperCanvas/thumbnails/c-1.jpg'],
-    ['a thumbnail named by something that is not a canvas id', '/plugin/SuperCanvas/thumbnails/Photo-1.png'],
+    ['a picture that is not a Canvas thumbnail', '/note/images/photo.png'],
+    ['a path that climbs out of the thumbnails folder', '/plugin/Canvas/thumbnails/../../x.png'],
+    ['a thumbnail with a different extension', '/plugin/Canvas/thumbnails/c-1.jpg'],
+    ['a thumbnail named by something that is not a canvas id', '/plugin/Canvas/thumbnails/Photo-1.png'],
   ])('rejects %s', (_case, path) => {
     expect(canvasIdFromThumbnailPath(path)).toBeNull();
   });
 });
 
 describe('canvasIdFromLassoedElements', () => {
-  test('is null when nothing lassoed is a SuperCanvas thumbnail', () => {
+  test('is null when nothing lassoed is a Canvas thumbnail', () => {
     expect(canvasIdFromLassoedElements([])).toBeNull();
     expect(canvasIdFromLassoedElements([null, {}, {picture: null}, {picture: {picturePath: 42}}])).toBeNull();
   });
 
-  test('is the canvas of the first SuperCanvas thumbnail in the lasso', () => {
+  test('is the canvas of the first Canvas thumbnail in the lasso', () => {
     const lassoed = [
       {picture: {picturePath: '/note/images/photo.png'}},
-      {picture: {picturePath: '/plugin/SuperCanvas/thumbnails/c-2.png'}},
-      {picture: {picturePath: '/plugin/SuperCanvas/thumbnails/c-3.png'}},
+      {picture: {picturePath: '/plugin/Canvas/thumbnails/c-2.png'}},
+      {picture: {picturePath: '/plugin/Canvas/thumbnails/c-3.png'}},
     ];
     expect(canvasIdFromLassoedElements(lassoed)).toBe('c-2');
   });

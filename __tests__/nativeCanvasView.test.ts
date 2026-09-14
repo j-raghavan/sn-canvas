@@ -7,7 +7,7 @@ const mockDispatch = jest.fn();
 const mockGetViewManagerConfig = jest.fn();
 
 jest.mock('react-native', () => ({
-  requireNativeComponent: () => 'SuperCanvasView',
+  requireNativeComponent: () => 'CanvasView',
   findNodeHandle: (view: unknown) => (view ? 7 : null),
   UIManager: {
     dispatchViewManagerCommand: (...args: unknown[]) => mockDispatch(...args),
@@ -39,7 +39,7 @@ test('a command before the view mounts is dropped', () => {
 test('the e-ink grays are read from the view constants, or null when absent', () => {
   mockGetViewManagerConfig.mockReturnValueOnce({Constants: {einkGrays: {black: '#000000'}}});
   expect(nativeEinkGrays()).toEqual({black: '#000000'});
-  expect(mockGetViewManagerConfig).toHaveBeenCalledWith('SuperCanvasView');
+  expect(mockGetViewManagerConfig).toHaveBeenCalledWith('CanvasView');
   mockGetViewManagerConfig.mockReturnValueOnce({});
   expect(nativeEinkGrays()).toBeNull();
   mockGetViewManagerConfig.mockReturnValueOnce(undefined);

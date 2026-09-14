@@ -4,7 +4,7 @@
 // declared in PluginConfig.json under `uses-permissions` and requested at
 // runtime, since declaration alone leaves hasPermission at 0. READ lets Canvas
 // read the open note's page (getElements) to tell its thumbnails apart; WRITE
-// and DELETE let it keep canvases in MyStyle/SnSuperCanvas. A refused native
+// and DELETE let it keep canvases in MyStyle/SnCanvas. A refused native
 // file call throws SecurityException, which would kill the plugin, so nothing
 // touches the canvas folder before the answer is in.
 // Ref: docs.supernote.com/en/plugin-base/permission
@@ -17,7 +17,7 @@
 import {PluginManager} from 'sn-plugin-lib';
 import type {Logger} from '../sdk/types';
 
-const TAG = '[SUPERCANVAS]';
+const TAG = '[SNCANVAS]';
 
 export const FILE_READ = 'plugin.permission.FILE:READ';
 export const FILE_WRITE = 'plugin.permission.FILE:WRITE';

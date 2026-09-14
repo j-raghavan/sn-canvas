@@ -27,7 +27,7 @@ test('asks for read, write and delete in turn, and is true once write and delete
   mockRequestPermission.mockResolvedValue(2);
   expect(await createFileAccess(logger)()).toBe(true);
   expect(mockRequestPermission.mock.calls.map(([name]) => name)).toEqual([FILE_READ, FILE_WRITE, FILE_DELETE]);
-  expect(logger.lines).toContain(`log [SUPERCANVAS][PERM] ${FILE_WRITE} -> 2`);
+  expect(logger.lines).toContain(`log [SNCANVAS][PERM] ${FILE_WRITE} -> 2`);
 });
 
 test('does not ask for what is granted already', async () => {
@@ -49,7 +49,7 @@ test('is false when write or delete is refused, a request that fails counting as
     return 1;
   });
   expect(await requestFileAccess()).toBe(false);
-  expect(logger.lines).toContain(`warn [SUPERCANVAS][PERM] ${FILE_WRITE} failed: Error: This permission has not been declared.`);
+  expect(logger.lines).toContain(`warn [SNCANVAS][PERM] ${FILE_WRITE} failed: Error: This permission has not been declared.`);
 });
 
 test('calls while a request is in flight share it, so each dialog shows once; a call after it asks again', async () => {

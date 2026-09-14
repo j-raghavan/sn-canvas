@@ -2,7 +2,7 @@
 //
 // A canvas is a JSON file in the canvas folder, beside its PNG thumbnail and
 // the link index (domain/canvasIndex.ts) that says which note thumbnail opens
-// which canvas. The folder is MyStyle/SnSuperCanvas in shared storage, so
+// which canvas. The folder is MyStyle/SnCanvas in shared storage, so
 // canvases outlast an uninstall (which deletes the plugin's own directory) and
 // sync with the rest of MyStyle; without file write access they stay in the
 // plugin's own directory instead. "Open Canvas" still reads an id from a
@@ -14,10 +14,13 @@
 export const DEFAULT_CANVAS_ID = 'default';
 
 /** Where canvases live with file write access: beside the plugin file in MyStyle, outlasting an uninstall. */
-export const SHARED_CANVAS_DIR = '/storage/emulated/0/MyStyle/SnSuperCanvas';
+export const SHARED_CANVAS_DIR = '/storage/emulated/0/MyStyle/SnCanvas';
+
+/** Where canvases lived before the plugin was renamed from SuperCanvas; the first open with write access moves them in. */
+export const LEGACY_SHARED_CANVAS_DIR = '/storage/emulated/0/MyStyle/SnSuperCanvas';
 
 // The canvas folder inside the plugin's own directory.
-const PRIVATE_CANVAS_DIR = 'SuperCanvas';
+const PRIVATE_CANVAS_DIR = 'Canvas';
 
 // Ids are only ever minted by mintCanvasId (or are DEFAULT_CANVAS_ID). Anything
 // else is rejected, so neither a lassoed picture nor a stray file can steer a load outside the canvas folder.
@@ -74,7 +77,7 @@ export function indexPath(canvasDir: string): string {
   return `${canvasDir}/links.json`;
 }
 
-/** The canvas id a thumbnail path names, or null when [path] is not a SuperCanvas thumbnail. */
+/** The canvas id a thumbnail path names, or null when [path] is not a Canvas thumbnail. */
 export function canvasIdFromThumbnailPath(path: unknown): string | null {
   if (typeof path !== 'string') {
     return null;
@@ -88,7 +91,7 @@ export function picturePathOf(element: unknown): unknown {
   return (element as {picture?: {picturePath?: unknown} | null} | null)?.picture?.picturePath;
 }
 
-/** The canvas behind the first SuperCanvas thumbnail among lassoed note elements, or null if none is one. */
+/** The canvas behind the first Canvas thumbnail among lassoed note elements, or null if none is one. */
 export function canvasIdFromLassoedElements(elements: readonly unknown[]): string | null {
   for (const element of elements) {
     const canvasId = canvasIdFromThumbnailPath(picturePathOf(element));

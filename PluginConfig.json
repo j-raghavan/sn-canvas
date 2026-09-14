@@ -4,8 +4,8 @@
   "iconPath": "assets/icon.png",
   "versionName": "0.1.0",
   "versionCode": "100",
-  "pluginID": "snsupercanvasv01",
-  "pluginKey": "SnSuperCanvas",
+  "pluginID": "sncanvasv01",
+  "pluginKey": "SnCanvas",
   "jsMainPath": "index",
   "uses-permissions": [
     "plugin.permission.FILE:READ",

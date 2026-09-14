@@ -1,5 +1,5 @@
 {
-  "name": "SnSuperCanvas",
+  "name": "SnCanvas",
   "version": "0.1.0",
   "description": "An effectively infinite, pannable/zoomable native drawing canvas for Supernote notes: shapes, connectors, freehand and calligraphy pens as persistent, re-editable objects — opened from a note via the plugin launcher and reopened later via a thumbnail link.",
   "private": true,

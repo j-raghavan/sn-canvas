@@ -1,5 +1,5 @@
-// CanvasStorePort over the native SuperCanvasModule
-// (android/app/src/main/java/com/snsupercanvas/canvas/SuperCanvasModule.kt).
+// CanvasStorePort over the native CanvasModule
+// (android/app/src/main/java/com/sncanvas/canvas/CanvasModule.kt).
 // Like sn-copilot's CopilotOverlay facade it never rejects: a missing module,
 // a rejection or a malformed result all come back as false, null, zero or
 // empty, logged here, so the session branches on plain values instead of
@@ -23,15 +23,15 @@ export type NativeCanvasModule = Record<PathMethod, (path: string) => Promise<bo
   setNotePen: (type: number, width: number, color: number) => Promise<boolean>;
 };
 
-const TAG = '[SUPERCANVAS]';
+const TAG = '[SNCANVAS]';
 
 export function createNativeCanvasStore(
   logger: Logger,
-  native: NativeCanvasModule | undefined = (NativeModules as {SuperCanvasModule?: NativeCanvasModule}).SuperCanvasModule,
+  native: NativeCanvasModule | undefined = (NativeModules as {CanvasModule?: NativeCanvasModule}).CanvasModule,
 ): CanvasStorePort {
   const invoke = async <T>(method: string, fallback: T, run: (module: NativeCanvasModule) => Promise<T>): Promise<T> => {
     if (!native) {
-      logger.error(`${TAG} ${method}: NativeModules.SuperCanvasModule is missing (is SuperCanvasPackage in MainApplication.kt?)`);
+      logger.error(`${TAG} ${method}: NativeModules.CanvasModule is missing (is CanvasPackage in MainApplication.kt?)`);
       return fallback;
     }
     try {

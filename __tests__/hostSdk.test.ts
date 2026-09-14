@@ -47,7 +47,7 @@ test('pluginDir is the host path, or null when it has none or the call fails', a
   expect(await host.pluginDir()).toBeNull();
   mockGetPluginDirPath.mockImplementationOnce(failure);
   expect(await host.pluginDir()).toBeNull();
-  expect(logger.lines).toEqual(['warn [SUPERCANVAS] getPluginDirPath failed: Error: host said no']);
+  expect(logger.lines).toEqual(['warn [SNCANVAS] getPluginDirPath failed: Error: host said no']);
 });
 
 test('requestFileAccess is the shared file-permission request it is given', async () => {
@@ -105,12 +105,12 @@ test('pagePictureNumbers reads the page, page first as the SDK wants, and keeps 
   });
   expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([2]);
   expect(mockGetElements).toHaveBeenCalledWith(3, '/n.note');
-  expect(logger.lines).toEqual(['log [SUPERCANVAS][LINK] page=3 pictures=[{"uuid":"pic","type":200,"num":2}]']);
+  expect(logger.lines).toEqual(['log [SNCANVAS][LINK] page=3 pictures=[{"uuid":"pic","type":200,"num":2}]']);
   // A refused read comes back as an error envelope: logged, so the reason reaches the plugin's own log.
   mockGetElements.mockResolvedValueOnce({success: false, error: {code: 403, message: 'sdcard_no_read'}});
   expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([]);
   expect(logger.lines).toContain(
-    'warn [SUPERCANVAS] getElements failed: {"success":false,"error":{"code":403,"message":"sdcard_no_read"}}',
+    'warn [SNCANVAS] getElements failed: {"success":false,"error":{"code":403,"message":"sdcard_no_read"}}',
   );
   mockGetElements.mockImplementationOnce(failure);
   expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([]);
@@ -124,13 +124,13 @@ test('tagPicture writes the canvas into the picture as the lasso gave it, on its
   mockModifyElements.mockResolvedValueOnce({success: true, result: [42]});
   expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(true);
   expect(mockModifyElements).toHaveBeenCalledWith('/n.note', 2, [
-    {uuid: 'copy', type: 200, numInPage: 42, pageNum: 2, userData: 'snsupercanvas:c-1', picture: {picturePath: '/c/thumbnails/c-1.png'}},
+    {uuid: 'copy', type: 200, numInPage: 42, pageNum: 2, userData: 'sncanvas:c-1', picture: {picturePath: '/c/thumbnails/c-1.png'}},
   ]);
   mockModifyElements.mockResolvedValueOnce({success: true, result: []});
   expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
   mockModifyElements.mockResolvedValueOnce({success: false, error: {code: 107, message: 'bad element'}});
   expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
-  expect(logger.lines).toContain('warn [SUPERCANVAS] modifyElements failed: {"success":false,"error":{"code":107,"message":"bad element"}}');
+  expect(logger.lines).toContain('warn [SNCANVAS] modifyElements failed: {"success":false,"error":{"code":107,"message":"bad element"}}');
   mockModifyElements.mockImplementationOnce(failure);
   expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
 });
@@ -140,14 +140,14 @@ test("notePen is the note's pen, logged as the host reported it, and null for an
   const host = createHostSdk(logger, requestAccess);
   mockGetPenInfo.mockResolvedValueOnce({success: true, result: {type: 14, width: 700, color: 0, extra: 1}});
   expect(await host.notePen()).toEqual({type: 14, width: 700, color: 0});
-  expect(logger.lines).toEqual(['log [SUPERCANVAS][PEN] note pen={"type":14,"width":700,"color":0,"extra":1}']);
+  expect(logger.lines).toEqual(['log [SNCANVAS][PEN] note pen={"type":14,"width":700,"color":0,"extra":1}']);
   mockGetPenInfo.mockResolvedValueOnce({success: true, result: {type: 14, width: '700', color: 0}});
   expect(await host.notePen()).toBeNull();
   mockGetPenInfo.mockResolvedValueOnce({success: true, result: null});
   expect(await host.notePen()).toBeNull();
   mockGetPenInfo.mockResolvedValueOnce({success: false});
   expect(await host.notePen()).toBeNull();
-  expect(logger.lines).toContain('log [SUPERCANVAS][PEN] note pen=null');
+  expect(logger.lines).toContain('log [SNCANVAS][PEN] note pen=null');
   mockGetPenInfo.mockImplementationOnce(failure);
   expect(await host.notePen()).toBeNull();
 });
@@ -179,5 +179,5 @@ test('closeView closes the plugin view, and a failure to close is only logged', 
   host.closeView();
   await new Promise(resolve => setImmediate(resolve));
   expect(mockClosePluginView).toHaveBeenCalledTimes(1);
-  expect(logger.lines).toEqual(['warn [SUPERCANVAS] closePluginView failed: Error: host said no']);
+  expect(logger.lines).toEqual(['warn [SNCANVAS] closePluginView failed: Error: host said no']);
 });

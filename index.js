@@ -12,12 +12,12 @@ const BUTTON_TYPE_SIDEBAR = 1;
 const BUTTON_TYPE_LASSO = 2;
 const SHOW_TYPE_WITH_UI = 1;
 // regionType 3 = "Fullscreen display, won't dismiss" (NativePluginManager.d.ts).
-// SuperCanvas is a persistent full-screen canvas (spec/SuperCanvas-PRD.md
+// Canvas is a persistent full-screen canvas (spec/Canvas-PRD.md
 // journey step 3), not a popup like Shapes/Mindmap.
 const REGION_TYPE_FULLSCREEN_PERSISTENT = 3;
 // Lasso-toolbar `editDataTypes` value for images (NativePluginManager.d.ts:
 // 0=strokes, 1=title, 2=image, 3=text, 4=link), so "Open Canvas" only appears
-// when the lasso holds a picture, such as a SuperCanvas thumbnail.
+// when the lasso holds a picture, such as a Canvas thumbnail.
 const EDIT_DATA_TYPE_IMAGE = 2;
 
 // File permissions (read notes; write and delete the canvas folder in MyStyle)
@@ -42,7 +42,7 @@ PluginManager.registerButton(BUTTON_TYPE_SIDEBAR, ['NOTE'], {
   regionType: REGION_TYPE_FULLSCREEN_PERSISTENT,
 });
 
-// FR13: lasso a SuperCanvas thumbnail in the note, tap this, and its canvas reopens.
+// FR13: lasso a Canvas thumbnail in the note, tap this, and its canvas reopens.
 PluginManager.registerButton(BUTTON_TYPE_LASSO, ['NOTE'], {
   id: BUTTON_ID_OPEN_LINKED,
   name: 'Open Canvas',

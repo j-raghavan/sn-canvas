@@ -18,28 +18,28 @@ type Action = {
 const ACTIONS: readonly Action[] = [
   {
     command: 'undo',
-    testID: 'supercanvas-undo',
+    testID: 'canvas-undo',
     label: 'Undo',
     icon: require('../../assets/icons/action-undo.png'),
     enabled: ui => ui.canUndo,
   },
   {
     command: 'redo',
-    testID: 'supercanvas-redo',
+    testID: 'canvas-redo',
     label: 'Redo',
     icon: require('../../assets/icons/action-redo.png'),
     enabled: ui => ui.canRedo,
   },
   {
     command: 'deleteSelected',
-    testID: 'supercanvas-delete',
+    testID: 'canvas-delete',
     label: 'Delete',
     icon: require('../../assets/icons/action-delete.png'),
     enabled: ui => ui.hasSelection,
   },
   {
     command: 'duplicateSelected',
-    testID: 'supercanvas-duplicate',
+    testID: 'canvas-duplicate',
     label: 'Duplicate',
     icon: require('../../assets/icons/action-duplicate.png'),
     enabled: ui => ui.hasSelection,
@@ -89,7 +89,7 @@ export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JS
             return (
               <Pressable
                 key={item.action}
-                testID={`supercanvas-menu-${item.action}`}
+                testID={`canvas-menu-${item.action}`}
                 accessibilityLabel={item.label}
                 disabled={!enabled}
                 style={styles.menuItem}
@@ -123,7 +123,7 @@ export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JS
           );
         })}
         <Pressable
-          testID="supercanvas-more"
+          testID="canvas-more"
           accessibilityLabel="More actions"
           style={styles.button}
           onPress={() => setMenuOpen(open => !open)}>

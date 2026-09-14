@@ -10,7 +10,7 @@ import {createHostSdk} from './infrastructure/hostSdk';
 import {createNativeCanvasStore} from './infrastructure/nativeCanvasStore';
 import {getLastButtonEvent, subscribeToButtonEvents} from './infrastructure/pluginRouter';
 import type {Logger} from './sdk/types';
-import type {ButtonEventSource} from './ui/SuperCanvasScreen';
+import type {ButtonEventSource} from './ui/CanvasScreen';
 
 // `log` carries the few per-action lines worth having in a release logcat, so it
 // goes through infoLog, which survives production bundles.

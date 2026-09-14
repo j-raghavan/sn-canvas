@@ -3,6 +3,6 @@ build:
 
 style:
   MagicNumber:
-    active: false # canvas math (SuperCanvasCore.kt) is inherently numeric; named constants add noise, not clarity
+    active: false # canvas math (CanvasCore.kt) is inherently numeric; named constants add noise, not clarity
   MaxLineLength:
     maxLineLength: 140 # matches ktlintFormat's own single-line-expression-body collapsing output

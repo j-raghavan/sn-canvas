@@ -1,6 +1,6 @@
 /**
  * The native canvas facade never rejects: each port call maps to its
- * SuperCanvasModule method, and a missing module, a rejection or a malformed
+ * CanvasModule method, and a missing module, a rejection or a malformed
  * result all come back as false, null or empty.
  */
 import {createNativeCanvasStore, type NativeCanvasModule} from '../src/infrastructure/nativeCanvasStore';
@@ -72,20 +72,20 @@ test('saved canvases list by id, newest first, leaving out the index and anythin
   const native = createNative();
   const store = createNativeCanvasStore(createRecordingLogger(), native);
   native.listCanvasFiles.mockResolvedValueOnce(['c-2.json', 'links.json', 'default.json', 'c-1.json', 'Notes.json']);
-  expect(await store.savedCanvasIds('/p/SuperCanvas')).toEqual(['c-2', 'default', 'c-1']);
-  expect(native.listCanvasFiles).toHaveBeenCalledWith('/p/SuperCanvas');
+  expect(await store.savedCanvasIds('/p/Canvas')).toEqual(['c-2', 'default', 'c-1']);
+  expect(native.listCanvasFiles).toHaveBeenCalledWith('/p/Canvas');
   native.listCanvasFiles.mockResolvedValueOnce('nope' as unknown as string[]);
-  expect(await store.savedCanvasIds('/p/SuperCanvas')).toEqual([]);
+  expect(await store.savedCanvasIds('/p/Canvas')).toEqual([]);
 });
 
 test('adopting a folder reports how many files moved, and anything but a number as none', async () => {
   const native = createNative();
   const store = createNativeCanvasStore(createRecordingLogger(), native);
   native.adoptFolder.mockResolvedValueOnce(3);
-  expect(await store.adoptFolder('/plugin/SuperCanvas', '/shared')).toBe(3);
-  expect(native.adoptFolder).toHaveBeenCalledWith('/plugin/SuperCanvas', '/shared');
+  expect(await store.adoptFolder('/plugin/Canvas', '/shared')).toBe(3);
+  expect(native.adoptFolder).toHaveBeenCalledWith('/plugin/Canvas', '/shared');
   native.adoptFolder.mockResolvedValueOnce(null as unknown as number);
-  expect(await store.adoptFolder('/plugin/SuperCanvas', '/shared')).toBe(0);
+  expect(await store.adoptFolder('/plugin/Canvas', '/shared')).toBe(0);
 });
 
 test('a native rejection is logged and reported as false', async () => {
@@ -93,7 +93,7 @@ test('a native rejection is logged and reported as false', async () => {
   native.saveCanvas.mockRejectedValue(new Error('E_NO_ACTIVE_VIEW'));
   const logger = createRecordingLogger();
   expect(await createNativeCanvasStore(logger, native).save('/a.json')).toBe(false);
-  expect(logger.lines).toEqual(['warn [SUPERCANVAS] saveCanvas failed: Error: E_NO_ACTIVE_VIEW']);
+  expect(logger.lines).toEqual(['warn [SNCANVAS] saveCanvas failed: Error: E_NO_ACTIVE_VIEW']);
 });
 
 test('without the native module every call falls back, with an error saying why', async () => {
@@ -102,7 +102,7 @@ test('without the native module every call falls back, with an error saying why'
   expect(await store.load('/a.json', '/images')).toBe(false);
   expect(await store.readText('/links.json')).toBeNull();
   expect(await store.writeText('/links.json', '{}')).toBe(false);
-  expect(await store.savedCanvasIds('/p/SuperCanvas')).toEqual([]);
+  expect(await store.savedCanvasIds('/p/Canvas')).toEqual([]);
   expect(await store.adoptFolder('/a', '/b')).toBe(0);
-  expect(logger.lines[0]).toMatch(/^error \[SUPERCANVAS\] loadCanvas: NativeModules\.SuperCanvasModule is missing/);
+  expect(logger.lines[0]).toMatch(/^error \[SNCANVAS\] loadCanvas: NativeModules\.CanvasModule is missing/);
 });

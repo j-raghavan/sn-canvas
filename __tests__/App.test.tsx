@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 afterEach(() => warn.mockRestore());
 
-test('renders the SuperCanvas screen', async () => {
+test('renders the Canvas screen', async () => {
   let renderer: ReactTestRenderer.ReactTestRenderer;
   await act(async () => {
     renderer = ReactTestRenderer.create(<App />);
@@ -37,7 +37,7 @@ test('the close button closes the plugin view', async () => {
     renderer = ReactTestRenderer.create(<App />);
   });
   await act(async () => {
-    renderer!.root.findByProps({testID: 'supercanvas-close'}).props.onPress();
+    renderer!.root.findByProps({testID: 'canvas-close'}).props.onPress();
   });
   expect(PluginManager.closePluginView).toHaveBeenCalled();
 });

@@ -1,4 +1,4 @@
-// The native `<SuperCanvasView>` (SuperCanvasViewManager.kt): its props, the
+// The native `<CanvasView>` (CanvasViewManager.kt): its props, the
 // commands UIManager.dispatchViewManagerCommand delivers by name, and the
 // view constants it exports.
 
@@ -48,11 +48,11 @@ type NativeProps = ViewProps & {
   onEditText?: (event: NativeSyntheticEvent<unknown>) => void;
 };
 
-const NATIVE_NAME = 'SuperCanvasView';
+const NATIVE_NAME = 'CanvasView';
 
-export const SuperCanvasNativeView = requireNativeComponent<NativeProps>(NATIVE_NAME);
+export const CanvasNativeView = requireNativeComponent<NativeProps>(NATIVE_NAME);
 
-export type CanvasViewRef = React.ComponentRef<typeof SuperCanvasNativeView>;
+export type CanvasViewRef = React.ComponentRef<typeof CanvasNativeView>;
 
 /** Sends [command] (with [args], e.g. setStyle's property and value) to the mounted canvas view; a no-op before it mounts. */
 export function dispatchCanvasCommand(

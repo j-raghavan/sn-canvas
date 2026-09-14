@@ -6,12 +6,12 @@
  *      entry point (id 500, regionType 3).
  *   4. The lasso-toolbar "Open Canvas" button is registered (id 501),
  *      scoped to image selections so it only appears on a lassoed
- *      SuperCanvas note thumbnail.
+ *      Canvas note thumbnail.
  *   5. File access is asked for as soon as the plugin loads (at install),
  *      as in sn-shapes and sn-mindmap.
  *
  * App is mocked: this file is about host registration, not rendering
- * (SuperCanvasScreen has its own tests).
+ * (CanvasScreen has its own tests).
  */
 const mockRegisterComponent = jest.fn();
 const mockInit = jest.fn();
@@ -55,7 +55,7 @@ afterAll(() => {
 
 test('registers the app component under the app.json name', () => {
   expect(mockRegisterComponent).toHaveBeenCalledWith(
-    'SnSuperCanvas',
+    'SnCanvas',
     expect.any(Function),
   );
 });

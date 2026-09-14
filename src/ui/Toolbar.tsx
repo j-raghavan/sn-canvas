@@ -41,7 +41,7 @@ export default function Toolbar({toolMode, onToolChange, onInsertImage}: Props):
           return (
             <Pressable
               key={tool.id}
-              testID={`supercanvas-tool-${tool.id}`}
+              testID={`canvas-tool-${tool.id}`}
               accessibilityLabel={tool.label}
               style={[styles.button, active && styles.buttonActive]}
               onPress={() => onToolChange(tool.id)}>
@@ -49,7 +49,7 @@ export default function Toolbar({toolMode, onToolChange, onInsertImage}: Props):
             </Pressable>
           );
         })}
-        <Pressable testID="supercanvas-insert-image" accessibilityLabel="Image" style={styles.button} onPress={onInsertImage}>
+        <Pressable testID="canvas-insert-image" accessibilityLabel="Image" style={styles.button} onPress={onInsertImage}>
           <Image source={IMAGE_ICON} style={styles.icon} />
         </Pressable>
       </View>

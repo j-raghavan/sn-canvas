@@ -11,7 +11,7 @@ import {elementSummary, notePageOf, pictureNumbersOf, picturesOf} from '../domai
 import {taggedPicture} from '../domain/canvasTag';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
 
-const TAG = '[SUPERCANVAS]';
+const TAG = '[SNCANVAS]';
 
 // RattaFileSelector.selectFile's selectType for picking a single file.
 const SINGLE_FILE = 1;

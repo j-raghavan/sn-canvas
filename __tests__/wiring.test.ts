@@ -11,7 +11,7 @@ const mockInsertImage = jest.fn().mockResolvedValue({success: true, result: true
 
 jest.mock('react-native', () => ({
   NativeModules: {
-    SuperCanvasModule: {
+    CanvasModule: {
       loadCanvas: (path: string) => mockLoadCanvas(path),
       saveCanvas: jest.fn().mockResolvedValue(true),
       deleteCanvas: jest.fn().mockResolvedValue(true),
@@ -51,9 +51,9 @@ test('a built session loads through the native module and logs what it opened', 
     await buildCanvasSession().open(null);
     // No marker in the plugin folder yet: the first open since install starts a new canvas.
     expect(mockLoadCanvas).toHaveBeenCalledWith(
-      expect.stringMatching(/^\/storage\/emulated\/0\/MyStyle\/SnSuperCanvas\/c-[a-z0-9]+-[a-z0-9]{4}\.json$/),
+      expect.stringMatching(/^\/storage\/emulated\/0\/MyStyle\/SnCanvas\/c-[a-z0-9]+-[a-z0-9]{4}\.json$/),
     );
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[SUPERCANVAS\] button=null opened canvas=c-/));
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[SNCANVAS\] button=null opened canvas=c-/));
   } finally {
     warn.mockRestore();
   }
@@ -67,11 +67,11 @@ test('Save to Note links the canvas under a minted id', async () => {
     await session.saveToNote();
     expect(session.currentCanvasId()).toMatch(/^c-[a-z0-9]+-[a-z0-9]{4}$/);
     expect(mockInsertImage).toHaveBeenCalledWith(
-      `/storage/emulated/0/MyStyle/SnSuperCanvas/thumbnails/${session.currentCanvasId()}.png`,
+      `/storage/emulated/0/MyStyle/SnCanvas/thumbnails/${session.currentCanvasId()}.png`,
     );
     // The pending link is left after the insert, queued behind it: the next operation waits for it.
     await session.close();
-    expect(warn).toHaveBeenCalledWith(`[SUPERCANVAS][LINK] pending link for canvas=${session.currentCanvasId()} page=0 knownPictures=0`);
+    expect(warn).toHaveBeenCalledWith(`[SNCANVAS][LINK] pending link for canvas=${session.currentCanvasId()} page=0 knownPictures=0`);
   } finally {
     warn.mockRestore();
   }
@@ -98,18 +98,18 @@ test('warnings and errors reach the console', async () => {
   const error = jest.spyOn(console, 'error').mockImplementation(() => {});
   const {NativeModules} = jest.requireMock('react-native');
   const {PluginManager} = jest.requireMock('sn-plugin-lib');
-  const native = NativeModules.SuperCanvasModule;
+  const native = NativeModules.CanvasModule;
   try {
-    delete NativeModules.SuperCanvasModule;
+    delete NativeModules.CanvasModule;
     await buildCanvasSession().open(null);
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('NativeModules.SuperCanvasModule is missing'));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('NativeModules.CanvasModule is missing'));
     // Without write access canvases would go in the plugin folder; with no plugin folder either, nothing loads.
     PluginManager.hasPermission.mockResolvedValue(0);
     PluginManager.getPluginDirPath.mockResolvedValueOnce(null);
     await buildCanvasSession().open(null);
-    expect(warn).toHaveBeenCalledWith('[SUPERCANVAS] no plugin directory; canvas not loaded or saved');
+    expect(warn).toHaveBeenCalledWith('[SNCANVAS] no plugin directory; canvas not loaded or saved');
   } finally {
-    NativeModules.SuperCanvasModule = native;
+    NativeModules.CanvasModule = native;
     PluginManager.hasPermission.mockResolvedValue(1);
     warn.mockRestore();
     error.mockRestore();

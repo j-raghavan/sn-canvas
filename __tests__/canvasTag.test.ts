@@ -5,8 +5,12 @@
 import {canvasIdFromTags, canvasTag, taggedCanvasId, taggedPicture} from '../src/domain/canvasTag';
 
 test('a canvas id survives the round trip through the tag written into a picture', () => {
-  expect(canvasTag('c-1')).toBe('snsupercanvas:c-1');
+  expect(canvasTag('c-1')).toBe('sncanvas:c-1');
   expect(taggedCanvasId({userData: canvasTag('c-1')})).toBe('c-1');
+});
+
+test('a tag written before the plugin was renamed from SuperCanvas still names its canvas', () => {
+  expect(taggedCanvasId({userData: 'snsupercanvas:c-1'})).toBe('c-1');
 });
 
 test.each([
@@ -14,7 +18,7 @@ test.each([
   ['no userData', {}],
   ['userData that is not a string', {userData: 7}],
   ["another plugin's userData", {userData: 'sn-drafting-pen'}],
-  ['a tag naming something that is not a canvas', {userData: 'snsupercanvas:../../etc'}],
+  ['a tag naming something that is not a canvas', {userData: 'sncanvas:../../etc'}],
 ])('taggedCanvasId is null for %s', (_case, element) => {
   expect(taggedCanvasId(element)).toBeNull();
 });
@@ -40,11 +44,11 @@ test('taggedPicture puts the picture on its page, shows it from a PNG that exist
     numInPage: 42,
     pageNum: 2,
     picture: {picturePath: '/canvases/thumbnails/c-1.png', rect: {left: 760, top: 1080, right: 1160, bottom: 1480}},
-    userData: 'snsupercanvas:c-1',
+    userData: 'sncanvas:c-1',
   });
   expect(taggedPicture(null, 'c-1', 0, '/t.png')).toEqual({
     pageNum: 0,
-    userData: 'snsupercanvas:c-1',
+    userData: 'sncanvas:c-1',
     picture: {picturePath: '/t.png'},
   });
 });

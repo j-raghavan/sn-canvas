@@ -7,7 +7,10 @@
 
 import {isCanvasId} from './canvasLink';
 
-const TAG_PREFIX = 'snsupercanvas:';
+const TAG_PREFIX = 'sncanvas:';
+
+// Tags written before the plugin was renamed from SuperCanvas: still read, never written.
+const LEGACY_TAG_PREFIX = 'snsupercanvas:';
 
 /** The userData that names [canvasId]. */
 export function canvasTag(canvasId: string): string {
@@ -17,10 +20,11 @@ export function canvasTag(canvasId: string): string {
 /** The canvas a note element's userData names, or null when it names none. */
 export function taggedCanvasId(element: unknown): string | null {
   const userData = (element as {userData?: unknown} | null | undefined)?.userData;
-  if (typeof userData !== 'string' || !userData.startsWith(TAG_PREFIX)) {
+  if (typeof userData !== 'string') {
     return null;
   }
-  const canvasId = userData.slice(TAG_PREFIX.length);
+  const prefix = [TAG_PREFIX, LEGACY_TAG_PREFIX].find(candidate => userData.startsWith(candidate));
+  const canvasId = prefix === undefined ? null : userData.slice(prefix.length);
   return isCanvasId(canvasId) ? canvasId : null;
 }
 

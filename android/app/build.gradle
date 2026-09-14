@@ -1,7 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-// Kotlin quality gates (spec/SuperCanvas-PRD.md §9 — kept from the sn-tables scaffold).
+// Kotlin quality gates (spec/Canvas-PRD.md §9 — kept from the sn-tables scaffold).
 apply plugin: "org.jetbrains.kotlinx.kover"
 apply plugin: "org.jlleitschuh.gradle.ktlint"
 apply plugin: "io.gitlab.arturbosch.detekt"
@@ -190,9 +190,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.snsupercanvas"
+    namespace "com.sncanvas"
     defaultConfig {
-        applicationId "com.snsupercanvas"
+        applicationId "com.sncanvas"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -230,20 +230,20 @@ dependencies {
         implementation jscFlavor
     }
 
-    // SuperCanvasCore unit tests are plain JUnit, no Android runtime/instrumentation
-    // needed (framework-free math) — spec/SuperCanvas-PRD.md §9.
+    // CanvasCore unit tests are plain JUnit, no Android runtime/instrumentation
+    // needed (framework-free math) — spec/Canvas-PRD.md §9.
     testImplementation("junit:junit:4.13.2")
 }
 
-// Kotlin coverage gate, scoped to our own source (com.snsupercanvas.canvas).
+// Kotlin coverage gate, scoped to our own source (com.sncanvas.canvas).
 // MainActivity/MainApplication and RN's generated autolinking/BuildConfig
 // sources are boilerplate with no unit-testable logic (they require Android
 // instrumentation, not plain JUnit), so they are excluded from the REPORT
 // (reports.filters — what counts toward the percentage), not just
-// instrumentation. SuperCanvasView/SuperCanvasViewManager/SuperCanvasModule/
-// SuperCanvasPackage are thin RN-bridge adapters and the renderers only draw
-// with Android Canvas; all are exercised on-device (spec/SuperCanvas-PRD.md §9).
-// Everything with logic (the model, SuperCanvasCore, ViewTransforms, CanvasJson,
+// instrumentation. CanvasView/CanvasViewManager/CanvasModule/
+// CanvasPackage are thin RN-bridge adapters and the renderers only draw
+// with Android Canvas; all are exercised on-device (spec/Canvas-PRD.md §9).
+// Everything with logic (the model, CanvasCore, ViewTransforms, CanvasJson,
 // EditHistory, ActiveViewRegistry) is plain Kotlin, held to the line/branch
 // coverage bound below.
 kover {
@@ -251,29 +251,29 @@ kover {
         filters {
             excludes {
                 classes(
-                    "com.snsupercanvas.MainActivity",
-                    "com.snsupercanvas.MainApplication*",
-                    "com.snsupercanvas.BuildConfig",
-                    "com.snsupercanvas.canvas.SuperCanvasView*",
-                    "com.snsupercanvas.canvas.CanvasGesture*",
+                    "com.sncanvas.MainActivity",
+                    "com.sncanvas.MainApplication*",
+                    "com.sncanvas.BuildConfig",
+                    "com.sncanvas.canvas.CanvasView*",
+                    "com.sncanvas.canvas.CanvasGesture*",
                     // Firmware pen ink, and reading MotionEvents: device-only glue, verified on the device.
-                    "com.snsupercanvas.canvas.FirmwareInk*",
-                    "com.snsupercanvas.canvas.LiveInk*",
+                    "com.sncanvas.canvas.FirmwareInk*",
+                    "com.sncanvas.canvas.LiveInk*",
                     // Decoding and caching image pixels (FR22): Android BitmapFactory, verified on the device.
-                    "com.snsupercanvas.canvas.ImageCache*",
-                    "com.snsupercanvas.canvas.ImageSource*",
-                    "com.snsupercanvas.canvas.MotionSamples*",
-                    "com.snsupercanvas.canvas.SuperCanvasViewManager*",
-                    "com.snsupercanvas.canvas.SuperCanvasModule*",
-                    "com.snsupercanvas.canvas.SuperCanvasPackage*",
-                    // Android Canvas drawing only — same reason as SuperCanvasView; the math
-                    // they draw with (fit/rotation) is covered in SuperCanvasCore/ViewTransforms.
-                    "com.snsupercanvas.canvas.CanvasRenderer*",
-                    "com.snsupercanvas.canvas.ElementPainter*",
-                    "com.snsupercanvas.canvas.TextPainter*",
-                    "com.snsupercanvas.canvas.AndroidTextMeasurer*",
-                    "com.snsupercanvas.canvas.MinimapRenderer*",
-                    "com.snsupercanvas.canvas.ShapeDrawingKt",
+                    "com.sncanvas.canvas.ImageCache*",
+                    "com.sncanvas.canvas.ImageSource*",
+                    "com.sncanvas.canvas.MotionSamples*",
+                    "com.sncanvas.canvas.CanvasViewManager*",
+                    "com.sncanvas.canvas.CanvasModule*",
+                    "com.sncanvas.canvas.CanvasPackage*",
+                    // Android Canvas drawing only — same reason as CanvasView; the math
+                    // they draw with (fit/rotation) is covered in CanvasCore/ViewTransforms.
+                    "com.sncanvas.canvas.CanvasRenderer*",
+                    "com.sncanvas.canvas.ElementPainter*",
+                    "com.sncanvas.canvas.TextPainter*",
+                    "com.sncanvas.canvas.AndroidTextMeasurer*",
+                    "com.sncanvas.canvas.MinimapRenderer*",
+                    "com.sncanvas.canvas.ShapeDrawingKt",
                     // RN autolinking-generated (app:generateAutolinkingPackageList) — not our
                     // code, not unit-testable (just instantiates a static package list).
                     "com.facebook.react.PackageList",

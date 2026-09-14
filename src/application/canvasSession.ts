@@ -7,11 +7,11 @@
 // never reject: a failed step reports false/null, and the session logs and
 // stops, so no user action can crash the plugin.
 //
-// One session per mounted canvas view (see ui/SuperCanvasScreen.tsx). That is
+// One session per mounted canvas view (see ui/CanvasScreen.tsx). That is
 // what makes "save the current canvas before switching" safe: the view is
 // known to hold the session's canvas, never a freshly mounted, empty one.
 //
-// Nothing drawn is left out of reach: canvases live in MyStyle/SnSuperCanvas,
+// Nothing drawn is left out of reach: canvases live in MyStyle/SnCanvas,
 // which outlasts an uninstall, the sidebar reopens the canvas last open (the
 // first open after an install starts a new one instead), and
 // "Open Canvas" finds a thumbnail's canvas through the link index
@@ -30,6 +30,7 @@ import {
 } from '../domain/canvasIndex';
 import {
   DEFAULT_CANVAS_ID,
+  LEGACY_SHARED_CANVAS_DIR,
   SHARED_CANVAS_DIR,
   canvasFilePath,
   canvasIdFromLassoedElements,
@@ -113,7 +114,7 @@ export type CanvasSession = {
   currentCanvasId: () => string;
 };
 
-const TAG = '[SUPERCANVAS]';
+const TAG = '[SNCANVAS]';
 
 export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSessionDeps): CanvasSession {
   let canvasId = DEFAULT_CANVAS_ID;
@@ -132,12 +133,21 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
     return tail;
   };
 
+  /** Moves the canvas files in [from] into MyStyle/SnCanvas, keeping any it has already; logs how many moved. */
+  const takeIn = async (from: string, what: string): Promise<void> => {
+    const moved = await store.adoptFolder(from, SHARED_CANVAS_DIR);
+    if (moved > 0) {
+      logger.log(`${TAG} moved ${moved} files from ${what} to ${SHARED_CANVAS_DIR}`);
+    }
+  };
+
   /**
-   * The folder canvases live in, settled on first use: MyStyle/SnSuperCanvas
-   * with file write access, taking in the canvases an earlier build kept in
-   * the plugin's own folder; without it, that plugin folder. File access is
-   * asked for here, before any canvas is read or written, so no save can race
-   * the permission dialog into the wrong folder.
+   * The folder canvases live in, settled on first use: MyStyle/SnCanvas
+   * with file write access, taking in the canvases kept in the plugin's own
+   * folder and those in MyStyle under the plugin's old name (SnSuperCanvas);
+   * without it, that plugin folder. File access is asked for here, before any
+   * canvas is read or written, so no save can race the permission dialog into
+   * the wrong folder.
    */
   const resolveCanvasDir = async (): Promise<string | null> => {
     if (canvasDir !== null) {
@@ -148,11 +158,9 @@ export function createCanvasSession({store, host, newCanvasId, logger}: CanvasSe
     if (await host.requestFileAccess()) {
       canvasDir = SHARED_CANVAS_DIR;
       if (pluginDir !== null) {
-        const moved = await store.adoptFolder(privateCanvasDir(pluginDir), SHARED_CANVAS_DIR);
-        if (moved > 0) {
-          logger.log(`${TAG} moved ${moved} files from the plugin folder to ${SHARED_CANVAS_DIR}`);
-        }
+        await takeIn(privateCanvasDir(pluginDir), 'the plugin folder');
       }
+      await takeIn(LEGACY_SHARED_CANVAS_DIR, LEGACY_SHARED_CANVAS_DIR);
     } else if (pluginDir !== null) {
       canvasDir = privateCanvasDir(pluginDir);
       logger.warn(`${TAG} no file write access; canvases stay in the plugin folder, which uninstalling Canvas deletes`);

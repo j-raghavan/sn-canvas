@@ -20,11 +20,11 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
     });
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
-  const isMenuOpen = () => isListed('supercanvas-menu-zoomToFit');
+  const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
   return {onCommand, onNewCanvas, press, isDisabled, isMenuOpen, isListed};
 };
 
-const ACTIONS = ['supercanvas-undo', 'supercanvas-redo', 'supercanvas-delete', 'supercanvas-duplicate'];
+const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
 
 test('each action is enabled only when the canvas says it applies', () => {
   expect(ACTIONS.map(renderBar().isDisabled)).toEqual([true, true, true, true]);
@@ -33,10 +33,10 @@ test('each action is enabled only when the canvas says it applies', () => {
 });
 
 test.each([
-  ['supercanvas-undo', 'undo'],
-  ['supercanvas-redo', 'redo'],
-  ['supercanvas-delete', 'deleteSelected'],
-  ['supercanvas-duplicate', 'duplicateSelected'],
+  ['canvas-undo', 'undo'],
+  ['canvas-redo', 'redo'],
+  ['canvas-delete', 'deleteSelected'],
+  ['canvas-duplicate', 'duplicateSelected'],
 ])('%s sends %s', (testID, command) => {
   const {press, onCommand} = renderBar({canUndo: true, canRedo: true, hasSelection: true});
   press(testID);
@@ -46,43 +46,43 @@ test.each([
 test('the more button toggles the menu', () => {
   const {press, isMenuOpen} = renderBar();
   expect(isMenuOpen()).toBe(false);
-  press('supercanvas-more');
+  press('canvas-more');
   expect(isMenuOpen()).toBe(true);
-  press('supercanvas-more');
+  press('canvas-more');
   expect(isMenuOpen()).toBe(false);
 });
 
 test('z-order needs a selection; zoom never does', () => {
   const {press, isDisabled} = renderBar();
-  press('supercanvas-more');
-  const items = ['bringToFront', 'sendToBack', 'zoomToFit', 'zoomTo100'].map(item => `supercanvas-menu-${item}`);
+  press('canvas-more');
+  const items = ['bringToFront', 'sendToBack', 'zoomToFit', 'zoomTo100'].map(item => `canvas-menu-${item}`);
   expect(items.map(isDisabled)).toEqual([true, true, false, false]);
 });
 
 test('choosing a menu item runs it and closes the menu', () => {
   const {press, onCommand, isMenuOpen} = renderBar({hasSelection: true});
-  press('supercanvas-more');
-  press('supercanvas-menu-bringToFront');
+  press('canvas-more');
+  press('canvas-menu-bringToFront');
   expect(onCommand).toHaveBeenCalledWith('bringToFront');
   expect(isMenuOpen()).toBe(false);
 });
 
 test('row and column actions are listed only while a table is selected', () => {
-  const items = ['tableAddRow', 'tableAddColumn', 'tableRemoveRow', 'tableRemoveColumn'].map(item => `supercanvas-menu-${item}`);
+  const items = ['tableAddRow', 'tableAddColumn', 'tableRemoveRow', 'tableRemoveColumn'].map(item => `canvas-menu-${item}`);
   const shape = renderBar({hasSelection: true, selectedType: 'rectangle'});
-  shape.press('supercanvas-more');
+  shape.press('canvas-more');
   expect(items.map(shape.isListed)).toEqual([false, false, false, false]);
   const table = renderBar({hasSelection: true, selectedType: 'table'});
-  table.press('supercanvas-more');
+  table.press('canvas-more');
   expect(items.map(table.isListed)).toEqual([true, true, true, true]);
-  table.press('supercanvas-menu-tableAddColumn');
+  table.press('canvas-menu-tableAddColumn');
   expect(table.onCommand).toHaveBeenCalledWith('tableAddColumn');
 });
 
 test('New canvas, last in the menu, goes to the session rather than the canvas', () => {
   const {press, onCommand, onNewCanvas, isMenuOpen} = renderBar();
-  press('supercanvas-more');
-  press('supercanvas-menu-newCanvas');
+  press('canvas-more');
+  press('canvas-menu-newCanvas');
   expect(onNewCanvas).toHaveBeenCalledTimes(1);
   expect(onCommand).not.toHaveBeenCalled();
   expect(isMenuOpen()).toBe(false);

@@ -8,7 +8,7 @@ import {createFakeHost, createFakeStore, createRecordingLogger} from './helpers/
 
 // Canvas has opened since it was installed, so no test here starts a new canvas.
 const MARKER = '/plugin/canvas-opened';
-const IMAGES = '/plugin/SuperCanvas/images';
+const IMAGES = '/plugin/Canvas/images';
 
 const setup = () => {
   const store = createFakeStore({[MARKER]: 'opened'});
@@ -30,7 +30,7 @@ test('a picked image is copied into the images folder, onto the canvas shown', a
   host.picked = '/sdcard/Pictures/photo.jpg';
   expect(await session.insertImage()).toBe(true);
   expect(store.imported).toEqual([{source: '/sdcard/Pictures/photo.jpg', imageDir: IMAGES}]);
-  expect(logger.lines).toContain('log [SUPERCANVAS][IMAGE] inserted /sdcard/Pictures/photo.jpg');
+  expect(logger.lines).toContain('log [SNCANVAS][IMAGE] inserted /sdcard/Pictures/photo.jpg');
 });
 
 test('cancelling the picker inserts nothing', async () => {
@@ -44,7 +44,7 @@ test('an image the canvas cannot take is reported, and nothing is inserted', asy
   host.picked = '/sdcard/notes.pdf';
   store.failing.add('importImage');
   expect(await session.insertImage()).toBe(false);
-  expect(logger.lines).toContain('warn [SUPERCANVAS][IMAGE] could not insert /sdcard/notes.pdf');
+  expect(logger.lines).toContain('warn [SNCANVAS][IMAGE] could not insert /sdcard/notes.pdf');
 });
 
 test('a picker that never answers holds up nothing: Close still saves and closes', async () => {

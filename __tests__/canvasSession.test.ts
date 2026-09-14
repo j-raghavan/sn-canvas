@@ -7,12 +7,12 @@
 import {createCanvasSession} from '../src/application/canvasSession';
 import {createFakeHost, createFakeStore, createRecordingLogger} from './helpers/fakePorts';
 
-const SCRATCH = '/plugin/SuperCanvas/default.json';
-const INDEX = '/plugin/SuperCanvas/links.json';
+const SCRATCH = '/plugin/Canvas/default.json';
+const INDEX = '/plugin/Canvas/links.json';
 // Canvas has opened since it was installed; a test of the first open since install leaves it out.
 const MARKER = '/plugin/canvas-opened';
-const canvasFile = (id: string) => `/plugin/SuperCanvas/${id}.json`;
-const thumbnail = (id: string) => `/plugin/SuperCanvas/thumbnails/${id}.png`;
+const canvasFile = (id: string) => `/plugin/Canvas/${id}.json`;
+const thumbnail = (id: string) => `/plugin/Canvas/thumbnails/${id}.png`;
 const lassoedThumbnail = (id: string) => ({picture: {picturePath: thumbnail(id)}});
 // What this firmware hands back for a lassoed thumbnail: a copy with a fresh uuid, no page, its number in the
 // page, any userData, and a temporary copy of the picture.
@@ -58,13 +58,13 @@ describe('open', () => {
     expect(store.shown).toBe('scratch');
   });
 
-  test('Open Canvas on a lassoed SuperCanvas thumbnail shows its linked canvas', async () => {
+  test('Open Canvas on a lassoed Canvas thumbnail shows its linked canvas', async () => {
     const {store, host, logger, session} = setup({[canvasFile('c-9')]: 'nine'});
     host.lassoed = [{}, lassoedThumbnail('c-9')];
     await session.open(501);
     expect(store.shown).toBe('nine');
     expect(session.currentCanvasId()).toBe('c-9');
-    expect(logger.lines).toContain('log [SUPERCANVAS][LINK] lassoed=2 elements=[{},{}] canvas=c-9');
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] lassoed=2 elements=[{},{}] canvas=c-9');
   });
 
   test('Open Canvas on any other picture, with no other canvas saved, falls back to the scratch canvas', async () => {
@@ -85,7 +85,7 @@ describe('open', () => {
     store.failing.add('rememberNotePen');
     await session.open(500);
     expect(logger.lines).toContain(
-      `warn [SUPERCANVAS][PEN] the note's pen {"type":14,"width":700,"color":0} is not one the canvas can set back`,
+      `warn [SNCANVAS][PEN] the note's pen {"type":14,"width":700,"color":0} is not one the canvas can set back`,
     );
   });
 
@@ -117,7 +117,7 @@ describe('open', () => {
     host.dir = null;
     await session.open(null);
     expect(store.shown).toBe('');
-    expect(logger.lines).toContain('warn [SUPERCANVAS] no plugin directory; canvas not loaded or saved');
+    expect(logger.lines).toContain('warn [SNCANVAS] no plugin directory; canvas not loaded or saved');
     host.dir = '/plugin';
     await session.open(500);
     expect(store.shown).toBe('scratch');
@@ -132,7 +132,7 @@ describe('the first open after an install', () => {
     expect(first.session.currentCanvasId()).toBe('c-1');
     expect(first.store.files.get(canvasFile('c-9'))).toBe('nine');
     expect(first.store.files.get(MARKER)).toBe('opened');
-    expect(first.logger.lines).toContain('log [SUPERCANVAS] first open since install: a new canvas');
+    expect(first.logger.lines).toContain('log [SNCANVAS] first open since install: a new canvas');
     await first.session.close();
     const later = setup(Object.fromEntries(first.store.files), {installedJustNow: true});
     await later.session.open(500);
@@ -150,7 +150,7 @@ describe('the first open after an install', () => {
 });
 
 describe('where canvases live', () => {
-  const SHARED = '/storage/emulated/0/MyStyle/SnSuperCanvas';
+  const SHARED = '/storage/emulated/0/MyStyle/SnCanvas';
 
   test('with file write access, canvases live in MyStyle, and those an earlier build kept in the plugin folder move there', async () => {
     const {store, host, logger, session} = setup({
@@ -163,10 +163,19 @@ describe('where canvases live', () => {
     expect(store.shown).toBe('nine');
     expect(store.files.get(`${SHARED}/c-9.json`)).toBe('nine');
     expect(store.files.get(`${SHARED}/thumbnails/c-9.png`)).toBe('png:nine');
-    expect([...store.files.keys()].some(path => path.startsWith('/plugin/SuperCanvas/'))).toBe(false);
-    expect(logger.lines).toContain(`log [SUPERCANVAS] moved 3 files from the plugin folder to ${SHARED}`);
+    expect([...store.files.keys()].some(path => path.startsWith('/plugin/Canvas/'))).toBe(false);
+    expect(logger.lines).toContain(`log [SNCANVAS] moved 3 files from the plugin folder to ${SHARED}`);
     await session.saveToNote();
     expect(host.inserted).toEqual([`${SHARED}/thumbnails/c-9.png`]);
+  });
+
+  test('canvases kept in MyStyle under the old name, SnSuperCanvas, move to the new folder', async () => {
+    const OLD = '/storage/emulated/0/MyStyle/SnSuperCanvas';
+    const {store, host, logger, session} = setup({[`${OLD}/c-9.json`]: 'nine', [`${OLD}/links.json`]: indexWith({lastCanvasId: 'c-9'})});
+    host.fileWrite = true;
+    await session.open(500);
+    expect(store.shown).toBe('nine');
+    expect(logger.lines).toContain(`log [SNCANVAS] moved 2 files from ${OLD} to ${SHARED}`);
   });
 
   test('without it, canvases stay in the plugin folder, with a warning that uninstalling deletes them', async () => {
@@ -174,7 +183,7 @@ describe('where canvases live', () => {
     await session.open(null);
     expect(store.shown).toBe('scratch');
     expect(logger.lines).toContain(
-      'warn [SUPERCANVAS] no file write access; canvases stay in the plugin folder, which uninstalling Canvas deletes',
+      'warn [SNCANVAS] no file write access; canvases stay in the plugin folder, which uninstalling Canvas deletes',
     );
   });
 
@@ -213,12 +222,12 @@ describe('links back to a canvas', () => {
     await later.session.open(501);
     expect(later.store.shown).toBe('drawing');
     expect(later.host.tagged).toEqual([{canvasId: 'c-1', picture: lassoedPicture(42), imagePath: thumbnail('c-1')}]);
-    expect(later.logger.lines).toContain('log [SUPERCANVAS][LINK] tagged the thumbnail for canvas=c-1');
+    expect(later.logger.lines).toContain('log [SNCANVAS][LINK] tagged the thumbnail for canvas=c-1');
     expect(savedIndex(later.store).pending).toEqual([]);
     // The note keeps the tag with the picture: whatever copy a lasso hands over, and wherever it moved, it names its canvas.
     const again = setup({...Object.fromEntries(later.store.files), [canvasFile('c-latest')]: 'newest'});
     again.host.page = null;
-    again.host.lassoed = [lassoedPicture(9, 'snsupercanvas:c-1')];
+    again.host.lassoed = [lassoedPicture(9, 'sncanvas:c-1')];
     await again.session.open(501);
     expect(again.store.shown).toBe('drawing');
     expect(again.host.tagged).toEqual([]);
@@ -257,7 +266,7 @@ describe('links back to a canvas', () => {
     expect(later.store.shown).toBe('drawing');
     expect(savedIndex(later.store).pending).toHaveLength(1);
     expect(later.logger.lines).toContain(
-      'warn [SUPERCANVAS][LINK] could not tag the thumbnail for canvas=c-1; its link stays pending',
+      'warn [SNCANVAS][LINK] could not tag the thumbnail for canvas=c-1; its link stays pending',
     );
   });
 
@@ -288,7 +297,7 @@ describe('links back to a canvas', () => {
     await session.close();
     expect(savedIndex(store)).toEqual({lastCanvasId: 'c-1', pending: []});
     expect(logger.lines).toContain(
-      'warn [SUPERCANVAS][LINK] no note page; Open Canvas on this thumbnail will show the newest canvas',
+      'warn [SNCANVAS][LINK] no note page; Open Canvas on this thumbnail will show the newest canvas',
     );
   });
 
@@ -351,7 +360,7 @@ describe('saveToNote', () => {
     await session.open(null);
     await Promise.all([session.saveToNote(), session.saveToNote()]);
     expect(host.inserted).toEqual([thumbnail('c-1')]);
-    expect(logger.lines).toContain('log [SUPERCANVAS][LINK] save to note already running; tap ignored');
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] save to note already running; tap ignored');
   });
 
   test('a later tap, after the first finished, links again', async () => {
@@ -378,7 +387,7 @@ describe('saveToNote', () => {
     expect(session.currentCanvasId()).toBe('default');
     expect([...store.files.keys()]).toEqual([MARKER, SCRATCH, INDEX]);
     expect(host.inserted).toEqual([]);
-    expect(logger.lines).toContain('warn [SUPERCANVAS][LINK] save to note failed; canvas=default unchanged');
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] save to note failed; canvas=default unchanged');
   });
 
   test('a failed re-link of a linked canvas keeps its files', async () => {
@@ -462,7 +471,7 @@ test('an operation that throws is logged and does not block the ones after it', 
   };
   await session.open(null);
   await session.close();
-  expect(logger.lines).toContain('error [SUPERCANVAS] Error: boom');
+  expect(logger.lines).toContain('error [SNCANVAS] Error: boom');
   expect(host.closeCount).toBe(1);
 });
 

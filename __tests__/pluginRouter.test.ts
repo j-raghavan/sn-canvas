@@ -33,7 +33,7 @@ import {
   __testing__,
 } from '../src/infrastructure/pluginRouter';
 
-const press = (id: number) => ({id, pressEvent: 3, name: 'SuperCanvas', icon: '', color: 0, bgColor: 0});
+const press = (id: number) => ({id, pressEvent: 3, name: 'Canvas', icon: '', color: 0, bgColor: 0});
 
 let log: jest.SpyInstance;
 beforeEach(() => {
