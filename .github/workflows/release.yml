@@ -1,6 +1,7 @@
 name: Release
 
-# Manually-triggered release. The `version` input is optional:
+# Manually-triggered release: Actions > Release > Run workflow (on main).
+# The `version` input is optional:
 #   - Leave blank to auto-bump the latest `v*` tag by patch
 #     (e.g. v1.0.1 -> v1.0.2). If no tag exists yet, the first release
 #     is v1.0.1.
