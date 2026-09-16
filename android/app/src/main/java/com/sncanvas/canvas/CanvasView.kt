@@ -71,7 +71,7 @@ class CanvasView(
                 override fun onEditText(target: CanvasController.EditTarget) = requestTextEditor(target)
             },
         )
-    private val selectGestures = SelectGestures({ controller.state }, { controller.selected }, controller::fitted, measurer)
+    private val selectGestures = SelectGestures({ controller.state }, { controller.selectedElements }, controller::fitted, measurer)
 
     private var toolMode = CanvasTools.SELECT
     private val isPencil: Boolean get() = toolMode == CanvasTools.DRAW
@@ -290,7 +290,7 @@ class CanvasView(
             when {
                 // The pen's eraser end erases with any tool, as does the eraser tool with the pen.
                 contact.isEraser || (contact.isPen && toolMode == CanvasTools.ERASER) -> CanvasGesture.Erase().also { eraseAt(it, world) }
-                !CanvasTools.usesPen(toolMode) -> selectGestures.startAt(world, HANDLE_HIT_RADIUS_PX / controller.state.zoom)
+                !CanvasTools.usesPen(toolMode) -> selectGesture(world, contact)
                 // Palm rejection: every other tool works with the pen alone, as in Supernote's own notes.
                 !contact.isPen -> null
                 toolMode == CanvasTools.DRAW -> startFreehand(sampleAt(contact.x, contact.y, contact.pressure))
@@ -302,6 +302,19 @@ class CanvasView(
             LOG_TAG,
             "touch start pen=${contact.isPen} eraser=${contact.isEraser} tool=$toolMode gesture=${gesture?.javaClass?.simpleName}",
         )
+    }
+
+    /**
+     * The select tool's gesture. Where it grabs nothing the pen drags a selection
+     * rectangle out instead of panning (FR7): the device has no modifier key, so
+     * the pen selects and the finger navigates, as everywhere else in the canvas.
+     */
+    private fun selectGesture(
+        world: Point,
+        contact: Contact,
+    ): CanvasGesture {
+        val gesture = selectGestures.startAt(world, HANDLE_HIT_RADIUS_PX / controller.state.zoom)
+        return if (gesture == CanvasGesture.Pan && contact.isPen) CanvasGesture.Marquee else gesture
     }
 
     /**
@@ -369,6 +382,7 @@ class CanvasView(
         val redraw = needsRedraw()
         when (finished) {
             CanvasGesture.Pan -> tapSelect(end, isTap)
+            CanvasGesture.Marquee -> selectInMarquee(end)
             CanvasGesture.DrawShape -> commitDrawnShape(end, totalDist)
             CanvasGesture.PlaceText -> placeTextOnTap(isTap)
             is CanvasGesture.Freehand -> commitStroke(finished)
@@ -436,6 +450,19 @@ class CanvasView(
         if (isTap) controller.select(CanvasCore.hitTest(at.x, at.y, controller.state.elements)?.id)
     }
 
+    /** Everything the selection rectangle covered, selected together (FR7); one that covered nothing clears the selection. */
+    private fun selectInMarquee(end: Point) {
+        val start = toWorld(downTouch.x, downTouch.y)
+        val rect =
+            WorldRect(
+                left = minOf(start.x, end.x),
+                top = minOf(start.y, end.y),
+                right = maxOf(start.x, end.x),
+                bottom = maxOf(start.y, end.y),
+            )
+        controller.selectAll(CanvasCore.elementsIn(rect, controller.state.elements).map { it.id }.toSet())
+    }
+
     private fun placeTextOnTap(isTap: Boolean) {
         if (isTap) controller.placeText(toolMode, toWorld(downTouch.x, downTouch.y))
     }
@@ -446,7 +473,12 @@ class CanvasView(
         end: Point,
         isTap: Boolean,
     ) {
-        if (isTap || drag == CanvasGesture.Move()) editTappedText(end) else commitGestureEdit(drag, end)
+        val move = drag as? CanvasGesture.Move
+        when {
+            isTap || drag == CanvasGesture.Move() -> editTappedText(end)
+            move != null -> controller.moveSelected(move.dx, move.dy)
+            else -> commitGestureEdit(drag, end)
+        }
     }
 
     /** A tap on the selected text box, note or table cell opens the keyboard editor on it (FR6/FR24). */
@@ -463,7 +495,7 @@ class CanvasView(
         finished: CanvasGesture,
         pointer: Point,
     ) {
-        val id = controller.selectedId ?: return
+        val id = controller.selected?.id ?: return
         selectGestures.edit(finished, id, pointer)?.let { controller.commit(it.elements) }
     }
 
@@ -498,10 +530,18 @@ class CanvasView(
     /** The elements to draw this frame: any in-progress edit previewed, and what the eraser is about to take faded. */
     private fun elementsForDrawing(): List<Element> {
         val erasing = (gesture as? CanvasGesture.Erase)?.ids.orEmpty()
-        val id = controller.selectedId
-        val edited = if (id == null) null else selectGestures.edit(gesture, id, toWorld(dragCurrent.x, dragCurrent.y))?.elements
-        return (edited ?: controller.state.elements).map {
+        return (previewEdit()?.elements ?: controller.state.elements).map {
             if (it.id in erasing) it.copy(style = it.style.copy(opacity = ERASE_PREVIEW_OPACITY)) else it
+        }
+    }
+
+    /** The canvas as the gesture in progress would leave it: a move takes the whole selection, every other edit one element. */
+    private fun previewEdit(): CanvasState? {
+        val move = gesture as? CanvasGesture.Move
+        return if (move != null) {
+            CanvasCore.moveElements(controller.state, controller.selectedIds, move.dx, move.dy)
+        } else {
+            controller.selected?.id?.let { selectGestures.edit(gesture, it, toWorld(dragCurrent.x, dragCurrent.y)) }
         }
     }
 
@@ -517,8 +557,9 @@ class CanvasView(
         renderer.drawBackground(canvas, width.toFloat(), height.toFloat())
         val elements = elementsForDrawing()
         renderer.drawElements(canvas, elements, transform, StylePalette.EINK, hiddenText())
-        controller.selectedId?.let { renderer.drawSelectionHandles(canvas, elements, it, transform) }
+        renderer.drawSelection(canvas, elements, controller.selectedIds, transform)
         if (gesture == CanvasGesture.DrawShape) renderer.drawDragPreview(canvas, toolMode, downTouch, dragCurrent, transform.zoom)
+        if (gesture == CanvasGesture.Marquee) renderer.drawMarquee(canvas, downTouch, dragCurrent)
         if (isMinimapVisible) minimapRenderer.draw(canvas, controller.state, width, height)
     }
 

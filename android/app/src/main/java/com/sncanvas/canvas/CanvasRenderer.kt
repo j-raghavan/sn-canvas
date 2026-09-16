@@ -25,6 +25,7 @@ import kotlin.math.abs
  * the UI thread, gets a renderer of its own. Images come from [images], which
  * both share (FR22).
  */
+@Suppress("TooManyFunctions") // one draw entry per thing the canvas shows, by design
 internal class CanvasRenderer(
     measurer: TextMeasurer = AndroidTextMeasurer(),
     images: ImageSource = ImageSource.NONE,
@@ -117,27 +118,62 @@ internal class CanvasRenderer(
     }
 
     /**
-     * The selected element's frame and handles (FR9): two endpoint handles for a
-     * line or arrow; for anything else, a frame around it, four corner handles
-     * and the rotate handle.
+     * What is selected (FR7). One element gets its handles: corners to resize,
+     * the stem to rotate, endpoints to re-point. Several get an outline each and
+     * no handles, since resizing and rotating apply to one element at a time;
+     * dragging any of them moves the lot.
      */
-    fun drawSelectionHandles(
+    fun drawSelection(
         canvas: Canvas,
         elements: List<Element>,
-        selectedId: String,
+        selectedIds: Set<String>,
         transform: ViewTransform,
     ) {
-        val element = elements.find { it.id == selectedId } ?: return
+        for (element in elements.filter { it.id in selectedIds }) drawSelectionOutline(canvas, element, elements, transform)
+        // Alone, an element can also be resized, rotated and re-pointed, so it gets the handles for those.
+        elements.find { it.id == selectedIds.singleOrNull() }?.let { drawSelectionHandles(canvas, it, elements, transform) }
+    }
+
+    private fun drawSelectionOutline(
+        canvas: Canvas,
+        element: Element,
+        elements: List<Element>,
+        transform: ViewTransform,
+    ) {
+        if (element.hasEndpoints()) {
+            val (start, end) = CanvasCore.resolveArrowEndpoints(element, elements)
+            val from = screenPoint(start, transform)
+            val to = screenPoint(end, transform)
+            canvas.drawLine(from.x, from.y, to.x, to.y, selectionFramePaint)
+        } else {
+            val bounds = screenBounds(element, transform)
+            withRotation(canvas, element, bounds) { canvas.drawRect(bounds, selectionFramePaint) }
+        }
+    }
+
+    private fun drawSelectionHandles(
+        canvas: Canvas,
+        element: Element,
+        elements: List<Element>,
+        transform: ViewTransform,
+    ) {
         if (element.hasEndpoints()) {
             val (start, end) = CanvasCore.resolveArrowEndpoints(element, elements)
             drawHandle(canvas, screenPoint(start, transform))
             drawHandle(canvas, screenPoint(end, transform))
         } else {
-            val bounds = screenBounds(element, transform)
-            withRotation(canvas, element, bounds) { canvas.drawRect(bounds, selectionFramePaint) }
             for (corner in CanvasCore.cornerPoints(element)) drawHandle(canvas, screenPoint(corner, transform))
             drawRotateHandle(canvas, element, transform)
         }
+    }
+
+    /** The selection rectangle being dragged out, from [from] to [to] in view coordinates (FR7). */
+    fun drawMarquee(
+        canvas: Canvas,
+        from: PointF,
+        to: PointF,
+    ) {
+        canvas.drawRect(minOf(from.x, to.x), minOf(from.y, to.y), maxOf(from.x, to.x), maxOf(from.y, to.y), selectionFramePaint)
     }
 
     /** The dashed outline of what [tool] would draw for a drag from [from] to [to] (screen space), at [zoom]. */

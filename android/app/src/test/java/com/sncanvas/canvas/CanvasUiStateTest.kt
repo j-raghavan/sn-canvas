@@ -16,6 +16,7 @@ class CanvasUiStateTest {
                 "canRedo" to false,
                 "hasSelection" to true,
                 "hasContent" to true,
+                "selectionCount" to 1,
                 "selectedType" to "table",
                 "style" to styleIds,
             ),
@@ -26,6 +27,7 @@ class CanvasUiStateTest {
                 style = style,
                 selectedType = "table",
                 hasContent = true,
+                selectionCount = 1,
             ).toPayload(),
         )
     }

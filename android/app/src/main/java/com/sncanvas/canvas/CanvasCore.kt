@@ -331,6 +331,51 @@ object CanvasCore {
         )
 
     /**
+     * Every element in [ids] moved by ([dx], [dy]): a drag of a whole selection
+     * (FR7). A line or arrow among them moves by both its endpoints, since it
+     * has no x/y of its own; an endpoint bound to an element that is moving too
+     * follows that element anyway, so only free endpoints are shifted.
+     */
+    fun moveElements(
+        state: CanvasState,
+        ids: Set<String>,
+        dx: Double,
+        dy: Double,
+    ): CanvasState =
+        state.copy(
+            elements =
+                state.elements.map { element ->
+                    when {
+                        element.id !in ids -> element
+                        !element.hasEndpoints() -> element.copy(x = element.x + dx, y = element.y + dy)
+                        else ->
+                            element.copy(
+                                startX = element.startX?.let { if (element.startElementId in ids) it else it + dx },
+                                startY = element.startY?.let { if (element.startElementId in ids) it else it + dy },
+                                endX = element.endX?.let { if (element.endElementId in ids) it else it + dx },
+                                endY = element.endY?.let { if (element.endElementId in ids) it else it + dy },
+                            )
+                    }
+                },
+        )
+
+    /**
+     * The elements whose bounds meet [rect], for a selection dragged out over
+     * them (FR7): touching is enough, an element need not be wholly inside. A
+     * connector's endpoints are resolved against [elements], so one bound to a
+     * shape is judged where it is drawn, not where it was stored.
+     */
+    fun elementsIn(
+        rect: WorldRect,
+        elements: List<Element>,
+    ): List<Element> =
+        elements.filter { element ->
+            val corners = if (element.hasEndpoints()) resolveArrowEndpoints(element, elements).toList() else cornerPoints(element)
+            val bounds = ViewTransforms.boundsOf(corners)
+            bounds.left <= rect.right && bounds.right >= rect.left && bounds.top <= rect.bottom && bounds.bottom >= rect.top
+        }
+
+    /**
      * Resizes the bbox element with the given [id] by dragging [corner] to a new
      * world-space position, keeping the opposite corner fixed; an image keeps
      * its proportions too ([ImageElements.resize]). A no-op if no element has that id.

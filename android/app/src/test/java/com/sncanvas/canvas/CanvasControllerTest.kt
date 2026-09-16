@@ -41,7 +41,7 @@ class CanvasControllerTest {
         controller.load(listOf(box.copy(id = "loaded")))
         assertEquals(listOf("loaded"), ids)
         assertFalse(ui.canUndo)
-        assertNull(controller.selectedId)
+        assertEquals(emptySet<String>(), controller.selectedIds)
     }
 
     @Test
@@ -139,7 +139,7 @@ class CanvasControllerTest {
         controller.select("box")
         controller.deleteSelected()
         assertEquals(emptyList<String>(), ids)
-        assertNull(controller.selectedId)
+        assertEquals(emptySet<String>(), controller.selectedIds)
     }
 
     @Test
@@ -148,7 +148,7 @@ class CanvasControllerTest {
         controller.select("box")
         controller.clearCanvas()
         assertEquals(emptyList<String>(), ids)
-        assertNull(controller.selectedId)
+        assertEquals(emptySet<String>(), controller.selectedIds)
         assertFalse(ui.hasContent)
         controller.undo()
         assertEquals(listOf("box", "b2"), ids)
@@ -168,7 +168,7 @@ class CanvasControllerTest {
         controller.select("box")
         controller.duplicateSelected(16.0)
         assertEquals(listOf("box", "id-1"), ids)
-        assertEquals("id-1", controller.selectedId)
+        assertEquals(setOf("id-1"), controller.selectedIds)
         assertEquals(
             16.0,
             controller.state.elements
@@ -205,7 +205,7 @@ class CanvasControllerTest {
         assertEquals(listOf("id-1"), ids)
         assertEquals(CanvasController.EditTarget("id-1"), controller.editing)
         assertEquals(listOf(CanvasController.EditTarget("id-1")), recorder.edits)
-        assertEquals("id-1", controller.selectedId)
+        assertEquals(setOf("id-1"), controller.selectedIds)
         assertFalse(ui.canUndo)
         controller.finishEdit("hello")
         assertEquals(
@@ -224,7 +224,7 @@ class CanvasControllerTest {
         controller.placeText(CanvasTools.TEXT, Point(5.0, 5.0))
         controller.finishEdit("   ")
         assertEquals(emptyList<String>(), ids)
-        assertNull(controller.selectedId)
+        assertEquals(emptySet<String>(), controller.selectedIds)
         assertFalse(ui.canUndo)
     }
 
@@ -246,7 +246,7 @@ class CanvasControllerTest {
         controller.beginEdit(CanvasController.EditTarget("t"))
         controller.finishEdit("a")
         assertFalse(ui.canUndo)
-        assertEquals("t", controller.selectedId)
+        assertEquals(setOf("t"), controller.selectedIds)
     }
 
     @Test
@@ -270,7 +270,7 @@ class CanvasControllerTest {
         controller.select("b2")
         controller.erase(setOf("box", "b2"))
         assertEquals(listOf("b3"), ids)
-        assertNull(controller.selectedId)
+        assertEquals(emptySet<String>(), controller.selectedIds)
         controller.undo()
         assertEquals(listOf("box", "b2", "b3"), ids)
     }
@@ -355,11 +355,76 @@ class CanvasControllerTest {
     }
 
     @Test
+    fun `selectAll takes several at once, and one selected alone is still the single selection`() {
+        controller.load(listOf(box, box.copy(id = "b2"), box.copy(id = "b3")))
+        controller.selectAll(setOf("box", "b3"))
+        assertEquals(setOf("box", "b3"), controller.selectedIds)
+        assertEquals(listOf("box", "b3"), controller.selectedElements.map { it.id })
+        // Nothing to resize, rotate or type into while several are selected.
+        assertNull(controller.selected)
+        assertEquals(2, ui.selectionCount)
+        controller.select("b2")
+        assertEquals("b2", controller.selected?.id)
+        assertEquals(1, ui.selectionCount)
+    }
+
+    @Test
+    fun `moveSelected moves everything selected as one undoable step`() {
+        controller.load(listOf(box, box.copy(id = "b2", x = 100.0)))
+        controller.selectAll(setOf("box", "b2"))
+        controller.moveSelected(5.0, -3.0)
+        assertEquals(listOf(5.0, 105.0), controller.state.elements.map { it.x })
+        assertEquals(listOf(-3.0, -3.0), controller.state.elements.map { it.y })
+        controller.undo()
+        assertEquals(listOf(0.0, 100.0), controller.state.elements.map { it.x })
+    }
+
+    @Test
+    fun `deleteSelected takes every selected element in one step`() {
+        controller.load(listOf(box, box.copy(id = "b2"), box.copy(id = "b3")))
+        controller.selectAll(setOf("box", "b3"))
+        controller.deleteSelected()
+        assertEquals(listOf("b2"), ids)
+        assertEquals(emptySet<String>(), controller.selectedIds)
+        controller.undo()
+        assertEquals(listOf("box", "b2", "b3"), ids)
+    }
+
+    @Test
+    fun `duplicateSelected copies every selected element and selects the copies`() {
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.duplicateSelected(16.0)
+        assertEquals(listOf("box", "b2", "id-1", "id-2"), ids)
+        assertEquals(setOf("id-1", "id-2"), controller.selectedIds)
+    }
+
+    @Test
+    fun `setStyle restyles everything selected in one step`() {
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.setStyle("color", "red")
+        assertEquals(listOf(StyleColor.RED, StyleColor.RED), controller.state.elements.map { it.style.color })
+        controller.undo()
+        assertEquals(listOf(StyleColor.BLACK, StyleColor.BLACK), controller.state.elements.map { it.style.color })
+    }
+
+    @Test
+    fun `z-order on several keeps the order they had among themselves`() {
+        controller.load(listOf(box, box.copy(id = "b2"), box.copy(id = "b3")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.bringSelectedToFront()
+        assertEquals(listOf("b3", "box", "b2"), ids)
+        controller.sendSelectedToBack()
+        assertEquals(listOf("box", "b2", "b3"), ids)
+    }
+
+    @Test
     fun `erasing other elements keeps the selection`() {
         controller.load(listOf(box, box.copy(id = "b2")))
         controller.select("box")
         controller.erase(setOf("b2"))
-        assertEquals("box", controller.selectedId)
+        assertEquals(setOf("box"), controller.selectedIds)
     }
 
     @Test
