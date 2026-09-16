@@ -79,6 +79,35 @@ test('row and column actions are listed only while a table is selected', () => {
   expect(table.onCommand).toHaveBeenCalledWith('tableAddColumn');
 });
 
+test('Clear canvas applies only to a canvas with something on it', () => {
+  const empty = renderBar();
+  empty.press('canvas-more');
+  expect(empty.isDisabled('canvas-menu-clearCanvas')).toBe(true);
+  const drawn = renderBar({hasContent: true});
+  drawn.press('canvas-more');
+  expect(drawn.isDisabled('canvas-menu-clearCanvas')).toBe(false);
+});
+
+test('Clear canvas asks before it clears, and cancelling leaves the canvas alone', () => {
+  const {press, onCommand, isListed, isMenuOpen} = renderBar({hasContent: true});
+  press('canvas-more');
+  press('canvas-menu-clearCanvas');
+  expect(onCommand).not.toHaveBeenCalled();
+  expect(isListed('canvas-menu-clearCanvas-confirm')).toBe(true);
+  press('canvas-menu-clearCanvas-cancel');
+  expect(onCommand).not.toHaveBeenCalled();
+  expect(isMenuOpen()).toBe(false);
+});
+
+test('confirming Clear canvas sends clearCanvas and closes the menu', () => {
+  const {press, onCommand, isMenuOpen} = renderBar({hasContent: true});
+  press('canvas-more');
+  press('canvas-menu-clearCanvas');
+  press('canvas-menu-clearCanvas-confirm');
+  expect(onCommand).toHaveBeenCalledWith('clearCanvas');
+  expect(isMenuOpen()).toBe(false);
+});
+
 test('New canvas, last in the menu, goes to the session rather than the canvas', () => {
   const {press, onCommand, onNewCanvas, isMenuOpen} = renderBar();
   press('canvas-more');

@@ -11,8 +11,22 @@ class CanvasUiStateTest {
     @Test
     fun `the payload carries the action states, the selection's type and the style by id`() {
         assertEquals(
-            mapOf("canUndo" to true, "canRedo" to false, "hasSelection" to true, "selectedType" to "table", "style" to styleIds),
-            CanvasUiState(canUndo = true, canRedo = false, hasSelection = true, style = style, selectedType = "table").toPayload(),
+            mapOf(
+                "canUndo" to true,
+                "canRedo" to false,
+                "hasSelection" to true,
+                "hasContent" to true,
+                "selectedType" to "table",
+                "style" to styleIds,
+            ),
+            CanvasUiState(
+                canUndo = true,
+                canRedo = false,
+                hasSelection = true,
+                style = style,
+                selectedType = "table",
+                hasContent = true,
+            ).toPayload(),
         )
     }
 

@@ -31,7 +31,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 
 ### Editing
 - Select, move, resize and rotate anything. Undo and redo, delete, duplicate.
-- From the **⋮** menu: bring to front or send to back, zoom to fit or to 100%, table rows and columns, and **New canvas**.
+- From the **⋮** menu: bring to front or send to back, zoom to fit or to 100%, table rows and columns, **Clear canvas** (empties the canvas, after a confirmation, as one undoable step) and **New canvas**.
 - **Style panel:** 12 colours, opacity, fill (none, semi, solid, hatched), outline (hand-drawn, dashed, dotted, solid; images can also have none) and four sizes (S, M, L, XL). Picking a style changes the selected item and becomes the default for new ones.
 - On screen, colours are drawn as distinct e-ink grays; the note thumbnail and the PDF keep the true colours.
 

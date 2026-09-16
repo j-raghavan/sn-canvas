@@ -14,12 +14,15 @@ data class CanvasUiState(
     val style: ShapeStyle,
     /** The selected element's type, or null when nothing is selected. */
     val selectedType: String? = null,
+    /** Whether the canvas holds anything at all; Clear canvas applies only then. */
+    val hasContent: Boolean = false,
 ) {
     fun toPayload(): Map<String, Any> =
         mapOf(
             "canUndo" to canUndo,
             "canRedo" to canRedo,
             "hasSelection" to hasSelection,
+            "hasContent" to hasContent,
             "selectedType" to selectedType.orEmpty(),
             "style" to
                 mapOf(

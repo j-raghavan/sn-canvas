@@ -148,6 +148,14 @@ class CanvasController(
         commit(CanvasCore.deleteElement(state, id).elements)
     }
 
+    /** Empties the canvas as one undoable step; a no-op when it already is empty. */
+    fun clearCanvas() {
+        if (state.elements.isEmpty()) return
+        selectedId = null
+        editing = null
+        commit(emptyList())
+    }
+
     fun undo() {
         history.undo()?.let(::show)
     }
@@ -229,11 +237,19 @@ class CanvasController(
 
     private fun publish() {
         val element = selected
+        val hasContent = state.elements.isNotEmpty()
         val uiState =
             if (element == null) {
-                CanvasUiState(history.canUndo, history.canRedo, hasSelection = false, style = currentStyle)
+                CanvasUiState(history.canUndo, history.canRedo, hasSelection = false, style = currentStyle, hasContent = hasContent)
             } else {
-                CanvasUiState(history.canUndo, history.canRedo, hasSelection = true, style = element.style, selectedType = element.type)
+                CanvasUiState(
+                    history.canUndo,
+                    history.canRedo,
+                    hasSelection = true,
+                    style = element.style,
+                    selectedType = element.type,
+                    hasContent = hasContent,
+                )
             }
         if (uiState == lastUiState) return
         lastUiState = uiState

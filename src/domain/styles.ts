@@ -46,6 +46,8 @@ export type CanvasUiState = {
   canUndo: boolean;
   canRedo: boolean;
   hasSelection: boolean;
+  /** Whether the canvas holds anything at all; Clear canvas applies only then. */
+  hasContent: boolean;
   /** The selected element's type (such as 'table'), or null with nothing selected. */
   selectedType: string | null;
   style: CanvasStyle;
@@ -55,6 +57,7 @@ export const INITIAL_UI_STATE: CanvasUiState = {
   canUndo: false,
   canRedo: false,
   hasSelection: false,
+  hasContent: false,
   selectedType: null,
   style: DEFAULT_STYLE,
 };
@@ -74,6 +77,7 @@ export function parseUiState(payload: unknown): CanvasUiState {
     canUndo: body.canUndo === true,
     canRedo: body.canRedo === true,
     hasSelection: body.hasSelection === true,
+    hasContent: body.hasContent === true,
     selectedType: typeof body.selectedType === 'string' && body.selectedType !== '' ? body.selectedType : null,
     style: {
       color: oneOf(COLOR_IDS, style.color, DEFAULT_STYLE.color),
