@@ -46,6 +46,7 @@ object CanvasJson {
             number("endY", element.endY)
             string("startElementId", element.startElementId)
             string("endElementId", element.endElementId)
+            string("groupId", element.groupId)
             number("rotation", element.rotation)
             obj("style") {
                 string("color", element.style.color.id)
@@ -127,6 +128,8 @@ object CanvasJson {
             endY = obj.number("endY"),
             startElementId = obj.string("startElementId"),
             endElementId = obj.string("endElementId"),
+            // Absent in canvases saved before groups existed, which load as elements of their own.
+            groupId = obj.string("groupId"),
             style = styleFromJson(obj.entries["style"] as? JsonValue.Obj),
             text = obj.string("text"),
             points = pointsFromJson(obj.entries["points"] as? JsonValue.Arr),

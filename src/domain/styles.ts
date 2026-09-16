@@ -50,6 +50,8 @@ export type CanvasUiState = {
   hasContent: boolean;
   /** How many elements are selected; several at once rule out resizing, rotating and editing text. */
   selectionCount: number;
+  /** Whether anything selected belongs to a group, so Ungroup applies. */
+  canUngroup: boolean;
   /** The selected element's type (such as 'table'), or null with nothing selected. */
   selectedType: string | null;
   style: CanvasStyle;
@@ -61,6 +63,7 @@ export const INITIAL_UI_STATE: CanvasUiState = {
   hasSelection: false,
   hasContent: false,
   selectionCount: 0,
+  canUngroup: false,
   selectedType: null,
   style: DEFAULT_STYLE,
 };
@@ -82,6 +85,7 @@ export function parseUiState(payload: unknown): CanvasUiState {
     hasSelection: body.hasSelection === true,
     hasContent: body.hasContent === true,
     selectionCount: Number.isInteger(body.selectionCount) ? (body.selectionCount as number) : 0,
+    canUngroup: body.canUngroup === true,
     selectedType: typeof body.selectedType === 'string' && body.selectedType !== '' ? body.selectedType : null,
     style: {
       color: oneOf(COLOR_IDS, style.color, DEFAULT_STYLE.color),

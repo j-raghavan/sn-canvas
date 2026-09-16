@@ -420,6 +420,81 @@ class CanvasControllerTest {
     }
 
     @Test
+    fun `grouping makes one of the selection, and selecting any member brings the group back`() {
+        controller.load(listOf(box, box.copy(id = "b2"), box.copy(id = "b3")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.groupSelected()
+        assertEquals(setOf("box", "b2"), controller.selectedIds)
+        assertTrue(ui.canUngroup)
+        // A tap on one member selects the whole group, and nothing outside it.
+        controller.select("b2")
+        assertEquals(setOf("box", "b2"), controller.selectedIds)
+        controller.select("b3")
+        assertEquals(setOf("b3"), controller.selectedIds)
+    }
+
+    @Test
+    fun `grouping needs two, and ungrouping needs a group`() {
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.select("box")
+        controller.groupSelected()
+        assertFalse(ui.canUndo)
+        controller.ungroupSelected()
+        assertFalse(ui.canUndo)
+    }
+
+    @Test
+    fun `ungrouping leaves the elements where they are, on their own again`() {
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.groupSelected()
+        controller.ungroupSelected()
+        assertEquals(listOf(null, null), controller.state.elements.map { it.groupId })
+        controller.select("box")
+        assertEquals(setOf("box"), controller.selectedIds)
+    }
+
+    @Test
+    fun `grouping a group with another element takes the whole of the old group in`() {
+        controller.load(listOf(box, box.copy(id = "b2"), box.copy(id = "b3")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.groupSelected()
+        // Only one member of the group is picked, along with an outsider.
+        controller.selectAll(setOf("b2", "b3"))
+        assertEquals(setOf("box", "b2", "b3"), controller.selectedIds)
+        controller.groupSelected()
+        assertEquals(
+            1,
+            controller.state.elements
+                .mapNotNull { it.groupId }
+                .toSet()
+                .size,
+        )
+    }
+
+    @Test
+    fun `deleting a group takes all of it, in one step`() {
+        controller.load(listOf(box, box.copy(id = "b2"), box.copy(id = "b3")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.groupSelected()
+        controller.select("box")
+        controller.deleteSelected()
+        assertEquals(listOf("b3"), ids)
+    }
+
+    @Test
+    fun `copies of a group form a group of their own, not joining the one they came from`() {
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.groupSelected()
+        controller.duplicateSelected(16.0)
+        val groups = controller.state.elements.groupBy { it.groupId }
+        assertEquals(2, groups.size)
+        // The copies are selected, and they are the ones in the new group.
+        assertEquals(controller.selectedIds, groups.getValue(controller.selectedElements.first().groupId).map { it.id }.toSet())
+    }
+
+    @Test
     fun `erasing other elements keeps the selection`() {
         controller.load(listOf(box, box.copy(id = "b2")))
         controller.select("box")

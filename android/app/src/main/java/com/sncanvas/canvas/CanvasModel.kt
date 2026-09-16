@@ -212,6 +212,9 @@ data class Element(
     val table: TableData? = null,
     // FR22: an image's picture; see ImageElements.
     val image: ImageData? = null,
+    // FR7: the group this element belongs to, if any. Elements sharing an id are
+    // selected, moved and deleted as one; null for an element of its own.
+    val groupId: String? = null,
 ) {
     init {
         require(rotation.isFinite()) { "rotation must be finite" }

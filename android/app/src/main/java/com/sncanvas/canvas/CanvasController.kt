@@ -67,17 +67,39 @@ class CanvasController(
         listener.onChanged()
     }
 
-    /** Selects one element, or nothing. */
+    /** Selects one element, or nothing; a grouped one brings its group with it. */
     fun select(id: String?) {
-        selectedIds = setOfNotNull(id)
+        selectedIds = withGroups(setOfNotNull(id))
         changed()
     }
 
-    /** Selects every element in [ids]: what a selection dragged out over them takes (FR7). */
+    /** Selects every element in [ids]: what a selection dragged out over them takes (FR7), groups whole. */
     fun selectAll(ids: Set<String>) {
-        selectedIds = ids
+        selectedIds = withGroups(ids)
         changed()
     }
+
+    /** Makes one group of everything selected (FR7); a no-op unless at least two elements are. */
+    fun groupSelected() {
+        if (selectedElements.size < 2) return
+        val groupId = newId()
+        val grouped = CanvasActions.group(state, selectedIds, groupId)
+        selectedIds =
+            grouped.elements
+                .filter { it.groupId == groupId }
+                .map { it.id }
+                .toSet()
+        commit(grouped.elements)
+    }
+
+    /** Breaks up the group of whatever is selected; a no-op when none of it is grouped. */
+    fun ungroupSelected() {
+        if (selectedElements.none { it.groupId != null }) return
+        commit(CanvasActions.ungroup(state, selectedIds).elements)
+    }
+
+    /** [ids] and everything grouped with them: a group is selected, moved and deleted as one. */
+    private fun withGroups(ids: Set<String>): Set<String> = ids + CanvasActions.groupsOf(state, ids)
 
     /** Moves everything selected by ([dx], [dy]) as one undoable step. */
     fun moveSelected(
@@ -197,8 +219,19 @@ class CanvasController(
                 copies += copyId
                 CanvasActions.duplicate(copied, element.id, copyId, offset)
             }
+        // Copies of a group form a group of their own, or they would join the one they were copied from.
+        val groupsForCopies = mutableMapOf<String, String>()
+        val regrouped =
+            duplicated.elements.map { element ->
+                val group = element.groupId
+                if (element.id !in copies || group == null) {
+                    element
+                } else {
+                    element.copy(groupId = groupsForCopies.getOrPut(group) { newId() })
+                }
+            }
         selectedIds = copies
-        commit(duplicated.elements)
+        commit(regrouped)
     }
 
     /** Brings everything selected to the front, lowest first, so they keep the order they had among themselves. */
@@ -286,6 +319,7 @@ class CanvasController(
                 selectedType = element?.type,
                 hasContent = state.elements.isNotEmpty(),
                 selectionCount = selectedNow,
+                canUngroup = selectedElements.any { it.groupId != null },
             )
         if (uiState == lastUiState) return
         lastUiState = uiState

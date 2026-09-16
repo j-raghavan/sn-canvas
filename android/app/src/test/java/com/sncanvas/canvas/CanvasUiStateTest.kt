@@ -17,6 +17,7 @@ class CanvasUiStateTest {
                 "hasSelection" to true,
                 "hasContent" to true,
                 "selectionCount" to 1,
+                "canUngroup" to false,
                 "selectedType" to "table",
                 "style" to styleIds,
             ),
