@@ -1,11 +1,49 @@
 package com.sncanvas.canvas
 
 /**
+ * Where the minimap is and what a touch on it means: the box in view
+ * coordinates, the transform it draws through, and the world rect the view was
+ * showing when it was measured (its "you are here" rectangle). Held for the
+ * length of a drag, so the map keeps still under the finger while the viewport
+ * it moves would otherwise keep re-fitting it.
+ */
+data class MinimapLayout(
+    val left: Double,
+    val top: Double,
+    val width: Double,
+    val height: Double,
+    val visible: WorldRect,
+    val fit: ViewTransform,
+) {
+    fun contains(
+        x: Double,
+        y: Double,
+    ): Boolean = x >= left && x <= left + width && y >= top && y <= top + height
+
+    /** The world point under ([x], [y]), a point in view coordinates. */
+    fun worldAt(
+        x: Double,
+        y: Double,
+    ): Point = Point(fit.viewportX + (x - left) / fit.zoom, fit.viewportY + (y - top) / fit.zoom)
+
+    /** Whether ([world]) falls inside the rectangle the view was showing: a grab of it, rather than a jump elsewhere. */
+    fun holdsViewport(world: Point): Boolean =
+        world.x >= visible.left && world.x <= visible.right && world.y >= visible.top && world.y <= visible.bottom
+}
+
+/**
  * Fit transforms: the [ViewTransform] that frames a set of elements (and, for the
  * minimap, the visible viewport too) inside a box. The note thumbnail and the
  * minimap both draw through these, reusing the live view's draw routines.
  */
 object ViewTransforms {
+    // The minimap's box, which [MinimapRenderer] paints and a touch navigates by.
+    private const val MINIMAP_WIDTH_PX = 300.0
+    private const val MINIMAP_MIN_HEIGHT_PX = 160.0
+    private const val MINIMAP_MAX_HEIGHT_PX = 420.0
+    private const val MINIMAP_MARGIN_PX = 24.0
+    private const val MINIMAP_PADDING_PX = 12.0
+
     /**
      * Fallback world-space span used when content has zero width/height
      * (e.g. a single point), to avoid a divide-by-zero/infinite scale.
@@ -36,6 +74,31 @@ object ViewTransforms {
     ): ViewTransform {
         val bounds = contentBounds(elements) ?: return ViewTransform(viewportX = 0.0, viewportY = 0.0, zoom = 1.0)
         return fitTransform(bounds, thumbnailSizePx, thumbnailSizePx, paddingPx)
+    }
+
+    /**
+     * Where the minimap sits in a [viewWidthPx] × [viewHeightPx] view and how it
+     * maps to the world: the box [MinimapRenderer] paints, so a touch landing on
+     * it can be read back as a world point and navigate there (FR15). Null
+     * before the view has a size. The box is bottom-right; the style panel owns
+     * the top right, and the toolbar and action bar the middle.
+     */
+    fun minimapLayout(
+        state: CanvasState,
+        viewWidthPx: Double,
+        viewHeightPx: Double,
+    ): MinimapLayout? {
+        if (viewWidthPx <= 0.0 || viewHeightPx <= 0.0) return null
+        val boxHeight = (MINIMAP_WIDTH_PX * viewHeightPx / viewWidthPx).coerceIn(MINIMAP_MIN_HEIGHT_PX, MINIMAP_MAX_HEIGHT_PX)
+        val visible = state.transform.visibleRect(viewWidthPx, viewHeightPx)
+        return MinimapLayout(
+            left = viewWidthPx - MINIMAP_MARGIN_PX - MINIMAP_WIDTH_PX,
+            top = viewHeightPx - MINIMAP_MARGIN_PX - boxHeight,
+            width = MINIMAP_WIDTH_PX,
+            height = boxHeight,
+            visible = visible,
+            fit = computeMinimapTransform(state.elements, visible, MINIMAP_WIDTH_PX, boxHeight, MINIMAP_PADDING_PX),
+        )
     }
 
     /**
