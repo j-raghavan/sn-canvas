@@ -10,9 +10,19 @@ import ActionBar from '../src/ui/ActionBar';
 const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onCommand = jest.fn();
   const onNewCanvas = jest.fn();
+  const onClearCanvas = jest.fn();
+  const onMenuOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = ReactTestRenderer.create(<ActionBar ui={{...INITIAL_UI_STATE, ...overrides}} onCommand={onCommand} onNewCanvas={onNewCanvas} />);
+    renderer = ReactTestRenderer.create(
+      <ActionBar
+        ui={{...INITIAL_UI_STATE, ...overrides}}
+        onCommand={onCommand}
+        onNewCanvas={onNewCanvas}
+        onClearCanvas={onClearCanvas}
+        onMenuOpen={onMenuOpen}
+      />,
+    );
   });
   const press = (testID: string) =>
     act(() => {
@@ -21,7 +31,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
@@ -43,13 +53,16 @@ test.each([
   expect(onCommand).toHaveBeenCalledWith(command);
 });
 
-test('the more button toggles the menu', () => {
-  const {press, isMenuOpen} = renderBar();
+test('the more button toggles the menu, and says so as it opens', () => {
+  const {press, isMenuOpen, onMenuOpen} = renderBar();
   expect(isMenuOpen()).toBe(false);
   press('canvas-more');
   expect(isMenuOpen()).toBe(true);
+  expect(onMenuOpen).toHaveBeenCalledTimes(1);
   press('canvas-more');
   expect(isMenuOpen()).toBe(false);
+  // Closing is not an opening: the hints are not put away twice.
+  expect(onMenuOpen).toHaveBeenCalledTimes(1);
 });
 
 test('z-order needs a selection; zoom never does', () => {
@@ -77,6 +90,24 @@ test('row and column actions are listed only while a table is selected', () => {
   expect(items.map(table.isListed)).toEqual([true, true, true, true]);
   table.press('canvas-menu-tableAddColumn');
   expect(table.onCommand).toHaveBeenCalledWith('tableAddColumn');
+});
+
+test('Clear canvas applies only to a canvas with something on it', () => {
+  const empty = renderBar();
+  empty.press('canvas-more');
+  expect(empty.isDisabled('canvas-menu-clearCanvas')).toBe(true);
+  const drawn = renderBar({hasContent: true});
+  drawn.press('canvas-more');
+  expect(drawn.isDisabled('canvas-menu-clearCanvas')).toBe(false);
+});
+
+test('Clear canvas goes to the screen, which confirms it, rather than straight to the canvas', () => {
+  const {press, onCommand, onClearCanvas, isMenuOpen} = renderBar({hasContent: true});
+  press('canvas-more');
+  press('canvas-menu-clearCanvas');
+  expect(onClearCanvas).toHaveBeenCalledTimes(1);
+  expect(onCommand).not.toHaveBeenCalled();
+  expect(isMenuOpen()).toBe(false);
 });
 
 test('New canvas, last in the menu, goes to the session rather than the canvas', () => {

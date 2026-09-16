@@ -34,6 +34,9 @@ HINTS = {
     "header": (["Export, save to note & close"], "up-right", 26, 52),
     "styles": (["Colours & styles"], "up-right", 26, 48),
     "toolbar": (["Pick a tool &", "start drawing!"], "down-right", 30, 52),
+    # Reaches further down than the rest: the eraser sits under the action bar,
+    # so this caption has to clear the bar and only its arrow crosses it.
+    "eraser": (["Tap again to", "clear the canvas"], "down-left", 30, 82),
     "help": (["Show or hide", "these hints"], "down-left", 30, 52),
 }
 

@@ -109,12 +109,18 @@ describe('toolbar', () => {
 });
 
 describe('help hints', () => {
-  const CAPTIONS = ['Export, save to note & close', 'Colours & styles', 'Pick a tool & start drawing!', 'Show or hide these hints'];
+  const CAPTIONS = [
+    'Export, save to note & close',
+    'Colours & styles',
+    'Pick a tool & start drawing!',
+    'Tap again to clear the canvas',
+    'Show or hide these hints',
+  ];
 
   test('show by default, one for each control, and the help button reflects that', async () => {
     const {has, labelled, isPressed} = await render();
     expect(has('canvas-hints')).toBe(true);
-    expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true]);
+    expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true, true]);
     expect(isPressed('canvas-help')).toBe(true);
   });
 
@@ -251,7 +257,8 @@ describe('session', () => {
   test('Save to Note confirms an inserted thumbnail, and the notice then clears', async () => {
     jest.useFakeTimers();
     try {
-      const {press, shows} = await render();
+      const {press, shows, emitCanvasState} = await render();
+      await emitCanvasState({hasContent: true});
       await press('canvas-save-to-note');
       expect(shows('Added to note')).toBe(true);
       await act(async () => {
@@ -266,7 +273,8 @@ describe('session', () => {
   test('Save to Note shows nothing when no thumbnail was inserted', async () => {
     const session = createFakeSession();
     session.saveToNote.mockResolvedValue(false);
-    const {press, shows} = await render(session);
+    const {press, shows, emitCanvasState} = await render(session);
+    await emitCanvasState({hasContent: true});
     await press('canvas-save-to-note');
     expect(session.saveToNote).toHaveBeenCalledTimes(1);
     expect(shows('Added to note')).toBe(false);
@@ -314,9 +322,71 @@ test('New canvas in the ⋮ menu asks the session for one', async () => {
   expect(session.newCanvas).toHaveBeenCalledTimes(1);
 });
 
+describe('clear canvas', () => {
+  const openEraserOptions = async (press: (testID: string) => Promise<void>) => {
+    await press('canvas-tool-eraser');
+    await press('canvas-tool-eraser');
+  };
+
+  test('the eraser opens its options only once it is the tool', async () => {
+    const {press, has, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
+    await press('canvas-tool-eraser');
+    expect(has('canvas-eraser-clear')).toBe(false);
+    await press('canvas-tool-eraser');
+    expect(has('canvas-eraser-clear')).toBe(true);
+    await press('canvas-tool-eraser');
+    expect(has('canvas-eraser-clear')).toBe(false);
+  });
+
+  test('picking another tool closes the options', async () => {
+    const {press, has, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
+    await openEraserOptions(press);
+    await press('canvas-tool-draw');
+    expect(has('canvas-eraser-clear')).toBe(false);
+  });
+
+  test("the eraser's Clear canvas applies only to a canvas with something on it", async () => {
+    const {press, isDisabled, emitCanvasState} = await render();
+    await openEraserOptions(press);
+    expect(isDisabled('canvas-eraser-clear')).toBe(true);
+    await emitCanvasState({hasContent: true});
+    expect(isDisabled('canvas-eraser-clear')).toBe(false);
+  });
+
+  test.each([
+    ['the eraser', async (press: (testID: string) => Promise<void>) => openEraserOptions(press).then(() => press('canvas-eraser-clear'))],
+    [
+      'the ⋮ menu',
+      async (press: (testID: string) => Promise<void>) => press('canvas-more').then(() => press('canvas-menu-clearCanvas')),
+    ],
+  ])('%s asks before clearing, and cancelling sends nothing', async (_name, open) => {
+    const {press, has, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
+    await open(press);
+    expect(has('canvas-clear-confirm')).toBe(true);
+    expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'clearCanvas', []);
+    await press('canvas-clear-cancel');
+    expect(has('canvas-clear-confirm')).toBe(false);
+    expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'clearCanvas', []);
+  });
+
+  test('confirming dispatches clearCanvas to the canvas and closes the question', async () => {
+    const {press, has, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
+    await openEraserOptions(press);
+    await press('canvas-eraser-clear');
+    await press('canvas-clear-confirm-action');
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'clearCanvas', []);
+    expect(has('canvas-clear-confirm')).toBe(false);
+  });
+});
+
 describe('Export to PDF', () => {
   test('exports through the session and says where the PDF went', async () => {
-    const {session, press, shows} = await render();
+    const {session, press, shows, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
     await press('canvas-export-pdf');
     expect(session.exportPdf).toHaveBeenCalledTimes(1);
     expect(shows('Saved to EXPORT/Canvas-20260914-111507.pdf')).toBe(true);
@@ -325,9 +395,19 @@ describe('Export to PDF', () => {
   test('says so when nothing was exported', async () => {
     const session = createFakeSession();
     session.exportPdf.mockResolvedValue(null);
-    const {press, shows} = await render(session);
+    const {press, shows, emitCanvasState} = await render(session);
+    await emitCanvasState({hasContent: true});
     await press('canvas-export-pdf');
     expect(shows('Could not export the PDF')).toBe(true);
+  });
+
+  test('Export to PDF and Save to Note apply only to a canvas with something on it', async () => {
+    const {emitCanvasState, isDisabled} = await render();
+    expect([isDisabled('canvas-export-pdf'), isDisabled('canvas-save-to-note')]).toEqual([true, true]);
+    // Close is never disabled: a blank canvas still has to be closable.
+    expect(isDisabled('canvas-close')).toBeFalsy();
+    await emitCanvasState({hasContent: true});
+    expect([isDisabled('canvas-export-pdf'), isDisabled('canvas-save-to-note')]).toEqual([false, false]);
   });
 });
 

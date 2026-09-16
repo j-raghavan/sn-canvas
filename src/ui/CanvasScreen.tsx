@@ -58,6 +58,8 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   // The onboarding hints (HelpHints): on by default each time the plugin opens, off once the canvas is
   // touched (pen or finger) or a toolbar action is taken; the (?) button in Toolbar's dock brings them back.
   const [showHints, setShowHints] = useState(true);
+  // Clearing takes everything at once, so both ways in (the eraser's options, the ⋮ menu) ask here first.
+  const [isConfirmingClear, setConfirmingClear] = useState(false);
   const canvasRef = useRef<CanvasViewRef>(null);
 
   // The plugin runtime stays warm between opens, so this screen can stay
@@ -113,8 +115,21 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
       <View style={styles.header}>
         <Text style={styles.title}>Canvas</Text>
         <View style={styles.headerActions}>
-          <HeaderButton testID="canvas-export-pdf" label="Export to PDF" icon={EXPORT_PDF_ICON} onPress={exportPdf} />
-          <HeaderButton testID="canvas-save-to-note" label="Save to Note" icon={SAVE_TO_NOTE_ICON} onPress={saveToNote} />
+          {/* An empty canvas has nothing to export or to show in a note: both would produce a blank page. */}
+          <HeaderButton
+            testID="canvas-export-pdf"
+            label="Export to PDF"
+            icon={EXPORT_PDF_ICON}
+            onPress={exportPdf}
+            disabled={!ui.hasContent}
+          />
+          <HeaderButton
+            testID="canvas-save-to-note"
+            label="Save to Note"
+            icon={SAVE_TO_NOTE_ICON}
+            onPress={saveToNote}
+            disabled={!ui.hasContent}
+          />
           <HeaderButton testID="canvas-close" label="Close" icon={CLOSE_ICON} onPress={session.close} />
         </View>
       </View>
@@ -127,7 +142,16 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           onEditText={event => setEditing(parseTextEditRequest(event.nativeEvent))}
           onCanvasTouch={() => setShowHints(false)}
         />
-        {/* Under the controls, so an opened style panel or menu covers the hints rather than the reverse. */}
+        <ActionBar
+          ui={ui}
+          onCommand={runCommand}
+          onNewCanvas={session.newCanvas}
+          onClearCanvas={() => setConfirmingClear(true)}
+          onMenuOpen={() => setShowHints(false)}
+        />
+        {/* Over the action bar, which is always there and sits across the middle tools: the eraser's hint has to
+            cross it to reach the eraser, and only its arrow does. Still under the style panel and the toolbar,
+            and the ⋮ menu dismisses the hints as it opens, so nothing a tap opens is ever drawn over. */}
         {showHints && <HelpHints />}
         <StylePanel
           style={ui.style}
@@ -135,14 +159,42 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           swatch={color => swatchColor(color, einkGrays)}
           onChange={(property, value) => runCommand('setStyle', [property, value])}
         />
-        <ActionBar ui={ui} onCommand={runCommand} onNewCanvas={session.newCanvas} />
         <Toolbar
           toolMode={toolMode}
           onToolChange={changeTool}
           onInsertImage={insertImage}
           showHints={showHints}
           onToggleHints={() => setShowHints(current => !current)}
+          onClearCanvas={() => setConfirmingClear(true)}
+          canClearCanvas={ui.hasContent}
         />
+        {isConfirmingClear && (
+          <View testID="canvas-clear-confirm" style={styles.confirmOverlay}>
+            <View style={styles.confirmCard}>
+              <Text style={styles.confirmTitle}>Clear the whole canvas?</Text>
+              <Text style={styles.confirmBody}>Everything on it goes. Undo brings it back.</Text>
+              <View style={styles.confirmActions}>
+                <Pressable
+                  testID="canvas-clear-cancel"
+                  accessibilityLabel="Keep the canvas"
+                  style={styles.confirmButton}
+                  onPress={() => setConfirmingClear(false)}>
+                  <Text style={styles.confirmButtonText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  testID="canvas-clear-confirm-action"
+                  accessibilityLabel="Clear the canvas"
+                  style={[styles.confirmButton, styles.confirmButtonPrimary]}
+                  onPress={() => {
+                    setConfirmingClear(false);
+                    runCommand('clearCanvas');
+                  }}>
+                  <Text style={[styles.confirmButtonText, styles.confirmButtonTextPrimary]}>Clear canvas</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
         {editing !== null && (
           <TextEditor
             // A fresh editor, with its own text, for every edit.
@@ -164,12 +216,12 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   );
 }
 
-type HeaderButtonProps = {testID: string; label: string; icon: ImageSourcePropType; onPress: () => void};
+type HeaderButtonProps = {testID: string; label: string; icon: ImageSourcePropType; onPress: () => void; disabled?: boolean};
 
-function HeaderButton({testID, label, icon, onPress}: HeaderButtonProps): React.JSX.Element {
+function HeaderButton({testID, label, icon, onPress, disabled = false}: HeaderButtonProps): React.JSX.Element {
   return (
-    <Pressable testID={testID} accessibilityLabel={label} style={styles.headerButton} onPress={onPress}>
-      <Image source={icon} style={styles.headerIcon} />
+    <Pressable testID={testID} accessibilityLabel={label} disabled={disabled} style={styles.headerButton} onPress={onPress}>
+      <Image source={icon} style={[styles.headerIcon, disabled && styles.disabled]} />
     </Pressable>
   );
 }
@@ -206,6 +258,9 @@ const styles = StyleSheet.create({
     height: 22,
     tintColor: '#000000',
   },
+  disabled: {
+    opacity: 0.3,
+  },
   canvasArea: {
     flex: 1,
     position: 'relative',
@@ -221,6 +276,55 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     fontSize: 15,
+    color: '#ffffff',
+  },
+  // Over the canvas and its controls: nothing else is tappable while the question stands.
+  confirmOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+  },
+  confirmCard: {
+    width: 320,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#000000',
+    backgroundColor: '#ffffff',
+  },
+  confirmTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  confirmBody: {
+    marginTop: 6,
+    fontSize: 14,
+    color: '#444444',
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 18,
+  },
+  confirmButton: {
+    marginLeft: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#000000',
+  },
+  confirmButtonPrimary: {
+    backgroundColor: '#000000',
+  },
+  confirmButtonText: {
+    fontSize: 15,
+    color: '#000000',
+  },
+  confirmButtonTextPrimary: {
     color: '#ffffff',
   },
 });

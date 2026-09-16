@@ -148,6 +148,7 @@ class CanvasViewManager(
                 "tableAddColumn" to { view -> view.controller.addTableColumn() },
                 "tableRemoveRow" to { view -> view.controller.removeTableRow() },
                 "tableRemoveColumn" to { view -> view.controller.removeTableColumn() },
+                "clearCanvas" to { view -> view.controller.clearCanvas() },
             )
 
         // Command names and the numeric ids the Int overload receives (delete/undo/redo keep 1-3).

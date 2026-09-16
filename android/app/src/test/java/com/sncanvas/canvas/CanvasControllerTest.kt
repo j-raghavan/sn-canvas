@@ -143,6 +143,26 @@ class CanvasControllerTest {
     }
 
     @Test
+    fun `clearCanvas empties the canvas as one undoable step and clears the selection`() {
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.select("box")
+        controller.clearCanvas()
+        assertEquals(emptyList<String>(), ids)
+        assertNull(controller.selectedId)
+        assertFalse(ui.hasContent)
+        controller.undo()
+        assertEquals(listOf("box", "b2"), ids)
+        assertTrue(ui.hasContent)
+    }
+
+    @Test
+    fun `clearCanvas on an empty canvas does nothing`() {
+        controller.load(emptyList())
+        controller.clearCanvas()
+        assertFalse(ui.canUndo)
+    }
+
+    @Test
     fun `duplicateSelected adds an offset copy and selects it`() {
         controller.load(listOf(box))
         controller.select("box")

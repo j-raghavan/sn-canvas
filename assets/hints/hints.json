@@ -17,6 +17,12 @@
     "tipX": 166.5,
     "tipY": 79.0
   },
+  "eraser": {
+    "width": 201.5,
+    "height": 115.0,
+    "tipX": 10.29,
+    "tipY": 109.0
+  },
   "help": {
     "width": 160.0,
     "height": 85.0,

@@ -24,14 +24,14 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 ### Drawing and building blocks
 - **Pencil** with pen pressure, inked by Supernote's own pen engine, so it keeps up with your writing like native notes.
 - **Rectangle, ellipse, line and arrow.** Arrows attach to shapes and follow them when a shape moves.
-- **Eraser.** Tap or drag over items to delete them as one undoable step. The pen's eraser end works with any tool.
+- **Eraser.** Tap or drag over items to delete them as one undoable step. The pen's eraser end works with any tool. Tap the eraser again, once it is the tool, for **Clear canvas**: the whole canvas at once, after a confirmation, and Undo brings it back.
 - **Text boxes and sticky notes**, typed with the on-screen keyboard.
 - **Tables.** Drag out a grid of up to 12 rows × 8 columns, tap a cell to type, and add or remove rows and columns later.
 - **Images.** Insert a PNG, JPG or WebP from your files, then move, resize (keeping proportions) and rotate it. The image is copied into the canvas, so the canvas never depends on the original file.
 
 ### Editing
 - Select, move, resize and rotate anything. Undo and redo, delete, duplicate.
-- From the **⋮** menu: bring to front or send to back, zoom to fit or to 100%, table rows and columns, and **New canvas**.
+- From the **⋮** menu: bring to front or send to back, zoom to fit or to 100%, table rows and columns, **Clear canvas** (also under the eraser) and **New canvas**.
 - **Style panel:** 12 colours, opacity, fill (none, semi, solid, hatched), outline (hand-drawn, dashed, dotted, solid; images can also have none) and four sizes (S, M, L, XL). Picking a style changes the selected item and becomes the default for new ones.
 - On screen, colours are drawn as distinct e-ink grays; the note thumbnail and the PDF keep the true colours.
 

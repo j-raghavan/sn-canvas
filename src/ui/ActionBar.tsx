@@ -52,6 +52,8 @@ type MenuItem = {
   label: string;
   /** Greyed out with nothing selected. */
   needsSelection?: boolean;
+  /** Greyed out on an empty canvas. */
+  needsContent?: boolean;
   /** Listed only while a table is selected (FR24). */
   tableOnly?: boolean;
 };
@@ -65,6 +67,7 @@ const MENU: readonly MenuItem[] = [
   {action: 'tableRemoveColumn', label: 'Remove last column', tableOnly: true},
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
+  {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},
   {action: 'newCanvas', label: 'New canvas'},
 ];
 
@@ -75,17 +78,22 @@ type Props = {
   onCommand: (command: CanvasCommand) => void;
   /** Saves the canvas shown and starts a new, empty one. */
   onNewCanvas: () => void;
+  /** Asks to clear the canvas; the screen confirms it first. */
+  onClearCanvas: () => void;
+  /** The ⋮ menu is opening: the screen puts the onboarding hints away, so neither is drawn over the other. */
+  onMenuOpen: () => void;
 };
 
-export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JSX.Element {
+export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, onMenuOpen}: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
+
   return (
     // box-none: taps beside the bar and menu still reach the canvas underneath.
     <View style={styles.wrapper} pointerEvents="box-none">
       {isMenuOpen && (
         <View style={styles.menu}>
           {MENU.filter(item => !item.tableOnly || ui.selectedType === 'table').map(item => {
-            const enabled = !item.needsSelection || ui.hasSelection;
+            const enabled = (!item.needsSelection || ui.hasSelection) && (!item.needsContent || ui.hasContent);
             return (
               <Pressable
                 key={item.action}
@@ -97,6 +105,8 @@ export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JS
                   setMenuOpen(false);
                   if (item.action === 'newCanvas') {
                     onNewCanvas();
+                  } else if (item.action === 'clearCanvas') {
+                    onClearCanvas();
                   } else {
                     onCommand(item.action);
                   }
@@ -126,7 +136,12 @@ export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JS
           testID="canvas-more"
           accessibilityLabel="More actions"
           style={styles.button}
-          onPress={() => setMenuOpen(open => !open)}>
+          onPress={() => {
+            if (!isMenuOpen) {
+              onMenuOpen();
+            }
+            setMenuOpen(open => !open);
+          }}>
           <Image source={MORE_ICON} style={styles.icon} />
         </Pressable>
       </View>
