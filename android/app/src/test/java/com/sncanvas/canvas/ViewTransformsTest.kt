@@ -1,7 +1,9 @@
 package com.sncanvas.canvas
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Fit transforms behind the note thumbnail and the minimap, and the content bounds they frame. */
@@ -169,6 +171,57 @@ class ViewTransformsTest {
         val fit = ViewTransforms.fitTransform(line, 400.0, 400.0, 0.0)
         assertEquals(200.0, fit.screenX(10.0), 1e-9)
         assertEquals(200.0, fit.screenY(100.0), 1e-9)
+    }
+
+    // --- minimapLayout (navigating by the minimap) ----------------------------
+
+    private fun stateShowing(
+        viewportX: Double,
+        viewportY: Double,
+        zoom: Double = 1.0,
+        elements: List<Element> = listOf(Element(id = "b", type = "rectangle", x = 0.0, y = 0.0, width = 400.0, height = 400.0)),
+    ) = CanvasState(elements = elements, viewportX = viewportX, viewportY = viewportY, zoom = zoom)
+
+    @Test
+    fun `minimapLayout has no box before the view has a size`() {
+        assertNull(ViewTransforms.minimapLayout(stateShowing(0.0, 0.0), 0.0, 0.0))
+    }
+
+    @Test
+    fun `minimapLayout sits inside the bottom-right corner of the view`() {
+        val layout = ViewTransforms.minimapLayout(stateShowing(0.0, 0.0), 1000.0, 800.0)!!
+        assertEquals(1000.0 - 24.0, layout.left + layout.width, 1e-9)
+        assertEquals(800.0 - 24.0, layout.top + layout.height, 1e-9)
+        assertTrue(layout.contains(layout.left + 1, layout.top + 1))
+        assertFalse(layout.contains(layout.left - 1, layout.top + 1))
+        assertFalse(layout.contains(layout.left + 1, layout.top + layout.height + 1))
+    }
+
+    @Test
+    fun `minimapLayout reads a touch back as the world point drawn there`() {
+        val layout = ViewTransforms.minimapLayout(stateShowing(0.0, 0.0), 1000.0, 800.0)!!
+        val world = Point(120.0, 260.0)
+        val touchX = layout.left + layout.fit.screenX(world.x)
+        val touchY = layout.top + layout.fit.screenY(world.y)
+        val read = layout.worldAt(touchX, touchY)
+        assertEquals(world.x, read.x, 1e-9)
+        assertEquals(world.y, read.y, 1e-9)
+    }
+
+    @Test
+    fun `holdsViewport tells a grab of the you-are-here rectangle from a jump elsewhere`() {
+        val layout = ViewTransforms.minimapLayout(stateShowing(0.0, 0.0), 1000.0, 800.0)!!
+        // The view shows world (0,0)..(1000,800) at 100%.
+        assertTrue(layout.holdsViewport(Point(500.0, 400.0)))
+        assertFalse(layout.holdsViewport(Point(-100.0, 400.0)))
+        assertFalse(layout.holdsViewport(Point(500.0, 900.0)))
+    }
+
+    @Test
+    fun `minimapLayout keeps the viewport in view however far it is panned from the content`() {
+        val layout = ViewTransforms.minimapLayout(stateShowing(50_000.0, 50_000.0), 1000.0, 800.0)!!
+        val corner = layout.fit.screenX(50_000.0)
+        assertTrue("the panned-to viewport is inside the box", corner >= 0.0 && corner <= layout.width)
     }
 
     @Test
