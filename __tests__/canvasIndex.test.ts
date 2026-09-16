@@ -128,7 +128,7 @@ test.each([
   expect(notePageOf(notePath, page)).toEqual(expected);
 });
 
-test('elementSummary tells an element by its uuid, type, number, page, picture rect and user data, never its content', () => {
+test('elementSummary tells an element by its uuid, type, number, page, picture rect and path and user data, never its content', () => {
   const rect = {left: 1, top: 2, right: 3, bottom: 4};
   const element = {
     uuid: 'u',
@@ -139,7 +139,7 @@ test('elementSummary tells an element by its uuid, type, number, page, picture r
     picture: {picturePath: 'plugin/1.png', rect},
     stroke: {points: [1, 2]},
   };
-  expect(elementSummary(element)).toEqual({uuid: 'u', type: 200, num: 5, page: 2, rect, userData: 'x'});
+  expect(elementSummary(element)).toEqual({uuid: 'u', type: 200, num: 5, page: 2, rect, path: 'plugin/1.png', userData: 'x'});
   expect(JSON.stringify(elementSummary(null))).toBe('{}');
   expect(JSON.stringify(elementSummary({picture: null}))).toBe('{}');
 });

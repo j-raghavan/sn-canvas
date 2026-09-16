@@ -36,7 +36,9 @@ import {
   SHARED_CANVAS_DIR,
   canvasFilePath,
   canvasIdFromLassoedElements,
+  canvasIdFromThumbnailPath,
   imagesPath,
+  picturePathOf,
   indexPath,
   installMarkerPath,
   pdfPath,
@@ -346,20 +348,39 @@ export function createCanvasSession({
    * — it takes seconds — and only when a thumbnail of this canvas could
    * already be on the page. A canvas that has never been linked cannot have
    * one, so its save doesn't wait for the read at all.
+   *
+   * The note is saved first: getElements reads the note's file, so a thumbnail
+   * placed since the last save is not in it yet, and the page comes back
+   * looking emptier than it is (seen on device: a page with a thumbnail on it
+   * read back as having no pictures at all).
    */
   const pageAlready = async (couldHoldOne: boolean): Promise<{at: NotePage; pictures: unknown[]} | null> => {
-    const at = couldHoldOne ? await host.currentPage() : null;
+    if (!couldHoldOne) {
+      return null;
+    }
+    await host.saveNote();
+    const at = await host.currentPage();
     return at === null ? null : {at, pictures: picturesOf(await host.pageElements(at))};
   };
 
   /**
+   * Whether [picture] is the thumbnail of canvas [id]. Its tag says so once one
+   * was written (domain/canvasTag.ts), but tagging a lasso's copy doesn't take
+   * on every firmware, so the picture's own path — the thumbnail PNG it was
+   * inserted from — is read as well.
+   */
+  const showsCanvas = (picture: unknown, id: string): boolean =>
+    taggedCanvasId(picture) === id || canvasIdFromThumbnailPath(picturePathOf(picture)) === id;
+
+  /**
    * The thumbnail already in the note, redrawn: the note re-reads the PNG as it
    * takes the modified picture, so the picture keeps the place and the size the
-   * user gave it and only what it shows changes. The note is saved first, since
-   * modifying elements of the file that is open races its own writes.
+   * user gave it and only what it shows changes. The picture handed over is the
+   * note's own, as [pageAlready] read it, not a lasso's copy of one: a copy
+   * carries a number in the page that the note doesn't match, and modifying it
+   * changes nothing (seen on device as `modifyElements failed: {"result":[]}`).
    */
   const refreshThumbnail = async (picture: unknown, id: string, at: NotePage, imagePath: string): Promise<boolean> => {
-    await host.saveNote();
     const refreshed = await host.tagPicture(picture, id, at, imagePath);
     if (!refreshed) {
       logger.warn(`${TAG}[LINK] could not refresh the thumbnail for canvas=${id} on page=${at.page}`);
@@ -379,7 +400,7 @@ export function createCanvasSession({
     const canvasFile = canvasFilePath(dir, linkedId);
     const thumbnail = thumbnailPath(dir, linkedId);
     const already = await pageAlready(!fromScratch);
-    const existing = already?.pictures.find(picture => taggedCanvasId(picture) === linkedId) ?? null;
+    const existing = already?.pictures.find(picture => showsCanvas(picture, linkedId)) ?? null;
     const drawn = (await store.save(canvasFile)) && (await store.renderThumbnail(thumbnail));
     const placed =
       drawn &&
