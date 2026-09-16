@@ -251,7 +251,8 @@ describe('session', () => {
   test('Save to Note confirms an inserted thumbnail, and the notice then clears', async () => {
     jest.useFakeTimers();
     try {
-      const {press, shows} = await render();
+      const {press, shows, emitCanvasState} = await render();
+      await emitCanvasState({hasContent: true});
       await press('canvas-save-to-note');
       expect(shows('Added to note')).toBe(true);
       await act(async () => {
@@ -266,7 +267,8 @@ describe('session', () => {
   test('Save to Note shows nothing when no thumbnail was inserted', async () => {
     const session = createFakeSession();
     session.saveToNote.mockResolvedValue(false);
-    const {press, shows} = await render(session);
+    const {press, shows, emitCanvasState} = await render(session);
+    await emitCanvasState({hasContent: true});
     await press('canvas-save-to-note');
     expect(session.saveToNote).toHaveBeenCalledTimes(1);
     expect(shows('Added to note')).toBe(false);
@@ -316,7 +318,8 @@ test('New canvas in the ⋮ menu asks the session for one', async () => {
 
 describe('Export to PDF', () => {
   test('exports through the session and says where the PDF went', async () => {
-    const {session, press, shows} = await render();
+    const {session, press, shows, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
     await press('canvas-export-pdf');
     expect(session.exportPdf).toHaveBeenCalledTimes(1);
     expect(shows('Saved to EXPORT/Canvas-20260914-111507.pdf')).toBe(true);
@@ -325,9 +328,19 @@ describe('Export to PDF', () => {
   test('says so when nothing was exported', async () => {
     const session = createFakeSession();
     session.exportPdf.mockResolvedValue(null);
-    const {press, shows} = await render(session);
+    const {press, shows, emitCanvasState} = await render(session);
+    await emitCanvasState({hasContent: true});
     await press('canvas-export-pdf');
     expect(shows('Could not export the PDF')).toBe(true);
+  });
+
+  test('Export to PDF and Save to Note apply only to a canvas with something on it', async () => {
+    const {emitCanvasState, isDisabled} = await render();
+    expect([isDisabled('canvas-export-pdf'), isDisabled('canvas-save-to-note')]).toEqual([true, true]);
+    // Close is never disabled: a blank canvas still has to be closable.
+    expect(isDisabled('canvas-close')).toBeFalsy();
+    await emitCanvasState({hasContent: true});
+    expect([isDisabled('canvas-export-pdf'), isDisabled('canvas-save-to-note')]).toEqual([false, false]);
   });
 });
 

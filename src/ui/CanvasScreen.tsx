@@ -113,8 +113,21 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
       <View style={styles.header}>
         <Text style={styles.title}>Canvas</Text>
         <View style={styles.headerActions}>
-          <HeaderButton testID="canvas-export-pdf" label="Export to PDF" icon={EXPORT_PDF_ICON} onPress={exportPdf} />
-          <HeaderButton testID="canvas-save-to-note" label="Save to Note" icon={SAVE_TO_NOTE_ICON} onPress={saveToNote} />
+          {/* An empty canvas has nothing to export or to show in a note: both would produce a blank page. */}
+          <HeaderButton
+            testID="canvas-export-pdf"
+            label="Export to PDF"
+            icon={EXPORT_PDF_ICON}
+            onPress={exportPdf}
+            disabled={!ui.hasContent}
+          />
+          <HeaderButton
+            testID="canvas-save-to-note"
+            label="Save to Note"
+            icon={SAVE_TO_NOTE_ICON}
+            onPress={saveToNote}
+            disabled={!ui.hasContent}
+          />
           <HeaderButton testID="canvas-close" label="Close" icon={CLOSE_ICON} onPress={session.close} />
         </View>
       </View>
@@ -164,12 +177,12 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   );
 }
 
-type HeaderButtonProps = {testID: string; label: string; icon: ImageSourcePropType; onPress: () => void};
+type HeaderButtonProps = {testID: string; label: string; icon: ImageSourcePropType; onPress: () => void; disabled?: boolean};
 
-function HeaderButton({testID, label, icon, onPress}: HeaderButtonProps): React.JSX.Element {
+function HeaderButton({testID, label, icon, onPress, disabled = false}: HeaderButtonProps): React.JSX.Element {
   return (
-    <Pressable testID={testID} accessibilityLabel={label} style={styles.headerButton} onPress={onPress}>
-      <Image source={icon} style={styles.headerIcon} />
+    <Pressable testID={testID} accessibilityLabel={label} disabled={disabled} style={styles.headerButton} onPress={onPress}>
+      <Image source={icon} style={[styles.headerIcon, disabled && styles.disabled]} />
     </Pressable>
   );
 }
@@ -205,6 +218,9 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     tintColor: '#000000',
+  },
+  disabled: {
+    opacity: 0.3,
   },
   canvasArea: {
     flex: 1,
