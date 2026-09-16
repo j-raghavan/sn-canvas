@@ -22,6 +22,8 @@ import {
   claimPending,
   elementSummary,
   parseCanvasIndex,
+  pictureNumbersOf,
+  picturesOf,
   serializeCanvasIndex,
   withLastCanvas,
   withPending,
@@ -41,12 +43,15 @@ import {
   privateCanvasDir,
   thumbnailPath,
 } from '../domain/canvasLink';
-import {canvasIdFromTags} from '../domain/canvasTag';
+import {canvasIdFromTags, taggedCanvasId} from '../domain/canvasTag';
 import {BUTTON_ID_OPEN_LINKED} from '../domain/entryPoints';
 import type {Logger} from '../sdk/types';
 
 /** The pen the note writes with, in the SDK's codes (sn-plugin-lib's PenInfo). */
 export type NotePen = {type: number; width: number; color: number};
+
+/** What "Save to Note" did: redrew the thumbnail already on the page, added one, or neither. */
+export type SaveToNoteResult = 'refreshed' | 'inserted' | null;
 
 /** The live canvas view's persistence, by absolute path, the canvas folder's own small files, and the pen it gives back. */
 export type CanvasStorePort = {
@@ -86,8 +91,10 @@ export type HostPort = {
   insertImage: (path: string) => Promise<boolean>;
   /** The note page the user is on; null when the host can't say. */
   currentPage: () => Promise<NotePage | null>;
-  /** The numbers in the page of the pictures on page [at], in page order; empty when it can't be read. Slow: seconds, not milliseconds. */
-  pagePictureNumbers: (at: NotePage) => Promise<number[]>;
+  /** The elements on page [at], in page order; empty when it can't be read. Slow: seconds, not milliseconds. */
+  pageElements: (at: NotePage) => Promise<unknown[]>;
+  /** Saves the note that is open, before its elements are modified; false when it can't be saved. */
+  saveNote: () => Promise<boolean>;
   /**
    * Writes [canvasId] into the placed [picture]'s userData on page [at], showing
    * the PNG at [imagePath], so every later lasso of it names its canvas; true once written.
@@ -112,8 +119,13 @@ export type CanvasSession = {
   newCanvas: () => Promise<void>;
   /** Puts an image the user picks on the canvas shown (FR22), copied into the canvas folder; true once it is there. */
   insertImage: () => Promise<boolean>;
-  /** Inserts the canvas into the note as a thumbnail that links back to it; true once inserted. Taps while one runs are ignored. */
-  saveToNote: () => Promise<boolean>;
+  /**
+   * Puts the canvas into the note as a thumbnail that links back to it: a
+   * thumbnail of this canvas already on the page is redrawn where it sits
+   * ('refreshed'), otherwise a new one is added ('inserted'). Null when neither
+   * happened. Taps while one runs are ignored.
+   */
+  saveToNote: () => Promise<SaveToNoteResult>;
   /** Exports the canvas shown to a PDF in EXPORT, fitted to its content (FR11); its path, or null when none was written. */
   exportPdf: () => Promise<string | null>;
   /** Saves the canvas, then closes the plugin view whether or not the save worked. */
@@ -122,6 +134,14 @@ export type CanvasSession = {
 };
 
 const TAG = '[SNCANVAS]';
+
+/** A thumbnail just put into the note: which canvas, whether it was redrawn in place, and the page read on the way. */
+type NoteLink = {
+  dir: string;
+  linkedId: string;
+  refreshed: boolean;
+  known: {at: NotePage; pictures: unknown[]} | null;
+};
 
 export function createCanvasSession({
   store,
@@ -321,8 +341,34 @@ export function createCanvasSession({
       logger.log(`${TAG} new canvas=${canvasId}`);
     });
 
-  /** Inserts the thumbnail; the canvas it links to (and its folder), or null when it wasn't inserted. */
-  const linkIntoNote = async (): Promise<{dir: string; linkedId: string} | null> => {
+  /**
+   * The page the note is on and the pictures already there, read once per save
+   * — it takes seconds — and only when a thumbnail of this canvas could
+   * already be on the page. A canvas that has never been linked cannot have
+   * one, so its save doesn't wait for the read at all.
+   */
+  const pageAlready = async (couldHoldOne: boolean): Promise<{at: NotePage; pictures: unknown[]} | null> => {
+    const at = couldHoldOne ? await host.currentPage() : null;
+    return at === null ? null : {at, pictures: picturesOf(await host.pageElements(at))};
+  };
+
+  /**
+   * The thumbnail already in the note, redrawn: the note re-reads the PNG as it
+   * takes the modified picture, so the picture keeps the place and the size the
+   * user gave it and only what it shows changes. The note is saved first, since
+   * modifying elements of the file that is open races its own writes.
+   */
+  const refreshThumbnail = async (picture: unknown, id: string, at: NotePage, imagePath: string): Promise<boolean> => {
+    await host.saveNote();
+    const refreshed = await host.tagPicture(picture, id, at, imagePath);
+    if (!refreshed) {
+      logger.warn(`${TAG}[LINK] could not refresh the thumbnail for canvas=${id} on page=${at.page}`);
+    }
+    return refreshed;
+  };
+
+  /** Puts the thumbnail in the note; the canvas it links to (and its folder), or null when it didn't go in. */
+  const linkIntoNote = async (): Promise<NoteLink | null> => {
     const dir = await resolveCanvasDir();
     if (!dir) {
       return null;
@@ -332,9 +378,15 @@ export function createCanvasSession({
     const linkedId = fromScratch ? newCanvasId() : canvasId;
     const canvasFile = canvasFilePath(dir, linkedId);
     const thumbnail = thumbnailPath(dir, linkedId);
-    const inserted =
-      (await store.save(canvasFile)) && (await store.renderThumbnail(thumbnail)) && (await host.insertImage(thumbnail));
-    if (!inserted) {
+    const already = await pageAlready(!fromScratch);
+    const existing = already?.pictures.find(picture => taggedCanvasId(picture) === linkedId) ?? null;
+    const drawn = (await store.save(canvasFile)) && (await store.renderThumbnail(thumbnail));
+    const placed =
+      drawn &&
+      (existing !== null && already !== null
+        ? await refreshThumbnail(existing, linkedId, already.at, thumbnail)
+        : await host.insertImage(thumbnail));
+    if (!placed) {
       logger.warn(`${TAG}[LINK] save to note failed; canvas=${canvasId} unchanged`);
       if (fromScratch) {
         await store.remove(canvasFile);
@@ -348,32 +400,35 @@ export function createCanvasSession({
       await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID));
     }
     await updateIndex(dir, current => withLastCanvas(current, linkedId));
-    logger.log(`${TAG}[LINK] inserted thumbnail for canvas=${linkedId}`);
-    return {dir, linkedId};
+    logger.log(`${TAG}[LINK] ${existing === null ? 'inserted' : 'refreshed'} thumbnail for canvas=${linkedId}`);
+    // A refreshed picture is already tagged with its canvas; only a new one has to be claimed once the note places it.
+    return {dir, linkedId, refreshed: existing !== null, known: already};
   };
 
   /**
    * After an insert: a pending link that remembers the pictures on the page,
-   * so the thumbnail can be told apart once the note places it.
+   * so the thumbnail can be told apart once the note places it. It reuses the
+   * page [linkIntoNote] already read, and reads it itself only when there was
+   * nothing to reuse.
    */
-  const leavePendingLink = async (dir: string, linkedId: string): Promise<void> => {
-    const at = await host.currentPage();
+  const leavePendingLink = async (link: NoteLink): Promise<void> => {
+    const at = link.known?.at ?? (await host.currentPage());
     if (at === null) {
       logger.warn(`${TAG}[LINK] no note page; Open Canvas on this thumbnail will show the newest canvas`);
       return;
     }
-    const knownPictureNumbers = await host.pagePictureNumbers(at);
-    await updateIndex(dir, current => withPending(current, {...at, canvasId: linkedId, knownPictureNumbers}));
-    logger.log(`${TAG}[LINK] pending link for canvas=${linkedId} page=${at.page} knownPictures=${knownPictureNumbers.length}`);
+    const knownPictureNumbers = pictureNumbersOf(link.known?.pictures ?? (await host.pageElements(at)));
+    await updateIndex(link.dir, current => withPending(current, {...at, canvasId: link.linkedId, knownPictureNumbers}));
+    logger.log(`${TAG}[LINK] pending link for canvas=${link.linkedId} page=${at.page} knownPictures=${knownPictureNumbers.length}`);
   };
 
-  const saveToNote = (): Promise<boolean> => {
+  const saveToNote = (): Promise<SaveToNoteResult> => {
     if (saveToNotePending) {
       logger.log(`${TAG}[LINK] save to note already running; tap ignored`);
-      return Promise.resolve(false);
+      return Promise.resolve(null);
     }
     saveToNotePending = true;
-    let linked: {dir: string; linkedId: string} | null = null;
+    let linked: NoteLink | null = null;
     return serially(async () => {
       try {
         linked = await linkIntoNote();
@@ -382,11 +437,15 @@ export function createCanvasSession({
       }
     }).then(() => {
       const done = linked;
-      if (done !== null) {
-        // Queued, not awaited: reading the page takes seconds, and the note places the thumbnail only later anyway.
-        serially(() => leavePendingLink(done.dir, done.linkedId));
+      if (done === null) {
+        return null;
       }
-      return done !== null;
+      if (done.refreshed) {
+        return 'refreshed';
+      }
+      // Queued, not awaited: reading the page takes seconds, and the note places the thumbnail only later anyway.
+      serially(() => leavePendingLink(done));
+      return 'inserted';
     });
   };
 

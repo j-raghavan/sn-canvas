@@ -5,7 +5,7 @@
  * the double-tap guard, new canvases, and close.
  */
 import {createCanvasSession} from '../src/application/canvasSession';
-import {createFakeHost, createFakeStore, createRecordingLogger} from './helpers/fakePorts';
+import {createFakeHost, createFakeStore, createRecordingLogger, notePicture} from './helpers/fakePorts';
 
 const SCRATCH = '/plugin/Canvas/default.json';
 const INDEX = '/plugin/Canvas/links.json';
@@ -209,7 +209,7 @@ describe('where canvases live', () => {
 describe('links back to a canvas', () => {
   test('Save to Note leaves a link pending; the first Open Canvas on the thumbnail tags it, and from then on the tag alone opens it', async () => {
     const first = setup({[SCRATCH]: 'drawing'});
-    first.host.pictures = [5];
+    first.host.elements = [notePicture(5)];
     await first.session.open(null);
     await first.session.saveToNote();
     await first.session.close();
@@ -233,6 +233,59 @@ describe('links back to a canvas', () => {
     expect(again.host.tagged).toEqual([]);
   });
 
+  test('Save to Note refreshes the thumbnail of this canvas already on the page instead of adding a second', async () => {
+    const {store, host, logger, session} = setup({[canvasFile('c-1')]: 'drawing', [INDEX]: indexWith({lastCanvasId: 'c-1'})});
+    await session.open(null);
+    // The note has the thumbnail of this canvas on the page, tagged by an earlier Open Canvas.
+    const placed = notePicture(7, 'sncanvas:c-1');
+    host.elements = [notePicture(3), placed];
+    expect(await session.saveToNote()).toBe('refreshed');
+    expect(store.files.get(thumbnail('c-1'))).toBe('png:drawing');
+    // Modified where it sits, so it keeps the place and size it was given; nothing new inserted.
+    expect(host.tagged).toEqual([{canvasId: 'c-1', picture: placed, imagePath: thumbnail('c-1')}]);
+    expect(host.inserted).toEqual([]);
+    // The note is saved first, or modifying its elements races its own writes.
+    expect(host.noteSaves).toBe(1);
+    // It is already tagged with its canvas, so nothing has to wait to claim it.
+    expect(savedIndex(store).pending).toEqual([]);
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] refreshed thumbnail for canvas=c-1');
+  });
+
+  test('a thumbnail of another canvas on the page is left alone; this canvas gets its own', async () => {
+    const {host, session} = setup({[canvasFile('c-1')]: 'drawing', [INDEX]: indexWith({lastCanvasId: 'c-1'})});
+    await session.open(null);
+    host.elements = [notePicture(7, 'sncanvas:c-other')];
+    expect(await session.saveToNote()).toBe('inserted');
+    expect(host.inserted).toEqual([thumbnail('c-1')]);
+    expect(host.tagged).toEqual([]);
+  });
+
+  test('a canvas that was never linked does not wait on the page read before saving', async () => {
+    const {host, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    let reads = 0;
+    host.pageElements = async () => {
+      reads += 1;
+      return [];
+    };
+    expect(await session.saveToNote()).toBe('inserted');
+    // Nothing was read before the thumbnail went in: the save did not wait on it.
+    expect(reads).toBe(0);
+    // The page is read afterwards, for the link that waits to be claimed.
+    await session.close();
+    expect(reads).toBe(1);
+  });
+
+  test('when the thumbnail on the page cannot be refreshed, nothing is inserted in its place', async () => {
+    const {host, logger, session} = setup({[canvasFile('c-1')]: 'drawing', [INDEX]: indexWith({lastCanvasId: 'c-1'})});
+    await session.open(null);
+    host.elements = [notePicture(7, 'sncanvas:c-1')];
+    host.tagSucceeds = false;
+    expect(await session.saveToNote()).toBeNull();
+    expect(host.inserted).toEqual([]);
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not refresh the thumbnail for canvas=c-1 on page=0');
+  });
+
   test('two thumbnails saved on one page before either was opened each reopen their own canvas', async () => {
     const first = setup({[SCRATCH]: 'A'});
     await first.session.open(null);
@@ -240,7 +293,7 @@ describe('links back to a canvas', () => {
     await first.session.newCanvas();
     first.store.shown = 'B';
     // By the second save, the note has placed the first thumbnail, as picture 42.
-    first.host.pictures = [42];
+    first.host.elements = [notePicture(42)];
     await first.session.saveToNote();
     await first.session.close();
     const files = Object.fromEntries(first.store.files);
@@ -293,7 +346,7 @@ describe('links back to a canvas', () => {
     const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
     host.page = null;
     await session.open(null);
-    expect(await session.saveToNote()).toBe(true);
+    expect(await session.saveToNote()).toBe('inserted');
     await session.close();
     expect(savedIndex(store)).toEqual({lastCanvasId: 'c-1', pending: []});
     expect(logger.lines).toContain(
@@ -476,20 +529,20 @@ test('an operation that throws is logged and does not block the ones after it', 
 });
 
 describe('saveToNote result', () => {
-  test('is true once the thumbnail is inserted, false when it is not', async () => {
+  test("is 'inserted' once the thumbnail is in the note, null when it is not", async () => {
     const {host, session} = setup({[SCRATCH]: 'scratch'});
     await session.open(null);
-    expect(await session.saveToNote()).toBe(true);
+    expect(await session.saveToNote()).toBe('inserted');
     host.insertSucceeds = false;
-    expect(await session.saveToNote()).toBe(false);
+    expect(await session.saveToNote()).toBeNull();
   });
 
-  test('is false for a tap ignored while one runs, and without a plugin directory', async () => {
+  test('is null for a tap ignored while one runs, and without a plugin directory', async () => {
     const {session} = setup({[SCRATCH]: 'scratch'});
     await session.open(null);
-    expect(await Promise.all([session.saveToNote(), session.saveToNote()])).toEqual([true, false]);
+    expect(await Promise.all([session.saveToNote(), session.saveToNote()])).toEqual(['inserted', null]);
     const {session: noDirSession, host: noDirHost} = setup();
     noDirHost.dir = null;
-    expect(await noDirSession.saveToNote()).toBe(false);
+    expect(await noDirSession.saveToNote()).toBeNull();
   });
 });
