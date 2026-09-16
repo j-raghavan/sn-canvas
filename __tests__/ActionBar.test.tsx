@@ -10,9 +10,17 @@ import ActionBar from '../src/ui/ActionBar';
 const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onCommand = jest.fn();
   const onNewCanvas = jest.fn();
+  const onClearCanvas = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = ReactTestRenderer.create(<ActionBar ui={{...INITIAL_UI_STATE, ...overrides}} onCommand={onCommand} onNewCanvas={onNewCanvas} />);
+    renderer = ReactTestRenderer.create(
+      <ActionBar
+        ui={{...INITIAL_UI_STATE, ...overrides}}
+        onCommand={onCommand}
+        onNewCanvas={onNewCanvas}
+        onClearCanvas={onClearCanvas}
+      />,
+    );
   });
   const press = (testID: string) =>
     act(() => {
@@ -21,7 +29,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, press, isDisabled, isMenuOpen, isListed};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
@@ -88,23 +96,12 @@ test('Clear canvas applies only to a canvas with something on it', () => {
   expect(drawn.isDisabled('canvas-menu-clearCanvas')).toBe(false);
 });
 
-test('Clear canvas asks before it clears, and cancelling leaves the canvas alone', () => {
-  const {press, onCommand, isListed, isMenuOpen} = renderBar({hasContent: true});
+test('Clear canvas goes to the screen, which confirms it, rather than straight to the canvas', () => {
+  const {press, onCommand, onClearCanvas, isMenuOpen} = renderBar({hasContent: true});
   press('canvas-more');
   press('canvas-menu-clearCanvas');
+  expect(onClearCanvas).toHaveBeenCalledTimes(1);
   expect(onCommand).not.toHaveBeenCalled();
-  expect(isListed('canvas-menu-clearCanvas-confirm')).toBe(true);
-  press('canvas-menu-clearCanvas-cancel');
-  expect(onCommand).not.toHaveBeenCalled();
-  expect(isMenuOpen()).toBe(false);
-});
-
-test('confirming Clear canvas sends clearCanvas and closes the menu', () => {
-  const {press, onCommand, isMenuOpen} = renderBar({hasContent: true});
-  press('canvas-more');
-  press('canvas-menu-clearCanvas');
-  press('canvas-menu-clearCanvas-confirm');
-  expect(onCommand).toHaveBeenCalledWith('clearCanvas');
   expect(isMenuOpen()).toBe(false);
 });
 

@@ -5,8 +5,8 @@
 // rather than Unicode glyphs, which rendered badly in the device font. They are
 // black on transparent, so tintColor can invert the active tool.
 
-import React from 'react';
-import {Image, Pressable, StyleSheet, View, type ImageSourcePropType} from 'react-native';
+import React, {useState} from 'react';
+import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
 import type {ToolMode} from './nativeCanvasView';
 
 const TOOLS: ReadonlyArray<{id: ToolMode; label: string; icon: ImageSourcePropType}> = [
@@ -27,6 +27,7 @@ const HELP_ICON = require('../../assets/icons/tool-help.png');
 
 // The pill's measures, which HelpHints also uses to land its arrows on these buttons.
 const BOTTOM = 24;
+const OPTIONS_WIDTH = 150;
 const BUTTON = 40;
 const BUTTON_MARGIN = 2;
 const SLOT = BUTTON + 2 * BUTTON_MARGIN;
@@ -34,6 +35,7 @@ const PADDING_H = 10;
 const PADDING_V = 8;
 const BORDER = 1;
 const SEPARATOR_MARGIN = 6;
+const PILL_HEIGHT = BUTTON + 2 * (PADDING_V + BORDER);
 // Every tool, then the image and help buttons, the separator between those two, and the pill's padding and border.
 const HALF_WIDTH = ((TOOLS.length + 2) * SLOT + 1 + 2 * SEPARATOR_MARGIN + 2 * (PADDING_H + BORDER)) / 2;
 
@@ -51,13 +53,51 @@ type Props = {
   /** Whether the onboarding hints overlay is showing (CanvasScreen), so this button reflects it. */
   showHints: boolean;
   onToggleHints: () => void;
+  /** Asks to clear the canvas; the screen confirms it first. */
+  onClearCanvas: () => void;
+  /** Whether the canvas holds anything, so Clear canvas is offered. */
+  canClearCanvas: boolean;
 };
 
-export default function Toolbar({toolMode, onToolChange, onInsertImage, showHints, onToggleHints}: Props): React.JSX.Element {
+export default function Toolbar({
+  toolMode,
+  onToolChange,
+  onInsertImage,
+  showHints,
+  onToggleHints,
+  onClearCanvas,
+  canClearCanvas,
+}: Props): React.JSX.Element {
+  // Erasing a stroke and erasing the lot belong together, so the eraser, once it
+  // is the tool, opens its own options on a second tap (its caret says so).
+  const [areEraserOptionsOpen, setEraserOptionsOpen] = useState(false);
+
+  const pickTool = (tool: ToolMode) => {
+    setEraserOptionsOpen(tool === 'eraser' && toolMode === 'eraser' ? !areEraserOptionsOpen : false);
+    if (tool !== toolMode) {
+      onToolChange(tool);
+    }
+  };
+
   // box-none: the wrapper spans the width so the pill can center itself, but
   // taps beside the pill must still reach the canvas underneath.
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
+      {areEraserOptionsOpen && (
+        <View style={styles.eraserOptions}>
+          <Pressable
+            testID="canvas-eraser-clear"
+            accessibilityLabel="Clear canvas"
+            disabled={!canClearCanvas}
+            style={styles.optionItem}
+            onPress={() => {
+              setEraserOptionsOpen(false);
+              onClearCanvas();
+            }}>
+            <Text style={[styles.optionText, !canClearCanvas && styles.optionDisabled]}>Clear canvas</Text>
+          </Pressable>
+        </View>
+      )}
       <View style={styles.pill}>
         {TOOLS.map(tool => {
           const active = tool.id === toolMode;
@@ -67,12 +107,20 @@ export default function Toolbar({toolMode, onToolChange, onInsertImage, showHint
               testID={`canvas-tool-${tool.id}`}
               accessibilityLabel={tool.label}
               style={[styles.button, active && styles.buttonActive]}
-              onPress={() => onToolChange(tool.id)}>
+              onPress={() => pickTool(tool.id)}>
               <Image source={tool.icon} style={[styles.icon, active && styles.iconActive]} />
+              {tool.id === 'eraser' && <View style={[styles.caret, active && styles.caretActive]} />}
             </Pressable>
           );
         })}
-        <Pressable testID="canvas-insert-image" accessibilityLabel="Image" style={styles.button} onPress={onInsertImage}>
+        <Pressable
+          testID="canvas-insert-image"
+          accessibilityLabel="Image"
+          style={styles.button}
+          onPress={() => {
+            setEraserOptionsOpen(false);
+            onInsertImage();
+          }}>
           <Image source={IMAGE_ICON} style={styles.icon} />
         </Pressable>
         <View style={styles.separator} />
@@ -80,7 +128,10 @@ export default function Toolbar({toolMode, onToolChange, onInsertImage, showHint
           testID="canvas-help"
           accessibilityLabel="Help"
           style={[styles.button, showHints && styles.buttonActive]}
-          onPress={onToggleHints}>
+          onPress={() => {
+            setEraserOptionsOpen(false);
+            onToggleHints();
+          }}>
           <Image source={HELP_ICON} style={[styles.icon, showHints && styles.iconActive]} />
         </Pressable>
       </View>
@@ -128,6 +179,47 @@ const styles = StyleSheet.create({
   },
   buttonActive: {
     backgroundColor: '#000000',
+  },
+  // The eraser's "there is more here" caret, in its corner, pointing at where its options open.
+  caret: {
+    position: 'absolute',
+    right: 5,
+    bottom: 5,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderBottomWidth: 5,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#000000',
+  },
+  caretActive: {
+    borderBottomColor: '#ffffff',
+  },
+  // Above the pill, over the eraser it belongs to.
+  eraserOptions: {
+    position: 'absolute',
+    bottom: PILL_HEIGHT + 6,
+    left: '50%',
+    marginLeft: TOOLBAR_GEOMETRY.toolCenterX('eraser') - OPTIONS_WIDTH / 2,
+    width: OPTIONS_WIDTH,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: BORDER,
+    borderColor: '#cccccc',
+    backgroundColor: '#ffffff',
+  },
+  optionItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  optionText: {
+    fontSize: 15,
+    color: '#000000',
+  },
+  optionDisabled: {
+    opacity: 0.3,
   },
   icon: {
     width: 22,

@@ -34,6 +34,7 @@ HINTS = {
     "header": (["Export, save to note & close"], "up-right", 26, 52),
     "styles": (["Colours & styles"], "up-right", 26, 48),
     "toolbar": (["Pick a tool &", "start drawing!"], "down-right", 30, 52),
+    "eraser": (["Tap again to", "clear the canvas"], "down-left", 30, 52),
     "help": (["Show or hide", "these hints"], "down-left", 30, 52),
 }
 

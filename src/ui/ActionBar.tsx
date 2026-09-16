@@ -78,44 +78,17 @@ type Props = {
   onCommand: (command: CanvasCommand) => void;
   /** Saves the canvas shown and starts a new, empty one. */
   onNewCanvas: () => void;
+  /** Asks to clear the canvas; the screen confirms it first. */
+  onClearCanvas: () => void;
 };
 
-export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JSX.Element {
+export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas}: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
-  // Clearing cannot be undone by tapping again, so the menu asks first.
-  const [isConfirmingClear, setConfirmingClear] = useState(false);
-
-  const closeMenu = () => {
-    setMenuOpen(false);
-    setConfirmingClear(false);
-  };
 
   return (
     // box-none: taps beside the bar and menu still reach the canvas underneath.
     <View style={styles.wrapper} pointerEvents="box-none">
-      {isMenuOpen && isConfirmingClear && (
-        <View style={styles.menu}>
-          <Text style={styles.confirmText}>Clear the whole canvas?</Text>
-          <Pressable
-            testID="canvas-menu-clearCanvas-cancel"
-            accessibilityLabel="Keep the canvas"
-            style={styles.menuItem}
-            onPress={closeMenu}>
-            <Text style={styles.menuText}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            testID="canvas-menu-clearCanvas-confirm"
-            accessibilityLabel="Clear the canvas"
-            style={styles.menuItem}
-            onPress={() => {
-              closeMenu();
-              onCommand('clearCanvas');
-            }}>
-            <Text style={styles.menuText}>Clear canvas</Text>
-          </Pressable>
-        </View>
-      )}
-      {isMenuOpen && !isConfirmingClear && (
+      {isMenuOpen && (
         <View style={styles.menu}>
           {MENU.filter(item => !item.tableOnly || ui.selectedType === 'table').map(item => {
             const enabled = (!item.needsSelection || ui.hasSelection) && (!item.needsContent || ui.hasContent);
@@ -127,13 +100,11 @@ export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JS
                 disabled={!enabled}
                 style={styles.menuItem}
                 onPress={() => {
-                  if (item.action === 'clearCanvas') {
-                    setConfirmingClear(true);
-                    return;
-                  }
-                  closeMenu();
+                  setMenuOpen(false);
                   if (item.action === 'newCanvas') {
                     onNewCanvas();
+                  } else if (item.action === 'clearCanvas') {
+                    onClearCanvas();
                   } else {
                     onCommand(item.action);
                   }
@@ -163,7 +134,7 @@ export default function ActionBar({ui, onCommand, onNewCanvas}: Props): React.JS
           testID="canvas-more"
           accessibilityLabel="More actions"
           style={styles.button}
-          onPress={() => (isMenuOpen ? closeMenu() : setMenuOpen(true))}>
+          onPress={() => setMenuOpen(open => !open)}>
           <Image source={MORE_ICON} style={styles.icon} />
         </Pressable>
       </View>
@@ -218,14 +189,6 @@ const styles = StyleSheet.create({
   },
   menuText: {
     fontSize: 15,
-    color: '#000000',
-  },
-  confirmText: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-    fontSize: 15,
-    fontWeight: '600',
     color: '#000000',
   },
 });

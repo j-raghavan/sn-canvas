@@ -9,7 +9,7 @@ import {Image, StyleSheet, View, type ImageSourcePropType, type ImageStyle} from
 import {TOOLBAR_GEOMETRY} from './Toolbar';
 
 type Layout = {width: number; height: number; tipX: number; tipY: number};
-const LAYOUT: Record<'header' | 'styles' | 'toolbar' | 'help', Layout> = require('../../assets/hints/hints.json');
+const LAYOUT: Record<'header' | 'styles' | 'toolbar' | 'eraser' | 'help', Layout> = require('../../assets/hints/hints.json');
 
 // CanvasScreen's header: its 16dp padding, then Close and Save to Note (38dp each), to the middle of Export.
 const EXPORT_CENTER_RIGHT = 16 + 38 * 2 + 38 / 2;
@@ -50,6 +50,12 @@ const HINTS: ReadonlyArray<{label: string; source: ImageSourcePropType; layout: 
     source: require('../../assets/hints/hint-toolbar.png'),
     layout: LAYOUT.toolbar,
     place: tipFromBottomCenter(LAYOUT.toolbar, TOOLBAR_GEOMETRY.toolCenterX('rectangle'), TOOLBAR_GEOMETRY.top + GAP),
+  },
+  {
+    label: 'Tap again to clear the canvas',
+    source: require('../../assets/hints/hint-eraser.png'),
+    layout: LAYOUT.eraser,
+    place: tipFromBottomCenter(LAYOUT.eraser, TOOLBAR_GEOMETRY.toolCenterX('eraser'), TOOLBAR_GEOMETRY.top + GAP),
   },
   {
     label: 'Show or hide these hints',
