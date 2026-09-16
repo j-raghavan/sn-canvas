@@ -11,6 +11,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onCommand = jest.fn();
   const onNewCanvas = jest.fn();
   const onClearCanvas = jest.fn();
+  const onMenuOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
     renderer = ReactTestRenderer.create(
@@ -19,6 +20,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
         onCommand={onCommand}
         onNewCanvas={onNewCanvas}
         onClearCanvas={onClearCanvas}
+        onMenuOpen={onMenuOpen}
       />,
     );
   });
@@ -29,7 +31,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, onClearCanvas, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
@@ -51,13 +53,16 @@ test.each([
   expect(onCommand).toHaveBeenCalledWith(command);
 });
 
-test('the more button toggles the menu', () => {
-  const {press, isMenuOpen} = renderBar();
+test('the more button toggles the menu, and says so as it opens', () => {
+  const {press, isMenuOpen, onMenuOpen} = renderBar();
   expect(isMenuOpen()).toBe(false);
   press('canvas-more');
   expect(isMenuOpen()).toBe(true);
+  expect(onMenuOpen).toHaveBeenCalledTimes(1);
   press('canvas-more');
   expect(isMenuOpen()).toBe(false);
+  // Closing is not an opening: the hints are not put away twice.
+  expect(onMenuOpen).toHaveBeenCalledTimes(1);
 });
 
 test('z-order needs a selection; zoom never does', () => {

@@ -80,9 +80,11 @@ type Props = {
   onNewCanvas: () => void;
   /** Asks to clear the canvas; the screen confirms it first. */
   onClearCanvas: () => void;
+  /** The ⋮ menu is opening: the screen puts the onboarding hints away, so neither is drawn over the other. */
+  onMenuOpen: () => void;
 };
 
-export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas}: Props): React.JSX.Element {
+export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, onMenuOpen}: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -134,7 +136,12 @@ export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas}: P
           testID="canvas-more"
           accessibilityLabel="More actions"
           style={styles.button}
-          onPress={() => setMenuOpen(open => !open)}>
+          onPress={() => {
+            if (!isMenuOpen) {
+              onMenuOpen();
+            }
+            setMenuOpen(open => !open);
+          }}>
           <Image source={MORE_ICON} style={styles.icon} />
         </Pressable>
       </View>

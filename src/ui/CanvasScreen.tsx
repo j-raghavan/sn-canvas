@@ -142,7 +142,16 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           onEditText={event => setEditing(parseTextEditRequest(event.nativeEvent))}
           onCanvasTouch={() => setShowHints(false)}
         />
-        {/* Under the controls, so an opened style panel or menu covers the hints rather than the reverse. */}
+        <ActionBar
+          ui={ui}
+          onCommand={runCommand}
+          onNewCanvas={session.newCanvas}
+          onClearCanvas={() => setConfirmingClear(true)}
+          onMenuOpen={() => setShowHints(false)}
+        />
+        {/* Over the action bar, which is always there and sits across the middle tools: the eraser's hint has to
+            cross it to reach the eraser, and only its arrow does. Still under the style panel and the toolbar,
+            and the ⋮ menu dismisses the hints as it opens, so nothing a tap opens is ever drawn over. */}
         {showHints && <HelpHints />}
         <StylePanel
           style={ui.style}
@@ -150,7 +159,6 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           swatch={color => swatchColor(color, einkGrays)}
           onChange={(property, value) => runCommand('setStyle', [property, value])}
         />
-        <ActionBar ui={ui} onCommand={runCommand} onNewCanvas={session.newCanvas} onClearCanvas={() => setConfirmingClear(true)} />
         <Toolbar
           toolMode={toolMode}
           onToolChange={changeTool}
