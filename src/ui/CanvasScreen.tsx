@@ -57,20 +57,23 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   const [editing, setEditing] = useState<TextEditRequest | null>(null);
   // The onboarding hints (HelpHints): on by default each time the plugin opens, off once the canvas is
   // touched (pen or finger) or a toolbar action is taken; the (?) button in Toolbar's dock brings them back.
-  const [showHints, setShowHints] = useState(true);
+  const [showHints, setShowHints] = useState(false);
   // Clearing takes everything at once, so both ways in (the eraser's options, the ⋮ menu) ask here first.
   const [isConfirmingClear, setConfirmingClear] = useState(false);
   const canvasRef = useRef<CanvasViewRef>(null);
+  // Set while an open is in flight; the canvas state that follows it says whether the canvas came up empty.
+  const isOpening = useRef(false);
 
-  // The plugin runtime stays warm between opens, so this screen can stay
-  // mounted across them: every press re-resolves which canvas to show, and the hints show again too.
+  // The plugin runtime stays warm between opens, so this screen can stay mounted across them: every press
+  // re-resolves which canvas to show. The hints come up with an empty canvas, which has nothing to hide behind
+  // them and nothing yet to do, and stay away from one with work on it; the (?) button brings them back.
   useEffect(() => {
-    setShowHints(true);
-    session.open(buttonEvents.lastButtonId());
-    return buttonEvents.onButton(buttonId => {
-      setShowHints(true);
+    const openCanvas = (buttonId: number | null) => {
+      isOpening.current = true;
       session.open(buttonId);
-    });
+    };
+    openCanvas(buttonEvents.lastButtonId());
+    return buttonEvents.onButton(openCanvas);
   }, [session, buttonEvents]);
 
   useEffect(() => {
@@ -140,7 +143,14 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           ref={canvasRef}
           style={StyleSheet.absoluteFill}
           toolMode={toolMode}
-          onCanvasState={event => setUi(parseUiState(event.nativeEvent))}
+          onCanvasState={event => {
+            const next = parseUiState(event.nativeEvent);
+            setUi(next);
+            if (isOpening.current) {
+              isOpening.current = false;
+              setShowHints(!next.hasContent);
+            }
+          }}
           onEditText={event => setEditing(parseTextEditRequest(event.nativeEvent))}
           onCanvasTouch={() => setShowHints(false)}
         />

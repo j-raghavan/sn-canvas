@@ -167,6 +167,8 @@ class CanvasView(
     /** Replaces the canvas content (after `loadCanvas`), restarts the undo history from it, and frames it (FR13). */
     fun setElements(elements: List<Element>) {
         controller.load(elements)
+        // Said again even when it reads the same as the last canvas, so the screen always hears what a load left it with.
+        controller.republish()
         fitToContent()
     }
 
@@ -187,6 +189,17 @@ class CanvasView(
     fun zoomTo100() {
         val center = toWorld(width / 2f, height / 2f)
         controller.setViewport(CanvasCore.zoomTo(controller.state, 1.0 / controller.state.zoom, center.x, center.y).transform)
+    }
+
+    /** Groups what is selected (FR7); logged, since nothing else says what the command found to group. */
+    fun groupSelected() {
+        Log.d(LOG_TAG, "group selected=${controller.selectedIds.size}")
+        controller.groupSelected()
+    }
+
+    fun ungroupSelected() {
+        Log.d(LOG_TAG, "ungroup selected=${controller.selectedIds.size}")
+        controller.ungroupSelected()
     }
 
     /** Duplicates the selected element a little down and to the right (FR18). */

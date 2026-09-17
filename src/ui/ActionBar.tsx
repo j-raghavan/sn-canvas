@@ -44,6 +44,21 @@ const ACTIONS: readonly Action[] = [
     icon: require('../../assets/icons/action-duplicate.png'),
     enabled: ui => ui.hasSelection,
   },
+  // Grouping acts on the selection, like delete and duplicate, so it belongs beside them rather than in the ⋮ menu.
+  {
+    command: 'group',
+    testID: 'canvas-group',
+    label: 'Group',
+    icon: require('../../assets/icons/action-group.png'),
+    enabled: ui => ui.selectionCount > 1,
+  },
+  {
+    command: 'ungroup',
+    testID: 'canvas-ungroup',
+    label: 'Ungroup',
+    icon: require('../../assets/icons/action-ungroup.png'),
+    enabled: ui => ui.canUngroup,
+  },
 ];
 
 type MenuItem = {
@@ -54,8 +69,6 @@ type MenuItem = {
   needsSelection?: boolean;
   /** Greyed out on an empty canvas. */
   needsContent?: boolean;
-  /** Listed only while the canvas says the action applies. */
-  applies?: (ui: CanvasUiState) => boolean;
   /** Listed only while a table is selected (FR24). */
   tableOnly?: boolean;
 };
@@ -67,8 +80,6 @@ const MENU: readonly MenuItem[] = [
   {action: 'tableAddColumn', label: 'Add column', tableOnly: true},
   {action: 'tableRemoveRow', label: 'Remove last row', tableOnly: true},
   {action: 'tableRemoveColumn', label: 'Remove last column', tableOnly: true},
-  {action: 'group', label: 'Group', applies: ui => ui.selectionCount > 1},
-  {action: 'ungroup', label: 'Ungroup', applies: ui => ui.canUngroup},
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},
@@ -96,7 +107,7 @@ export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, on
     <View style={styles.wrapper} pointerEvents="box-none">
       {isMenuOpen && (
         <View style={styles.menu}>
-          {MENU.filter(item => (!item.tableOnly || ui.selectedType === 'table') && (item.applies?.(ui) ?? true)).map(item => {
+          {MENU.filter(item => !item.tableOnly || ui.selectedType === 'table').map(item => {
             const enabled = (!item.needsSelection || ui.hasSelection) && (!item.needsContent || ui.hasContent);
             return (
               <Pressable

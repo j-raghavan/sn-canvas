@@ -19,7 +19,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 ### An infinite canvas inside your notes
 - **Endless space.** Pinch with two fingers to zoom (5% to 2000%), drag with the hand tool to pan. A minimap shows where you are while you move; drag its rectangle, or tap anywhere on it, to travel across the canvas (with a finger while a drawing tool is in hand, so the pen keeps drawing).
 - **Palm rejection.** With a drawing tool, only the pen draws, just like Supernote's own notes. A hand resting on the screen never leaves a mark.
-- **First-run hints.** Every time Canvas opens, hand-drawn hints point at each control. Touch the canvas or pick a tool to dismiss them; tap **?** to bring them back.
+- **Hints when you need them.** Open an empty canvas and hand-drawn hints point at each control. Touch the canvas or pick a tool to dismiss them, and a canvas with work on it opens without them, so they never cover your drawing. Clear a canvas and they are there again next time; **?** brings them back whenever you want.
 
 ### Drawing and building blocks
 - **Pencil** with pen pressure, inked by Supernote's own pen engine, so it keeps up with your writing like native notes.
@@ -32,7 +32,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 ### Editing
 - Select, move, resize and rotate anything. Undo and redo, delete, duplicate.
 - **Select several at once:** with the hand tool, drag a rectangle over them with the pen. Everything it touches is selected, and dragging any of them moves the lot. Delete, duplicate, z-order and styles all apply to the whole selection; resizing and rotating stay one item at a time.
-- **Group them:** with several selected, **Group** in the ⋮ menu makes them one. Tapping any member selects the whole group, and it moves, copies and deletes as one until you **Ungroup** it.
+- **Group them:** with several selected, **Group** in the action bar makes them one. Tapping any member selects the whole group, and it moves, copies and deletes as one until you **Ungroup** it.
 - From the **⋮** menu: bring to front or send to back, zoom to fit or to 100%, table rows and columns, **Clear canvas** (also under the eraser) and **New canvas**.
 - **Style panel:** 12 colours, opacity, fill (none, semi, solid, hatched), outline (hand-drawn, dashed, dotted, solid; images can also have none) and four sizes (S, M, L, XL). Picking a style changes the selected item and becomes the default for new ones.
 - On screen, colours are drawn as distinct e-ink grays; the note thumbnail and the PDF keep the true colours.
