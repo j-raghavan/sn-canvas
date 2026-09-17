@@ -39,11 +39,24 @@ test("tldraw's 12 colours, with tldraw's defaults, matching the shared style-cat
 
 test('parseUiState reads a well-formed event body', () => {
   const style = {color: 'light-green', opacity: 0.25, fill: 'pattern', dash: 'dashed', size: 'xl'};
-  expect(parseUiState({canUndo: true, canRedo: true, hasSelection: true, hasContent: true, selectedType: 'table', style})).toEqual({
+  expect(
+    parseUiState({
+      canUndo: true,
+      canRedo: true,
+      hasSelection: true,
+      hasContent: true,
+      selectionCount: 3,
+      canUngroup: true,
+      selectedType: 'table',
+      style,
+    }),
+  ).toEqual({
     canUndo: true,
     canRedo: true,
     hasSelection: true,
     hasContent: true,
+    selectionCount: 3,
+    canUngroup: true,
     selectedType: 'table',
     style,
   });

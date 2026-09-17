@@ -20,6 +20,56 @@ class CanvasCoreTest {
     }
 
     @Test
+    fun `moveElements moves every selected element, a connector by its free endpoints`() {
+        val arrow =
+            Element(id = "arr", type = "arrow", startX = 0.0, startY = 0.0, endX = 50.0, endY = 50.0)
+        val state = baseState.copy(elements = baseState.elements + arrow)
+        val moved = CanvasCore.moveElements(state, setOf("a", "arr"), dx = 5.0, dy = -2.0)
+        val elements = moved.elements.associateBy { it.id }
+        assertEquals(5.0, elements.getValue("a").x, 1e-9)
+        assertEquals(-2.0, elements.getValue("a").y, 1e-9)
+        assertEquals(5.0, elements.getValue("arr").startX!!, 1e-9)
+        assertEquals(55.0, elements.getValue("arr").endX!!, 1e-9)
+        // Not selected, so untouched.
+        assertEquals(5.0, elements.getValue("b").x, 1e-9)
+    }
+
+    @Test
+    fun `moveElements leaves an endpoint bound to an element that is moving too, which carries it`() {
+        val arrow =
+            Element(id = "arr", type = "arrow", startX = 0.0, startY = 0.0, endX = 5.0, endY = 5.0, endElementId = "b")
+        val state = baseState.copy(elements = baseState.elements + arrow)
+        val moved = CanvasCore.moveElements(state, setOf("b", "arr"), dx = 10.0, dy = 0.0)
+        val shifted = moved.elements.single { it.id == "arr" }
+        // The free start shifts; the bound end does not, or it would travel twice with the shape it follows.
+        assertEquals(10.0, shifted.startX!!, 1e-9)
+        assertEquals(5.0, shifted.endX!!, 1e-9)
+    }
+
+    @Test
+    fun `elementsIn takes everything the rectangle touches, whole or in part`() {
+        val inside = WorldRect(left = -1.0, top = -1.0, right = 20.0, bottom = 20.0)
+        assertEquals(listOf("a", "b"), CanvasCore.elementsIn(inside, baseState.elements).map { it.id })
+        // Touching a corner is enough.
+        val corner = WorldRect(left = 10.0, top = 10.0, right = 12.0, bottom = 12.0)
+        assertEquals(listOf("a", "b"), CanvasCore.elementsIn(corner, baseState.elements).map { it.id })
+        val away = WorldRect(left = 500.0, top = 500.0, right = 600.0, bottom = 600.0)
+        assertEquals(emptyList<String>(), CanvasCore.elementsIn(away, baseState.elements).map { it.id })
+    }
+
+    @Test
+    fun `elementsIn judges a bound connector where it is drawn, not where it was stored`() {
+        val arrow =
+            Element(id = "arr", type = "arrow", startX = 0.0, startY = 0.0, endX = 1.0, endY = 1.0, endElementId = "b")
+        // Past the stored (1,1) end, but on the way to the shape the end is bound to.
+        val pastTheStoredEnd = WorldRect(left = 3.0, top = 3.0, right = 6.0, bottom = 6.0)
+        assertEquals(true, CanvasCore.elementsIn(pastTheStoredEnd, baseState.elements + arrow).any { it.id == "arr" })
+        // The same arrow unbound reaches only as far as it was stored, so the rectangle misses it.
+        val unbound = arrow.copy(endElementId = null)
+        assertEquals(emptyList<String>(), CanvasCore.elementsIn(pastTheStoredEnd, listOf(unbound)).map { it.id })
+    }
+
+    @Test
     fun `panBy shifts viewport opposite the pan delta`() {
         val panned = CanvasCore.panBy(baseState, dx = 5.0, dy = -3.0)
         assertEquals(-5.0, panned.viewportX, 0.0001)

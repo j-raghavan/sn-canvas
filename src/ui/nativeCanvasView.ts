@@ -39,7 +39,9 @@ export type CanvasCommand =
   | 'tableAddColumn'
   | 'tableRemoveRow'
   | 'tableRemoveColumn'
-  | 'clearCanvas';
+  | 'clearCanvas'
+  | 'group'
+  | 'ungroup';
 
 type NativeProps = ViewProps & {
   toolMode: ToolMode;

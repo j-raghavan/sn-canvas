@@ -31,6 +31,8 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 
 ### Editing
 - Select, move, resize and rotate anything. Undo and redo, delete, duplicate.
+- **Select several at once:** with the hand tool, drag a rectangle over them with the pen. Everything it touches is selected, and dragging any of them moves the lot. Delete, duplicate, z-order and styles all apply to the whole selection; resizing and rotating stay one item at a time.
+- **Group them:** with several selected, **Group** in the ⋮ menu makes them one. Tapping any member selects the whole group, and it moves, copies and deletes as one until you **Ungroup** it.
 - From the **⋮** menu: bring to front or send to back, zoom to fit or to 100%, table rows and columns, **Clear canvas** (also under the eraser) and **New canvas**.
 - **Style panel:** 12 colours, opacity, fill (none, semi, solid, hatched), outline (hand-drawn, dashed, dotted, solid; images can also have none) and four sizes (S, M, L, XL). Picking a style changes the selected item and becomes the default for new ones.
 - On screen, colours are drawn as distinct e-ink grays; the note thumbnail and the PDF keep the true colours.
@@ -80,7 +82,8 @@ The first time Canvas opens it asks for file access, once:
 | Gesture | What it does |
 |---|---|
 | Pen, with a drawing tool | Draws; your palm and fingers are ignored |
-| Finger or pen, with the hand tool | Selects, moves and resizes items; drag on empty space to pan |
+| Finger, with the hand tool | Selects and moves items; drag on empty space to pan |
+| Pen, with the hand tool | The same, but a drag on empty space pulls out a selection rectangle |
 | Two fingers | Pinch to zoom |
 | The pen's eraser end | Erases, whichever tool is selected |
 | Tap selected text, a note or a table cell | Opens the keyboard to edit it |
@@ -96,7 +99,6 @@ The first time Canvas opens it asks for file access, once:
 
 ## Tips and known limitations
 
-- **One item at a time.** Selection works on a single item; multi-select is not supported yet.
 - **Typed text only.** Text boxes, sticky notes and table cells use the on-screen keyboard. Supernote's handwriting recognition only reads the note's own ink, not strokes drawn inside a canvas.
 - **Light colours look pale on screen.** Each colour gets its own gray so they stay distinguishable on e-ink, which makes yellow and the light colours quite light. The PDF and the note thumbnail use true colour.
 - **Some e-ink ghosting while panning.** A faint trace of the previous frame can linger until the screen refreshes.

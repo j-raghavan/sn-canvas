@@ -92,6 +92,24 @@ test('row and column actions are listed only while a table is selected', () => {
   expect(table.onCommand).toHaveBeenCalledWith('tableAddColumn');
 });
 
+test('Group is listed only with several selected, and Ungroup only when the canvas says so', () => {
+  const one = renderBar({hasSelection: true, selectionCount: 1});
+  one.press('canvas-more');
+  expect([one.isListed('canvas-menu-group'), one.isListed('canvas-menu-ungroup')]).toEqual([false, false]);
+
+  const several = renderBar({hasSelection: true, selectionCount: 3});
+  several.press('canvas-more');
+  expect([several.isListed('canvas-menu-group'), several.isListed('canvas-menu-ungroup')]).toEqual([true, false]);
+  several.press('canvas-menu-group');
+  expect(several.onCommand).toHaveBeenCalledWith('group');
+
+  const grouped = renderBar({hasSelection: true, selectionCount: 2, canUngroup: true});
+  grouped.press('canvas-more');
+  expect(grouped.isListed('canvas-menu-ungroup')).toBe(true);
+  grouped.press('canvas-menu-ungroup');
+  expect(grouped.onCommand).toHaveBeenCalledWith('ungroup');
+});
+
 test('Clear canvas applies only to a canvas with something on it', () => {
   const empty = renderBar();
   empty.press('canvas-more');

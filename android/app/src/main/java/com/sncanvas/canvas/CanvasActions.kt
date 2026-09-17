@@ -54,6 +54,47 @@ object CanvasActions {
         return state.copy(elements = state.elements + copy)
     }
 
+    /**
+     * Every element in [ids] made one group under [groupId] (FR7), so they are
+     * selected and moved together from now on. An element already in a group
+     * joins this one, and so does the rest of its old group: groups do not nest,
+     * and leaving half a group behind would break the half that stayed.
+     */
+    fun group(
+        state: CanvasState,
+        ids: Set<String>,
+        groupId: String,
+    ): CanvasState {
+        val joining = ids + groupsOf(state, ids)
+        return state.copy(elements = state.elements.map { if (it.id in joining) it.copy(groupId = groupId) else it })
+    }
+
+    /** Every element in [ids], and the rest of any group they belong to, left on its own again. */
+    fun ungroup(
+        state: CanvasState,
+        ids: Set<String>,
+    ): CanvasState {
+        val leaving = ids + groupsOf(state, ids)
+        return state.copy(elements = state.elements.map { if (it.id in leaving) it.copy(groupId = null) else it })
+    }
+
+    /** Every element sharing a group with one of [ids]; empty when none of them is in a group. */
+    fun groupsOf(
+        state: CanvasState,
+        ids: Set<String>,
+    ): Set<String> {
+        val groups =
+            state.elements
+                .filter { it.id in ids }
+                .mapNotNull { it.groupId }
+                .toSet()
+        if (groups.isEmpty()) return emptySet()
+        return state.elements
+            .filter { it.groupId in groups }
+            .map { it.id }
+            .toSet()
+    }
+
     /** Element [id] with [style]. */
     fun restyle(
         state: CanvasState,

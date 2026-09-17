@@ -8,7 +8,7 @@ import org.junit.Test
 /** The select tool's drags (FR7/FR9/FR24): what a touch on the selected element starts, and the edit each drag makes. */
 class SelectGesturesTest {
     private val controller = CanvasController(fakeMeasurer, { "new" }, silentListener)
-    private val gestures = SelectGestures({ controller.state }, { controller.selected }, controller::fitted, fakeMeasurer)
+    private val gestures = SelectGestures({ controller.state }, { controller.selectedElements }, controller::fitted, fakeMeasurer)
     private val box = Element(id = "box", type = "rectangle", width = 100.0, height = 100.0)
     private val line = Element(id = "line", type = "line", startX = 300.0, startY = 0.0, endX = 400.0, endY = 0.0)
 
@@ -19,6 +19,24 @@ class SelectGesturesTest {
         controller.load(listOf(box, line, table))
         controller.select(id)
         return gestures
+    }
+
+    private fun selectingAll(ids: Set<String>): SelectGestures {
+        controller.load(listOf(box, line, table))
+        controller.selectAll(ids)
+        return gestures
+    }
+
+    @Test
+    fun `with several selected, a touch on any of them drags the lot`() {
+        val gestures = selectingAll(setOf("box", "tb"))
+        assertEquals(CanvasGesture.Move(), gestures.startAt(Point(50.0, 50.0), 10.0))
+        assertEquals(CanvasGesture.Move(), gestures.startAt(Point(10.0, 520.0), 10.0))
+    }
+
+    @Test
+    fun `with several selected, a touch away from them all grabs nothing`() {
+        assertEquals(CanvasGesture.Pan, selectingAll(setOf("box", "tb")).startAt(Point(900.0, 900.0), 10.0))
     }
 
     private fun startAt(

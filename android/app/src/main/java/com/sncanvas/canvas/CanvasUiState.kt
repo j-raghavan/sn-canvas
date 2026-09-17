@@ -16,6 +16,10 @@ data class CanvasUiState(
     val selectedType: String? = null,
     /** Whether the canvas holds anything at all; Clear canvas applies only then. */
     val hasContent: Boolean = false,
+    /** How many elements are selected; several at once rule out resizing, rotating and editing text. */
+    val selectionCount: Int = 0,
+    /** Whether anything selected belongs to a group, so Ungroup applies. */
+    val canUngroup: Boolean = false,
 ) {
     fun toPayload(): Map<String, Any> =
         mapOf(
@@ -23,6 +27,8 @@ data class CanvasUiState(
             "canRedo" to canRedo,
             "hasSelection" to hasSelection,
             "hasContent" to hasContent,
+            "selectionCount" to selectionCount,
+            "canUngroup" to canUngroup,
             "selectedType" to selectedType.orEmpty(),
             "style" to
                 mapOf(

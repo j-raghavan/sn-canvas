@@ -12,16 +12,22 @@ package com.sncanvas.canvas
  */
 internal class SelectGestures(
     private val state: () -> CanvasState,
-    private val selected: () -> Element?,
+    private val selection: () -> List<Element>,
     private val fitted: (CanvasState, String) -> CanvasState,
     private val measurer: TextMeasurer,
 ) {
-    /** The drag a select-tool touch at [world] starts; [tolerance] is the handles' reach in world units. */
+    /**
+     * The drag a select-tool touch at [world] starts; [tolerance] is the
+     * handles' reach in world units. Handles belong to a single selected
+     * element: with several selected a touch on any of them drags the lot, and
+     * a touch away from them all grabs nothing.
+     */
     fun startAt(
         world: Point,
         tolerance: Double,
     ): CanvasGesture {
-        val element = selected() ?: return CanvasGesture.Pan
+        val selected = selection()
+        val element = selected.singleOrNull() ?: return dragSelectionAt(selected, world)
         return when (val handle = CanvasCore.handleAt(state(), element.id, world.x, world.y, tolerance)) {
             is HandleTarget.CornerHandle -> CanvasGesture.Resize(handle.corner)
             is HandleTarget.EndpointHandle -> CanvasGesture.DragEndpoint(handle.which)
@@ -52,6 +58,17 @@ internal class SelectGestures(
             else -> null
         }
     }
+
+    /**
+     * With several selected (or none): a touch on any of them drags the lot,
+     * and a touch away from them all grabs nothing, leaving the canvas to pan
+     * or a selection to be dragged out.
+     */
+    private fun dragSelectionAt(
+        selected: List<Element>,
+        world: Point,
+    ): CanvasGesture =
+        if (selected.any { CanvasCore.hitTest(world.x, world.y, listOf(it)) != null }) CanvasGesture.Move() else CanvasGesture.Pan
 
     /** On the selected element itself: a table's row edge, its body (a connector's body pans), or neither. */
     private fun bodyGestureAt(
