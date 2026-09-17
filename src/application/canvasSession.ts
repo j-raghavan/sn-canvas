@@ -128,6 +128,12 @@ export type CanvasSession = {
    * happened. Taps while one runs are ignored.
    */
   saveToNote: () => Promise<SaveToNoteResult>;
+  /**
+   * Whether the open that just finished was the first since Canvas was
+   * installed: when the onboarding hints are worth showing. False for every
+   * open after it, so reopening a canvas does not bring them back.
+   */
+  isFirstOpen: () => boolean;
   /** Exports the canvas shown to a PDF in EXPORT, fitted to its content (FR11); its path, or null when none was written. */
   exportPdf: () => Promise<string | null>;
   /** Saves the canvas, then closes the plugin view whether or not the save worked. */
@@ -158,6 +164,7 @@ export function createCanvasSession({
   let canvasDir: string | null = null;
   let pluginDirPath: string | null = null;
   let checkedInstall = false;
+  let firstOpen = false;
   let index: CanvasIndex | null = null;
   // Each operation starts after the previous one settles, so a button press
   // can never switch canvases halfway through a save.
@@ -286,6 +293,7 @@ export function createCanvasSession({
    */
   const targetFor = async (dir: string, buttonId: number | null): Promise<string> => {
     const firstSinceInstall = await isFirstOpenSinceInstall();
+    firstOpen = firstSinceInstall;
     if (buttonId === BUTTON_ID_OPEN_LINKED) {
       return linkedCanvasId(dir);
     }
@@ -324,6 +332,7 @@ export function createCanvasSession({
 
   const open = (buttonId: number | null): Promise<void> =>
     serially(async () => {
+      firstOpen = false;
       await rememberNotePen();
       const dir = await resolveCanvasDir();
       if (!dir) {
@@ -520,5 +529,14 @@ export function createCanvasSession({
       host.closeView();
     });
 
-  return {open, newCanvas, saveToNote, insertImage, exportPdf, close, currentCanvasId: () => canvasId};
+  return {
+    open,
+    newCanvas,
+    saveToNote,
+    insertImage,
+    exportPdf,
+    close,
+    isFirstOpen: () => firstOpen,
+    currentCanvasId: () => canvasId,
+  };
 }

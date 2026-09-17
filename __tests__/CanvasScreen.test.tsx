@@ -44,6 +44,8 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   insertImage: jest.fn().mockResolvedValue(true),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
   close: jest.fn().mockResolvedValue(undefined),
+  // The onboarding hints show on the first open since an install; most tests are that open.
+  isFirstOpen: jest.fn(() => true),
   currentCanvasId: jest.fn(() => 'default'),
 });
 
@@ -117,7 +119,7 @@ describe('help hints', () => {
     'Show or hide these hints',
   ];
 
-  test('show by default, one for each control, and the help button reflects that', async () => {
+  test('show on the first open since an install, one for each control, and the help button reflects that', async () => {
     const {has, labelled, isPressed} = await render();
     expect(has('canvas-hints')).toBe(true);
     expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true, true]);
@@ -156,12 +158,23 @@ describe('help hints', () => {
     expect(isPressed('canvas-help')).toBe(false);
   });
 
-  test('a later open (a lasso-toolbar press) shows them again', async () => {
-    const {press, has, buttons} = await render();
+  test('a later open does not bring them back: they are read once, not on every reopen', async () => {
+    const session = createFakeSession();
+    const {press, has, buttons} = await render(session);
+    expect(has('canvas-hints')).toBe(true);
     await press('canvas-tool-rectangle');
     expect(has('canvas-hints')).toBe(false);
+    // Reopening from the note, with the install behind us.
+    session.isFirstOpen.mockReturnValue(false);
     await act(async () => buttons.press(500));
-    expect(has('canvas-hints')).toBe(true);
+    expect(has('canvas-hints')).toBe(false);
+  });
+
+  test('an open that is not the first since an install shows none at all', async () => {
+    const session = createFakeSession();
+    session.isFirstOpen.mockReturnValue(false);
+    const {has} = await render(session);
+    expect(has('canvas-hints')).toBe(false);
   });
 });
 
