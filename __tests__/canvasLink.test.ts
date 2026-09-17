@@ -15,6 +15,7 @@ import {
   installMarkerPath,
   isCanvasId,
   mintCanvasId,
+  parseElementLink,
   picturePathOf,
   privateCanvasDir,
   thumbnailPath,
@@ -89,6 +90,18 @@ describe('canvasIdFromLassoedElements', () => {
 test('a PDF export goes to EXPORT, named for its local date and time', () => {
   expect(EXPORT_DIR).toBe('/storage/emulated/0/EXPORT');
   expect(pdfPath(new Date(2026, 0, 5, 9, 4, 3))).toBe('/storage/emulated/0/EXPORT/Canvas-20260105-090403.pdf');
+});
+
+test('parseElementLink takes a link this build can follow, and nothing else', () => {
+  expect(parseElementLink({kind: 'note', target: '/n.note', page: 3})).toEqual({kind: 'note', target: '/n.note', page: 3});
+  // No page, or one that is not a whole number: the note opens where it was last left.
+  expect(parseElementLink({kind: 'note', target: '/n.note'})).toEqual({kind: 'note', target: '/n.note', page: -1});
+  expect(parseElementLink({kind: 'note', target: '/n.note', page: 1.5})).toEqual({kind: 'note', target: '/n.note', page: -1});
+  // A kind this build does not follow, no target, or nothing at all.
+  expect(parseElementLink({kind: 'canvas', target: 'c-1'})).toBeNull();
+  expect(parseElementLink({kind: 'note', target: ''})).toBeNull();
+  expect(parseElementLink({kind: 'note'})).toBeNull();
+  expect(parseElementLink(null)).toBeNull();
 });
 
 test('picturePathOf reads Element.picture.picturePath and tolerates anything else', () => {

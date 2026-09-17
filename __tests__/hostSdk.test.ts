@@ -13,6 +13,7 @@ const mockModifyElements = jest.fn();
 const mockGetPenInfo = jest.fn();
 const mockSelectImage = jest.fn();
 const mockSaveCurrentNote = jest.fn();
+const mockOpenFile = jest.fn();
 
 jest.mock('sn-plugin-lib', () => ({
   PluginManager: {
@@ -28,6 +29,7 @@ jest.mock('sn-plugin-lib', () => ({
   PluginNoteAPI: {insertImage: (path: string) => mockInsertImage(path), saveCurrentNote: () => mockSaveCurrentNote()},
   RattaFileSelector: {selectFile: (params: unknown) => mockSelectImage(params)},
   PluginFileAPI: {
+    openFile: (path: string, page: number) => mockOpenFile(path, page),
     getElements: (page: number, notePath: string) => mockGetElements(page, notePath),
     modifyElements: (notePath: string, page: number, elements: unknown[]) => mockModifyElements(notePath, page, elements),
   },
@@ -123,6 +125,31 @@ test('saveNote saves the note that is open, and is false when the host refuses o
   expect(await host.saveNote()).toBe(false);
   mockSaveCurrentNote.mockImplementationOnce(failure);
   expect(await host.saveNote()).toBe(false);
+});
+
+test('pickNote asks the picker for one note, and is null when the user cancels or it throws', async () => {
+  const host = createHostSdk(createRecordingLogger(), requestAccess);
+  mockSelectImage.mockResolvedValueOnce(['/storage/emulated/0/Note/plan.note']);
+  expect(await host.pickNote()).toBe('/storage/emulated/0/Note/plan.note');
+  expect(mockSelectImage).toHaveBeenCalledWith({selectType: 1, suffixList: ['note'], maxNum: 1, title: 'Link to a note'});
+  mockSelectImage.mockResolvedValueOnce([]);
+  expect(await host.pickNote()).toBeNull();
+  // The picker answering with something that is not a list of paths at all.
+  mockSelectImage.mockResolvedValueOnce(null);
+  expect(await host.pickNote()).toBeNull();
+  mockSelectImage.mockImplementationOnce(failure);
+  expect(await host.pickNote()).toBeNull();
+});
+
+test('openNote opens the note at the page it is given, and is false when the host refuses or throws', async () => {
+  const host = createHostSdk(createRecordingLogger(), requestAccess);
+  mockOpenFile.mockResolvedValueOnce({success: true, result: true});
+  expect(await host.openNote('/n.note', -1)).toBe(true);
+  expect(mockOpenFile).toHaveBeenCalledWith('/n.note', -1);
+  mockOpenFile.mockResolvedValueOnce({success: false, error: {code: 404, message: 'gone'}});
+  expect(await host.openNote('/n.note', 2)).toBe(false);
+  mockOpenFile.mockImplementationOnce(failure);
+  expect(await host.openNote('/n.note', 2)).toBe(false);
 });
 
 test('tagPicture writes the canvas into the picture as the lasso gave it, on its page, and is true once the note modified it', async () => {

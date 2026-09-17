@@ -97,6 +97,19 @@ export function canvasIdFromThumbnailPath(path: unknown): string | null {
   return match && isCanvasId(match[1]) ? match[1] : null;
 }
 
+/**
+ * The follow-link event body (FR7), validated at the bridge: a link this build
+ * knows, with a target, or null. The canvas only ever sends links it stored,
+ * but the bridge is a boundary and anything crossing it is checked.
+ */
+export function parseElementLink(payload: unknown): {kind: 'note'; target: string; page: number} | null {
+  const body = (payload ?? {}) as {kind?: unknown; target?: unknown; page?: unknown};
+  if (body.kind !== 'note' || typeof body.target !== 'string' || body.target === '') {
+    return null;
+  }
+  return {kind: 'note', target: body.target, page: Number.isInteger(body.page) ? (body.page as number) : -1};
+}
+
 /** A lassoed note element's picture path (sn-plugin-lib `Element.picture.picturePath`), if it has one. */
 export function picturePathOf(element: unknown): unknown {
   return (element as {picture?: {picturePath?: unknown} | null} | null)?.picture?.picturePath;

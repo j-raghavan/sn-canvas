@@ -89,6 +89,14 @@ internal class CanvasRenderer(
             isAntiAlias = true
         }
 
+    private val linkGlyphPaint =
+        Paint().apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            color = Color.WHITE
+            isAntiAlias = true
+        }
+
     private val rotateStemPaint =
         Paint().apply {
             style = Paint.Style.STROKE
@@ -164,6 +172,39 @@ internal class CanvasRenderer(
         } else {
             for (corner in CanvasCore.cornerPoints(element)) drawHandle(canvas, screenPoint(corner, transform))
             drawRotateHandle(canvas, element, transform)
+        }
+    }
+
+    /**
+     * The glyph on every linked element (FR7): a chain link in a filled round
+     * badge, drawn at a fixed size whatever the zoom, so it stays tappable and
+     * says at a glance that the element goes somewhere.
+     */
+    fun drawLinkGlyphs(
+        canvas: Canvas,
+        elements: List<Element>,
+        transform: ViewTransform,
+    ) {
+        for (element in elements.filter { it.link != null }) {
+            val at = CanvasCore.linkGlyphPoint(element, transform.zoom)
+            val x = transform.screenX(at.x).toFloat()
+            val y = transform.screenY(at.y).toFloat()
+            canvas.drawCircle(x, y, LINK_GLYPH_RADIUS_PX, handlePaint)
+            // Two interlocking arcs over a filled badge: a chain, in the badge's own white.
+            linkGlyphPaint.strokeWidth = LINK_GLYPH_STROKE_PX
+            for (side in listOf(-1f, 1f)) {
+                val centre = x + side * LINK_GLYPH_RING_GAP_PX
+                canvas.drawArc(
+                    centre - LINK_GLYPH_RING_PX,
+                    y - LINK_GLYPH_RING_PX,
+                    centre + LINK_GLYPH_RING_PX,
+                    y + LINK_GLYPH_RING_PX,
+                    if (side < 0) LINK_GLYPH_ARC_START else LINK_GLYPH_ARC_START + HALF_TURN_DEGREES,
+                    LINK_GLYPH_ARC_SWEEP,
+                    false,
+                    linkGlyphPaint,
+                )
+            }
         }
     }
 
@@ -340,6 +381,16 @@ internal class CanvasRenderer(
         const val THUMBNAIL_TAG_Y_PX = 10f
         const val THUMBNAIL_TAG_TILT_DEGREES = -4f
         const val THUMBNAIL_TAG_LABEL = "Canvas"
+
+        // The link glyph (FR7): a filled badge with a two-ring chain in it.
+        const val LINK_GLYPH_RADIUS_PX = 16f
+        const val LINK_GLYPH_RING_PX = 6f
+        const val LINK_GLYPH_RING_GAP_PX = 3.5f
+        const val LINK_GLYPH_STROKE_PX = 2.5f
+        const val LINK_GLYPH_ARC_START = 300f
+        const val LINK_GLYPH_ARC_SWEEP = 120f
+        const val HALF_TURN_DEGREES = 180f
+
         const val HANDLE_DRAW_SIZE_PX = 24f
         const val ROTATE_HANDLE_RADIUS_PX = 22f
         const val PREVIEW_ARROWHEAD_PX = 28f

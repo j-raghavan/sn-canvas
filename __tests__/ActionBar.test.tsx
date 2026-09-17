@@ -11,6 +11,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onCommand = jest.fn();
   const onNewCanvas = jest.fn();
   const onClearCanvas = jest.fn();
+  const onLinkToNote = jest.fn();
   const onMenuOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
@@ -20,6 +21,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
         onCommand={onCommand}
         onNewCanvas={onNewCanvas}
         onClearCanvas={onClearCanvas}
+        onLinkToNote={onLinkToNote}
         onMenuOpen={onMenuOpen}
       />,
     );
@@ -31,7 +33,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, onClearCanvas, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
@@ -106,6 +108,26 @@ test('Group and Ungroup sit in the bar beside delete and duplicate, greyed out u
   expect(grouped.isDisabled('canvas-ungroup')).toBe(false);
   grouped.press('canvas-ungroup');
   expect(grouped.onCommand).toHaveBeenCalledWith('ungroup');
+});
+
+test('Link to note needs a selection, and Remove link a link on it', () => {
+  const nothing = renderBar();
+  nothing.press('canvas-more');
+  expect([nothing.isDisabled('canvas-menu-linkToNote'), nothing.isDisabled('canvas-menu-unlinkSelected')]).toEqual([true, true]);
+
+  const selected = renderBar({hasSelection: true});
+  selected.press('canvas-more');
+  expect([selected.isDisabled('canvas-menu-linkToNote'), selected.isDisabled('canvas-menu-unlinkSelected')]).toEqual([false, true]);
+  // Picking the note is the screen's job, not a command the canvas can run.
+  selected.press('canvas-menu-linkToNote');
+  expect(selected.onLinkToNote).toHaveBeenCalledTimes(1);
+  expect(selected.onCommand).not.toHaveBeenCalled();
+
+  const linked = renderBar({hasSelection: true, hasLink: true});
+  linked.press('canvas-more');
+  expect(linked.isDisabled('canvas-menu-unlinkSelected')).toBe(false);
+  linked.press('canvas-menu-unlinkSelected');
+  expect(linked.onCommand).toHaveBeenCalledWith('unlinkSelected');
 });
 
 test('Clear canvas applies only to a canvas with something on it', () => {

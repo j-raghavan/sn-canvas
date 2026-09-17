@@ -20,6 +20,8 @@ data class CanvasUiState(
     val selectionCount: Int = 0,
     /** Whether anything selected belongs to a group, so Ungroup applies. */
     val canUngroup: Boolean = false,
+    /** Whether the one selected element links somewhere, so the link can be taken off it. */
+    val hasLink: Boolean = false,
 ) {
     fun toPayload(): Map<String, Any> =
         mapOf(
@@ -29,6 +31,7 @@ data class CanvasUiState(
             "hasContent" to hasContent,
             "selectionCount" to selectionCount,
             "canUngroup" to canUngroup,
+            "hasLink" to hasLink,
             "selectedType" to selectedType.orEmpty(),
             "style" to
                 mapOf(

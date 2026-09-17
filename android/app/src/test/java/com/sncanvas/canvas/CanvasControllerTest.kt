@@ -495,6 +495,38 @@ class CanvasControllerTest {
     }
 
     @Test
+    fun `linkSelected puts a link on the one selected element, and unlinkSelected takes it off`() {
+        val link = ElementLink(ElementLink.KIND_NOTE, "/n.note")
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.select("box")
+        controller.linkSelected(link)
+        assertEquals(link, controller.selected?.link)
+        assertTrue(ui.hasLink)
+        controller.unlinkSelected()
+        assertNull(controller.selected?.link)
+        assertFalse(ui.hasLink)
+        // Each was one undoable step of its own.
+        controller.undo()
+        assertEquals(
+            link,
+            controller.state.elements
+                .first { it.id == "box" }
+                .link,
+        )
+    }
+
+    @Test
+    fun `linking needs exactly one selected, and unlinking needs a link`() {
+        controller.load(listOf(box, box.copy(id = "b2")))
+        controller.selectAll(setOf("box", "b2"))
+        controller.linkSelected(ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        assertFalse(ui.canUndo)
+        controller.select("box")
+        controller.unlinkSelected()
+        assertFalse(ui.canUndo)
+    }
+
+    @Test
     fun `erasing other elements keeps the selection`() {
         controller.load(listOf(box, box.copy(id = "b2")))
         controller.select("box")

@@ -95,6 +95,13 @@ object CanvasActions {
             .toSet()
     }
 
+    /** Element [id] linking to [link], or to nowhere when it is null (FR7). */
+    fun relink(
+        state: CanvasState,
+        id: String,
+        link: ElementLink?,
+    ): CanvasState = state.copy(elements = state.elements.map { if (it.id == id) it.copy(link = link) else it })
+
     /** Element [id] with [style]. */
     fun restyle(
         state: CanvasState,

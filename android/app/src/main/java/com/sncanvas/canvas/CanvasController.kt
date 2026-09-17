@@ -92,6 +92,15 @@ class CanvasController(
         commit(grouped.elements)
     }
 
+    /** Links the one selected element to [link] (FR7), as one undoable step; a no-op unless exactly one is selected. */
+    fun linkSelected(link: ElementLink) = editSelected { id -> CanvasActions.relink(state, id, link) }
+
+    /** Takes the link off the one selected element; a no-op when it has none. */
+    fun unlinkSelected() {
+        if (selected?.link == null) return
+        editSelected { id -> CanvasActions.relink(state, id, null) }
+    }
+
     /** Breaks up the group of whatever is selected; a no-op when none of it is grouped. */
     fun ungroupSelected() {
         if (selectedElements.none { it.groupId != null }) return
@@ -320,6 +329,7 @@ class CanvasController(
                 hasContent = state.elements.isNotEmpty(),
                 selectionCount = selectedNow,
                 canUngroup = selectedElements.any { it.groupId != null },
+                hasLink = element?.link != null,
             )
         if (uiState == lastUiState) return
         lastUiState = uiState

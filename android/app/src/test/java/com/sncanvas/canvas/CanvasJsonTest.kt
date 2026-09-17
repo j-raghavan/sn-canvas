@@ -337,4 +337,26 @@ class CanvasJsonTest {
                 """{"id":"ok","type":"image","image":{"file":"x.png","width":4,"height":3}}]}"""
         assertEquals(listOf("ok"), CanvasJson.deserializeElements(json).map { it.id })
     }
+
+    @Test
+    fun `a link survives the round trip, and one of an unknown kind is dropped as it loads`() {
+        val linked =
+            Element(id = "l", type = "rectangle", width = 10.0, height = 10.0)
+                .copy(link = ElementLink(ElementLink.KIND_NOTE, "/storage/emulated/0/Note/plan.note", page = 4))
+        val reloaded = CanvasJson.deserializeElements(CanvasJson.serializeElements(listOf(linked)))
+        assertEquals(linked.link, reloaded.single().link)
+
+        // A kind this build cannot follow: the element loads, without the link, rather than being dropped.
+        val unknown = """{"version":1,"elements":[{"id":"l","type":"rectangle","link":{"kind":"portal","target":"x"}}]}"""
+        assertNull(CanvasJson.deserializeElements(unknown).single().link)
+        // A link with no target at all is no link either.
+        val targetless = """{"version":1,"elements":[{"id":"l","type":"rectangle","link":{"kind":"note","target":""}}]}"""
+        assertNull(CanvasJson.deserializeElements(targetless).single().link)
+    }
+
+    @Test
+    fun `a canvas saved before links existed loads with none`() {
+        val old = """{"version":1,"elements":[{"id":"l","type":"rectangle","width":10,"height":10}]}"""
+        assertNull(CanvasJson.deserializeElements(old).single().link)
+    }
 }

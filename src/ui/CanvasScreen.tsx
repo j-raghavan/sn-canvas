@@ -9,6 +9,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
 import type {CanvasSession} from '../application/canvasSession';
 import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
+import {parseElementLink} from '../domain/canvasLink';
 import {parseTextEditRequest, type TextEditRequest} from '../domain/textEdit';
 import ActionBar from './ActionBar';
 import HelpHints from './HelpHints';
@@ -106,6 +107,23 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
     setNotice(path === null ? 'Could not export the PDF' : `Saved to ${path.replace(`${STORAGE_ROOT}/`, '')}`);
   };
 
+  // FR7: the picker names the note; the canvas stores the link on whatever is selected.
+  const linkToNote = async () => {
+    const link = await session.pickNoteLink();
+    if (link !== null) {
+      runCommand('linkSelected', [link.kind, link.target, String(link.page)]);
+      setNotice('Linked to the note');
+    }
+  };
+
+  // FR7: a tap on a link's glyph; the note opens over the plugin, so nothing more is said about it here.
+  const followLink = async (payload: unknown) => {
+    const link = parseElementLink(payload);
+    if (link !== null && !(await session.followLink(link))) {
+      setNotice('Could not open that note');
+    }
+  };
+
   // FR12: confirm what happened, so the thumbnail isn't added twice for want of feedback, and a
   // refresh of the one already on the page doesn't look like nothing happened.
   const saveToNote = async () => {
@@ -153,12 +171,14 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           }}
           onEditText={event => setEditing(parseTextEditRequest(event.nativeEvent))}
           onCanvasTouch={() => setShowHints(false)}
+          onFollowLink={event => followLink(event.nativeEvent)}
         />
         <ActionBar
           ui={ui}
           onCommand={runCommand}
           onNewCanvas={session.newCanvas}
           onClearCanvas={() => setConfirmingClear(true)}
+          onLinkToNote={linkToNote}
           onMenuOpen={() => setShowHints(false)}
         />
         {/* Over the action bar, which is always there and sits across the middle tools: the eraser's hint has to

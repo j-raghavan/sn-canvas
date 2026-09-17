@@ -47,6 +47,12 @@ class CanvasView(
 
         /** The canvas was touched, by pen or finger: once per touch, at its first contact (the onboarding hints go). */
         fun onTouched(view: CanvasView)
+
+        /** A linked element's glyph was tapped (FR7): the screen follows it, since only JS can open a note. */
+        fun onFollowLink(
+            view: CanvasView,
+            link: ElementLink,
+        )
     }
 
     private val measurer = AndroidTextMeasurer()
@@ -306,14 +312,41 @@ class CanvasView(
         )
     }
 
-    /** The gesture [contact] starts: the minimap answers first, being a control rather than canvas, then the tool in hand. */
+    /**
+     * A linked element's glyph under [world], if the select tool is in hand: a
+     * tap on it follows the link. Only the select tool, so the glyph never
+     * swallows a stroke from a drawing tool.
+     */
+    private fun linkGlyphAt(world: Point): Element? {
+        if (CanvasTools.usesPen(toolMode)) return null
+        val zoom = controller.state.zoom
+        return CanvasCore.linkGlyphAt(world.x, world.y, controller.state.elements, zoom, LINK_GLYPH_HIT_PX / zoom)
+    }
+
+    /** The gesture [contact] starts: the controls drawn over the canvas answer first, then the tool in hand. */
     private fun gestureFor(contact: Contact): CanvasGesture? {
+        val world = toWorld(contact.x, contact.y)
+        return controlGestureAt(contact, world) ?: toolGestureAt(contact, world)
+    }
+
+    /** What a touch on something drawn over the canvas starts: the minimap, or a linked element's glyph. */
+    private fun controlGestureAt(
+        contact: Contact,
+        world: Point,
+    ): CanvasGesture? {
         val minimap = if (isMinimapVisible && navigatesByMinimap(contact)) minimapLayout() else null
         if (minimap != null && minimap.contains(contact.x.toDouble(), contact.y.toDouble())) {
             return startMinimapDrag(minimap, contact)
         }
-        val world = toWorld(contact.x, contact.y)
-        return when {
+        return linkGlyphAt(world)?.let { linked -> CanvasGesture.FollowLink(linked.id) }
+    }
+
+    /** What the tool in hand makes of a touch at [world]. */
+    private fun toolGestureAt(
+        contact: Contact,
+        world: Point,
+    ): CanvasGesture? =
+        when {
             // The pen's eraser end erases with any tool, as does the eraser tool with the pen.
             contact.isEraser || (contact.isPen && toolMode == CanvasTools.ERASER) -> CanvasGesture.Erase().also { eraseAt(it, world) }
             !CanvasTools.usesPen(toolMode) -> selectGesture(world, contact)
@@ -323,7 +356,6 @@ class CanvasView(
             CanvasTools.placesText(toolMode) -> CanvasGesture.PlaceText
             else -> CanvasGesture.DrawShape
         }
-    }
 
     /**
      * Whether [contact] navigates when it lands on the minimap. The pen goes on
@@ -464,6 +496,7 @@ class CanvasView(
         when (finished) {
             CanvasGesture.Pan -> tapSelect(end, isTap)
             CanvasGesture.Marquee -> selectInMarquee(end)
+            is CanvasGesture.FollowLink -> followLink(finished.elementId, isTap)
             CanvasGesture.DrawShape -> commitDrawnShape(end, totalDist)
             CanvasGesture.PlaceText -> placeTextOnTap(isTap)
             is CanvasGesture.Freehand -> commitStroke(finished)
@@ -535,6 +568,18 @@ class CanvasView(
         isTap: Boolean,
     ) {
         if (isTap) controller.select(CanvasCore.hitTest(at.x, at.y, controller.state.elements)?.id)
+    }
+
+    /** A tap that stayed on the glyph follows its link; a drag off it was the user changing their mind. */
+    private fun followLink(
+        elementId: String,
+        isTap: Boolean,
+    ) {
+        val link =
+            controller.state.elements
+                .find { it.id == elementId }
+                ?.link ?: return
+        if (isTap) events.onFollowLink(this, link)
     }
 
     /** Everything the selection rectangle covered, selected together (FR7); one that covered nothing clears the selection. */
@@ -645,6 +690,7 @@ class CanvasView(
         val elements = elementsForDrawing()
         renderer.drawElements(canvas, elements, transform, StylePalette.EINK, hiddenText())
         renderer.drawSelection(canvas, elements, controller.selectedIds, transform)
+        renderer.drawLinkGlyphs(canvas, elements, transform)
         if (gesture == CanvasGesture.DrawShape) renderer.drawDragPreview(canvas, toolMode, downTouch, dragCurrent, transform.zoom)
         if (gesture == CanvasGesture.Marquee) renderer.drawMarquee(canvas, downTouch, dragCurrent)
         drawMinimap(canvas)
@@ -658,6 +704,9 @@ class CanvasView(
         const val TAP_SLOP_PX = 12f
         const val MIN_SHAPE_DRAG_PX = 8f
         const val HANDLE_HIT_RADIUS_PX = 28f
+
+        // A link glyph's tap radius; a touch this close to it follows the link (FR7).
+        const val LINK_GLYPH_HIT_PX = 24f
 
         // Long enough after a pan to reach the minimap and take hold of it, since that is the only way it comes up.
         const val MINIMAP_LINGER_MS = 3000L

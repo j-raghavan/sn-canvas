@@ -70,6 +70,36 @@ class CanvasCoreTest {
     }
 
     @Test
+    fun `linkGlyphAt answers for a linked element's glyph, and for nothing else`() {
+        val link = ElementLink(ElementLink.KIND_NOTE, "/n.note")
+        val linked = baseState.elements[0].copy(link = link)
+        val elements = listOf(linked, baseState.elements[1])
+        val glyph = CanvasCore.linkGlyphPoint(linked, zoom = 1.0)
+        assertEquals("a", CanvasCore.linkGlyphAt(glyph.x, glyph.y, elements, 1.0, 4.0)?.id)
+        // Away from the glyph, and on an element that links nowhere.
+        assertNull(CanvasCore.linkGlyphAt(glyph.x + 50, glyph.y, elements, 1.0, 4.0))
+        assertNull(CanvasCore.linkGlyphAt(glyph.x, glyph.y, baseState.elements, 1.0, 4.0))
+    }
+
+    @Test
+    fun `a link glyph keeps its distance from the shape on screen, however far the canvas is zoomed`() {
+        val linked = baseState.elements[0].copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        val near = CanvasCore.linkGlyphPoint(linked, zoom = 1.0)
+        val zoomedOut = CanvasCore.linkGlyphPoint(linked, zoom = 0.25)
+        // Four times as far in world units at a quarter of the zoom is the same gap in pixels.
+        val corner = linked.x + linked.width
+        assertEquals(4 * (near.x - corner), zoomedOut.x - corner, 1e-9)
+    }
+
+    @Test
+    fun `a connector carries its glyph at the end it points to`() {
+        val arrow =
+            Element(id = "arr", type = "arrow", startX = 0.0, startY = 0.0, endX = 40.0, endY = 60.0)
+                .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        assertEquals(Point(40.0, 60.0), CanvasCore.linkGlyphPoint(arrow, zoom = 1.0))
+    }
+
+    @Test
     fun `panBy shifts viewport opposite the pan delta`() {
         val panned = CanvasCore.panBy(baseState, dx = 5.0, dy = -3.0)
         assertEquals(-5.0, panned.viewportX, 0.0001)
