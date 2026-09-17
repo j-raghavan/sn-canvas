@@ -189,6 +189,17 @@ class CanvasView(
         controller.setViewport(CanvasCore.zoomTo(controller.state, 1.0 / controller.state.zoom, center.x, center.y).transform)
     }
 
+    /** Groups what is selected (FR7); logged, since nothing else says what the command found to group. */
+    fun groupSelected() {
+        Log.d(LOG_TAG, "group selected=${controller.selectedIds.size}")
+        controller.groupSelected()
+    }
+
+    fun ungroupSelected() {
+        Log.d(LOG_TAG, "ungroup selected=${controller.selectedIds.size}")
+        controller.ungroupSelected()
+    }
+
     /** Duplicates the selected element a little down and to the right (FR18). */
     fun duplicateSelected() = controller.duplicateSelected(DUPLICATE_OFFSET_PX / controller.state.zoom)
 

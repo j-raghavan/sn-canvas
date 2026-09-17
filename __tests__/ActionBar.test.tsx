@@ -92,21 +92,19 @@ test('row and column actions are listed only while a table is selected', () => {
   expect(table.onCommand).toHaveBeenCalledWith('tableAddColumn');
 });
 
-test('Group is listed only with several selected, and Ungroup only when the canvas says so', () => {
+test('Group and Ungroup sit in the bar beside delete and duplicate, greyed out until they apply', () => {
+  // On the bar itself, not behind the ⋮ menu: an action that has to be found is an action nobody uses.
   const one = renderBar({hasSelection: true, selectionCount: 1});
-  one.press('canvas-more');
-  expect([one.isListed('canvas-menu-group'), one.isListed('canvas-menu-ungroup')]).toEqual([false, false]);
+  expect([one.isDisabled('canvas-group'), one.isDisabled('canvas-ungroup')]).toEqual([true, true]);
 
   const several = renderBar({hasSelection: true, selectionCount: 3});
-  several.press('canvas-more');
-  expect([several.isListed('canvas-menu-group'), several.isListed('canvas-menu-ungroup')]).toEqual([true, false]);
-  several.press('canvas-menu-group');
+  expect([several.isDisabled('canvas-group'), several.isDisabled('canvas-ungroup')]).toEqual([false, true]);
+  several.press('canvas-group');
   expect(several.onCommand).toHaveBeenCalledWith('group');
 
   const grouped = renderBar({hasSelection: true, selectionCount: 2, canUngroup: true});
-  grouped.press('canvas-more');
-  expect(grouped.isListed('canvas-menu-ungroup')).toBe(true);
-  grouped.press('canvas-menu-ungroup');
+  expect(grouped.isDisabled('canvas-ungroup')).toBe(false);
+  grouped.press('canvas-ungroup');
   expect(grouped.onCommand).toHaveBeenCalledWith('ungroup');
 });
 

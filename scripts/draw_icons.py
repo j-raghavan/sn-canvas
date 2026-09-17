@@ -55,6 +55,33 @@ def action_duplicate():
     save(image, "action-duplicate")
 
 
+def corner_brackets(draw, box, reach=22):
+    """Four L-shaped corner marks around [box]: what a selection's frame looks like."""
+    left, top, right, bottom = box
+    polyline(draw, [(left + reach, top), (left, top), (left, top + reach)])
+    polyline(draw, [(right - reach, top), (right, top), (right, top + reach)])
+    polyline(draw, [(left, bottom - reach), (left, bottom), (left + reach, bottom)])
+    polyline(draw, [(right, bottom - reach), (right, bottom), (right - reach, bottom)])
+
+
+def action_group():
+    """Two squares inside one set of corner marks: taken as one (FR7)."""
+    image, draw = new_canvas()
+    draw.rectangle(scaled((30, 30, 66, 66)), outline="black", width=STROKE * SCALE)
+    draw.rectangle(scaled((62, 62, 98, 98)), outline="black", width=STROKE * SCALE)
+    corner_brackets(draw, (12, 12, 116, 116))
+    save(image, "action-group")
+
+
+def action_ungroup():
+    """The same two squares, one of them outside the marks: on their own again (FR7)."""
+    image, draw = new_canvas()
+    draw.rectangle(scaled((22, 22, 58, 58)), outline="black", width=STROKE * SCALE)
+    draw.rectangle(scaled((74, 74, 110, 110)), outline="black", width=STROKE * SCALE)
+    corner_brackets(draw, (8, 8, 72, 72), reach=16)
+    save(image, "action-ungroup")
+
+
 def action_more():
     """Three stacked dots: more actions (FR18)."""
     image, draw = new_canvas()
@@ -183,6 +210,8 @@ def tool_table():
 ICONS = [
     action_save_to_note,
     action_duplicate,
+    action_group,
+    action_ungroup,
     action_more,
     lambda: fill_icon("fill-none"),
     lambda: fill_icon("fill-semi", interior_alpha=80),
