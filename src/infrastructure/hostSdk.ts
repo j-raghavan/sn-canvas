@@ -7,7 +7,7 @@
 
 import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
 import type {HostPort, NotePen} from '../application/canvasSession';
-import {elementSummary, notePageOf, pictureNumbersOf, picturesOf} from '../domain/canvasIndex';
+import {elementSummary, notePageOf, picturesOf} from '../domain/canvasIndex';
 import {taggedPicture} from '../domain/canvasTag';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
 
@@ -68,17 +68,19 @@ export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<b
         return notePageOf(resultOf(notePath), resultOf(page));
       }),
     // getElements takes (page, notePath), the other way round from the rest of PluginFileAPI (as sn-drafting-pen notes).
-    pagePictureNumbers: at =>
+    pageElements: at =>
       attempt('getElements', [], async () => {
         const response = await PluginFileAPI.getElements(at.page, at.notePath);
         if (!succeeded(response)) {
           // A refused read (reading a note's file needs plugin.permission.FILE:READ) is an error envelope, not a throw.
           logger.warn(`${TAG} getElements failed: ${JSON.stringify(response)}`);
         }
-        const pictures = picturesOf(listOf(response));
-        logger.log(`${TAG}[LINK] page=${at.page} pictures=${JSON.stringify(pictures.map(elementSummary))}`);
-        return pictureNumbersOf(pictures);
+        const elements = listOf(response);
+        logger.log(`${TAG}[LINK] page=${at.page} pictures=${JSON.stringify(picturesOf(elements).map(elementSummary))}`);
+        return elements;
       }),
+    // Modifying elements of the note that is open races its own writes unless it is saved first (sn-plugin-lib's own warning).
+    saveNote: () => attempt('saveCurrentNote', false, async () => succeeded(await PluginNoteAPI.saveCurrentNote())),
     // The same call sn-tables edits its placed tables with; the note finds the element by its number in the page.
     tagPicture: (picture, canvasId, at, imagePath) =>
       attempt('modifyElements', false, async () => {

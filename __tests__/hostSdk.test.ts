@@ -12,6 +12,7 @@ const mockGetElements = jest.fn();
 const mockModifyElements = jest.fn();
 const mockGetPenInfo = jest.fn();
 const mockSelectImage = jest.fn();
+const mockSaveCurrentNote = jest.fn();
 
 jest.mock('sn-plugin-lib', () => ({
   PluginManager: {
@@ -24,7 +25,7 @@ jest.mock('sn-plugin-lib', () => ({
     getCurrentFilePath: () => mockGetCurrentFilePath(),
     getCurrentPageNum: () => mockGetCurrentPageNum(),
   },
-  PluginNoteAPI: {insertImage: (path: string) => mockInsertImage(path)},
+  PluginNoteAPI: {insertImage: (path: string) => mockInsertImage(path), saveCurrentNote: () => mockSaveCurrentNote()},
   RattaFileSelector: {selectFile: (params: unknown) => mockSelectImage(params)},
   PluginFileAPI: {
     getElements: (page: number, notePath: string) => mockGetElements(page, notePath),
@@ -93,27 +94,35 @@ test('currentPage is the note and page the host reports, or null when either is 
   expect(await host.currentPage()).toBeNull();
 });
 
-test('pagePictureNumbers reads the page, page first as the SDK wants, and keeps only its pictures', async () => {
+test('pageElements reads the page, page first as the SDK wants, and logs the pictures on it', async () => {
   const logger = createRecordingLogger();
   const host = createHostSdk(logger, requestAccess);
-  mockGetElements.mockResolvedValueOnce({
-    success: true,
-    result: [
-      {uuid: 'stroke', type: 0, numInPage: 1},
-      {uuid: 'pic', type: 200, numInPage: 2},
-    ],
-  });
-  expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([2]);
+  const page = [
+    {uuid: 'stroke', type: 0, numInPage: 1},
+    {uuid: 'pic', type: 200, numInPage: 2},
+  ];
+  mockGetElements.mockResolvedValueOnce({success: true, result: page});
+  expect(await host.pageElements({notePath: '/n.note', page: 3})).toEqual(page);
   expect(mockGetElements).toHaveBeenCalledWith(3, '/n.note');
   expect(logger.lines).toEqual(['log [SNCANVAS][LINK] page=3 pictures=[{"uuid":"pic","type":200,"num":2}]']);
   // A refused read comes back as an error envelope: logged, so the reason reaches the plugin's own log.
   mockGetElements.mockResolvedValueOnce({success: false, error: {code: 403, message: 'sdcard_no_read'}});
-  expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([]);
+  expect(await host.pageElements({notePath: '/n.note', page: 3})).toEqual([]);
   expect(logger.lines).toContain(
     'warn [SNCANVAS] getElements failed: {"success":false,"error":{"code":403,"message":"sdcard_no_read"}}',
   );
   mockGetElements.mockImplementationOnce(failure);
-  expect(await host.pagePictureNumbers({notePath: '/n.note', page: 3})).toEqual([]);
+  expect(await host.pageElements({notePath: '/n.note', page: 3})).toEqual([]);
+});
+
+test('saveNote saves the note that is open, and is false when the host refuses or throws', async () => {
+  const host = createHostSdk(createRecordingLogger(), requestAccess);
+  mockSaveCurrentNote.mockResolvedValueOnce({success: true, result: true});
+  expect(await host.saveNote()).toBe(true);
+  mockSaveCurrentNote.mockResolvedValueOnce({success: false, error: {code: 1, message: 'busy'}});
+  expect(await host.saveNote()).toBe(false);
+  mockSaveCurrentNote.mockImplementationOnce(failure);
+  expect(await host.saveNote()).toBe(false);
 });
 
 test('tagPicture writes the canvas into the picture as the lasso gave it, on its page, and is true once the note modified it', async () => {

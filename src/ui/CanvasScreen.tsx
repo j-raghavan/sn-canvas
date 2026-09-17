@@ -103,10 +103,12 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
     setNotice(path === null ? 'Could not export the PDF' : `Saved to ${path.replace(`${STORAGE_ROOT}/`, '')}`);
   };
 
-  // FR12: confirm the insert, so the thumbnail isn't added twice for want of feedback.
+  // FR12: confirm what happened, so the thumbnail isn't added twice for want of feedback, and a
+  // refresh of the one already on the page doesn't look like nothing happened.
   const saveToNote = async () => {
-    if (await session.saveToNote()) {
-      setNotice('Added to note');
+    const saved = await session.saveToNote();
+    if (saved !== null) {
+      setNotice(saved === 'refreshed' ? 'Thumbnail updated' : 'Added to note');
     }
   };
 

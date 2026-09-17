@@ -171,14 +171,19 @@ internal class CanvasRenderer(
      */
     fun renderThumbnail(
         elements: List<Element>,
-        sizePx: Int = THUMBNAIL_SIZE_PX,
+        sizePx: Int = THUMBNAIL_RENDER_PX,
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        drawBackground(canvas, sizePx.toFloat(), sizePx.toFloat())
-        val fit = ViewTransforms.computeThumbnailTransform(elements, sizePx.toDouble(), THUMBNAIL_PADDING_PX)
+        // Laid out in [THUMBNAIL_SIZE_PX] units and scaled up to the bitmap's size, so the frame, the tag
+        // and every stroke gain their pixels together: the same picture, with enough of them to be enlarged
+        // in the note without going soft.
+        val layout = THUMBNAIL_SIZE_PX.toFloat()
+        canvas.scale(sizePx / layout, sizePx / layout)
+        drawBackground(canvas, layout, layout)
+        val fit = ViewTransforms.computeThumbnailTransform(elements, layout.toDouble(), THUMBNAIL_PADDING_PX)
         drawElements(canvas, elements, fit, StylePalette.TRUE_COLOR)
-        drawThumbnailFrame(canvas, sizePx.toFloat())
+        drawThumbnailFrame(canvas, layout)
         return bitmap
     }
 
@@ -277,8 +282,15 @@ internal class CanvasRenderer(
     }
 
     private companion object {
-        /** The note thumbnail's size (FR12): a square PNG, independent of the live view's size. */
+        /** The units the note thumbnail is laid out in (FR12): a square, independent of the live view's size. */
         const val THUMBNAIL_SIZE_PX = 400
+
+        /**
+         * The square PNG those units are drawn into. Larger than the layout so a
+         * thumbnail enlarged in the note still has pixels to show; a note keeps
+         * the PNG, so this is the trade against the note's size on disk.
+         */
+        const val THUMBNAIL_RENDER_PX = 1200
 
         // Clear of the frame and the tag, so the drawing never touches either.
         const val THUMBNAIL_PADDING_PX = 56.0

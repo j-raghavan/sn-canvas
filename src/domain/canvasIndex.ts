@@ -144,8 +144,9 @@ export function pictureNumbersOf(elements: readonly unknown[]): number[] {
 
 /**
  * A note element in brief, for the log: which element it is and where it sits
- * (uuid, type, number in its page, page, picture rect, user data), never what
- * it shows.
+ * (uuid, type, number in its page, page, picture rect and path, user data),
+ * never what it shows. The path is what says whether a picture on the page is a
+ * Canvas thumbnail, so it is worth having in the log when one is not found.
  */
 export function elementSummary(element: unknown): Record<string, unknown> {
   const e = (element ?? {}) as {
@@ -156,5 +157,13 @@ export function elementSummary(element: unknown): Record<string, unknown> {
     userData?: unknown;
     picture?: {rect?: unknown} | null;
   };
-  return {uuid: e.uuid, type: e.type, num: e.numInPage, page: e.pageNum, rect: e.picture?.rect, userData: e.userData};
+  return {
+    uuid: e.uuid,
+    type: e.type,
+    num: e.numInPage,
+    page: e.pageNum,
+    rect: e.picture?.rect,
+    path: picturePathOf(element),
+    userData: e.userData,
+  };
 }
