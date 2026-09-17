@@ -32,6 +32,18 @@ internal sealed interface CanvasGesture {
         val which: Endpoint,
     ) : CanvasGesture
 
+    /**
+     * Navigating by the minimap: [layout] is held from where it was grabbed, so
+     * the map does not re-fit under the finger as the view it moves travels, and
+     * [grabX]/[grabY] keep the world point grabbed under the finger (zero for a
+     * touch outside the viewport rectangle, which jumps the view there instead).
+     */
+    data class MinimapDrag(
+        val layout: MinimapLayout,
+        val grabX: Double,
+        val grabY: Double,
+    ) : CanvasGesture
+
     /** The pencil's world-space samples so far. */
     class Freehand(
         val samples: MutableList<StrokePoint>,

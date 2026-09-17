@@ -285,22 +285,69 @@ class CanvasView(
         downTouch.set(contact.x, contact.y)
         lastTouch.set(contact.x, contact.y)
         dragCurrent.set(contact.x, contact.y)
-        val world = toWorld(contact.x, contact.y)
-        gesture =
-            when {
-                // The pen's eraser end erases with any tool, as does the eraser tool with the pen.
-                contact.isEraser || (contact.isPen && toolMode == CanvasTools.ERASER) -> CanvasGesture.Erase().also { eraseAt(it, world) }
-                !CanvasTools.usesPen(toolMode) -> selectGesture(world, contact)
-                // Palm rejection: every other tool works with the pen alone, as in Supernote's own notes.
-                !contact.isPen -> null
-                toolMode == CanvasTools.DRAW -> startFreehand(sampleAt(contact.x, contact.y, contact.pressure))
-                CanvasTools.placesText(toolMode) -> CanvasGesture.PlaceText
-                else -> CanvasGesture.DrawShape
-            }
+        gesture = gestureFor(contact)
         if (gesture == CanvasGesture.Pan) beginPanSnapshot()
         Log.d(
             LOG_TAG,
             "touch start pen=${contact.isPen} eraser=${contact.isEraser} tool=$toolMode gesture=${gesture?.javaClass?.simpleName}",
+        )
+    }
+
+    /** The gesture [contact] starts: the minimap answers first, being a control rather than canvas, then the tool in hand. */
+    private fun gestureFor(contact: Contact): CanvasGesture? {
+        val minimap = if (isMinimapVisible && navigatesByMinimap(contact)) minimapLayout() else null
+        if (minimap != null && minimap.contains(contact.x.toDouble(), contact.y.toDouble())) {
+            return startMinimapDrag(minimap, contact)
+        }
+        val world = toWorld(contact.x, contact.y)
+        return when {
+            // The pen's eraser end erases with any tool, as does the eraser tool with the pen.
+            contact.isEraser || (contact.isPen && toolMode == CanvasTools.ERASER) -> CanvasGesture.Erase().also { eraseAt(it, world) }
+            !CanvasTools.usesPen(toolMode) -> selectGesture(world, contact)
+            // Palm rejection: every other tool works with the pen alone, as in Supernote's own notes.
+            !contact.isPen -> null
+            toolMode == CanvasTools.DRAW -> startFreehand(sampleAt(contact.x, contact.y, contact.pressure))
+            CanvasTools.placesText(toolMode) -> CanvasGesture.PlaceText
+            else -> CanvasGesture.DrawShape
+        }
+    }
+
+    /**
+     * Whether [contact] navigates when it lands on the minimap. The pen goes on
+     * drawing wherever it would have drawn — a stroke in that corner, moments
+     * after a pan, must not be swallowed by the map — so with a pen tool in hand
+     * only a finger navigates. The pen's eraser end always erases.
+     */
+    private fun navigatesByMinimap(contact: Contact): Boolean = !contact.isEraser && !(contact.isPen && CanvasTools.usesPen(toolMode))
+
+    private fun minimapLayout(): MinimapLayout? = ViewTransforms.minimapLayout(controller.state, width.toDouble(), height.toDouble())
+
+    /**
+     * A touch on the minimap navigates (FR15): landing on the "you are here"
+     * rectangle drags it from where it was grabbed, and landing anywhere else in
+     * the box takes the view there at once, then drags on from it.
+     */
+    private fun startMinimapDrag(
+        layout: MinimapLayout,
+        contact: Contact,
+    ): CanvasGesture {
+        val world = layout.worldAt(contact.x.toDouble(), contact.y.toDouble())
+        val grabbed = layout.holdsViewport(world)
+        val center = layout.visible.let { Point((it.left + it.right) / 2, (it.top + it.bottom) / 2) }
+        if (!grabbed) centerViewOn(world)
+        showMinimap()
+        return CanvasGesture.MinimapDrag(
+            layout,
+            grabX = if (grabbed) center.x - world.x else 0.0,
+            grabY = if (grabbed) center.y - world.y else 0.0,
+        )
+    }
+
+    /** Moves the view so [world] sits in the middle of it; the zoom is untouched. */
+    private fun centerViewOn(world: Point) {
+        val zoom = controller.state.zoom
+        controller.setViewport(
+            ViewTransform(viewportX = world.x - width / (2 * zoom), viewportY = world.y - height / (2 * zoom), zoom = zoom),
         )
     }
 
@@ -360,6 +407,12 @@ class CanvasView(
                 // Past tap distance only, so a plain tap never flashes the minimap (an e-ink repaint).
                 if (distanceFromDown(x, y) > TAP_SLOP_PX) showMinimap()
             }
+            is CanvasGesture.MinimapDrag -> {
+                val world = active.layout.worldAt(x.toDouble(), y.toDouble())
+                centerViewOn(Point(world.x + active.grabX, world.y + active.grabY))
+                // It has to stay up for as long as it is being dragged by.
+                showMinimap()
+            }
             is CanvasGesture.Move -> gesture = active.copy(dx = active.dx + dx, dy = active.dy + dy)
             is CanvasGesture.Freehand -> active.samples += sampleAt(x, y, pressure)
             is CanvasGesture.Erase -> eraseAt(active, toWorld(x, y))
@@ -376,21 +429,9 @@ class CanvasView(
         y: Float,
     ) {
         val totalDist = distanceFromDown(x, y)
-        val isTap = totalDist <= TAP_SLOP_PX
-        val end = toWorld(x, y)
         val finished = gesture
         val redraw = needsRedraw()
-        when (finished) {
-            CanvasGesture.Pan -> tapSelect(end, isTap)
-            CanvasGesture.Marquee -> selectInMarquee(end)
-            CanvasGesture.DrawShape -> commitDrawnShape(end, totalDist)
-            CanvasGesture.PlaceText -> placeTextOnTap(isTap)
-            is CanvasGesture.Freehand -> commitStroke(finished)
-            is CanvasGesture.Erase -> controller.erase(finished.ids)
-            is CanvasGesture.Move, is CanvasGesture.ResizeRow -> finishDrag(finished, end, isTap)
-            is CanvasGesture.Resize, is CanvasGesture.DragEndpoint, CanvasGesture.Rotate -> commitGestureEdit(finished, end)
-            null -> Unit
-        }
+        commitGesture(finished, toWorld(x, y), totalDist)
         // Whatever else the pen did (the eraser end, with the pencil) leaves no firmware ink behind. A touch that
         // started nothing (a palm resting while writing) leaves it alone: wiping there erased strokes the canvas only
         // redraws once the pen rests, which in a light colour's pale gray looked like the writing had vanished.
@@ -398,6 +439,28 @@ class CanvasView(
         gesture = null
         if (isMinimapVisible) scheduleMinimapHide()
         if (redraw) invalidate()
+    }
+
+    /** What [finished] leaves behind, its pointer having ended at [end] after travelling [totalDist] on screen. */
+    private fun commitGesture(
+        finished: CanvasGesture?,
+        end: Point,
+        totalDist: Double,
+    ) {
+        val isTap = totalDist <= TAP_SLOP_PX
+        when (finished) {
+            CanvasGesture.Pan -> tapSelect(end, isTap)
+            CanvasGesture.Marquee -> selectInMarquee(end)
+            CanvasGesture.DrawShape -> commitDrawnShape(end, totalDist)
+            CanvasGesture.PlaceText -> placeTextOnTap(isTap)
+            is CanvasGesture.Freehand -> commitStroke(finished)
+            is CanvasGesture.Erase -> controller.erase(finished.ids)
+            // The view moved as it was dragged; there is nothing to commit, and panning is not an undo step.
+            is CanvasGesture.MinimapDrag -> Unit
+            is CanvasGesture.Move, is CanvasGesture.ResizeRow -> finishDrag(finished, end, isTap)
+            is CanvasGesture.Resize, is CanvasGesture.DragEndpoint, CanvasGesture.Rotate -> commitGestureEdit(finished, end)
+            null -> Unit
+        }
     }
 
     /**
@@ -433,8 +496,19 @@ class CanvasView(
         canvas.scale(scale, scale)
         canvas.drawBitmap(snapshot, 0f, 0f, null)
         canvas.restore()
-        if (isMinimapVisible) minimapRenderer.draw(canvas, controller.state, width, height)
+        drawMinimap(canvas)
         return true
+    }
+
+    /**
+     * The minimap, while it shows. A drag by it keeps the box and transform it
+     * was grabbed at, so only its viewport rectangle moves under the finger.
+     */
+    private fun drawMinimap(canvas: Canvas) {
+        if (!isMinimapVisible) return
+        val layout = (gesture as? CanvasGesture.MinimapDrag)?.layout ?: minimapLayout() ?: return
+        val state = controller.state
+        minimapRenderer.draw(canvas, state.elements, state.transform.visibleRect(width.toDouble(), height.toDouble()), layout)
     }
 
     /** Commits the pencil's stroke, keeping its firmware ink: that is what the user just drew. Too short for a stroke, it goes. */
@@ -560,7 +634,7 @@ class CanvasView(
         renderer.drawSelection(canvas, elements, controller.selectedIds, transform)
         if (gesture == CanvasGesture.DrawShape) renderer.drawDragPreview(canvas, toolMode, downTouch, dragCurrent, transform.zoom)
         if (gesture == CanvasGesture.Marquee) renderer.drawMarquee(canvas, downTouch, dragCurrent)
-        if (isMinimapVisible) minimapRenderer.draw(canvas, controller.state, width, height)
+        drawMinimap(canvas)
     }
 
     /** The stroke the pencil is drawing, in the style new elements get. */
@@ -571,7 +645,9 @@ class CanvasView(
         const val TAP_SLOP_PX = 12f
         const val MIN_SHAPE_DRAG_PX = 8f
         const val HANDLE_HIT_RADIUS_PX = 28f
-        const val MINIMAP_LINGER_MS = 1500L
+
+        // Long enough after a pan to reach the minimap and take hold of it, since that is the only way it comes up.
+        const val MINIMAP_LINGER_MS = 3000L
 
         // Generous, so fitted content clears the floating toolbar at the bottom.
         const val FIT_PADDING_PX = 96.0

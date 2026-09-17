@@ -39,7 +39,7 @@ import {CanvasNativeView} from '../src/ui/nativeCanvasView';
 
 const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   open: jest.fn().mockResolvedValue(undefined),
-  saveToNote: jest.fn().mockResolvedValue(true),
+  saveToNote: jest.fn().mockResolvedValue('inserted'),
   newCanvas: jest.fn().mockResolvedValue(undefined),
   insertImage: jest.fn().mockResolvedValue(true),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
@@ -272,11 +272,21 @@ describe('session', () => {
 
   test('Save to Note shows nothing when no thumbnail was inserted', async () => {
     const session = createFakeSession();
-    session.saveToNote.mockResolvedValue(false);
+    session.saveToNote.mockResolvedValue(null);
     const {press, shows, emitCanvasState} = await render(session);
     await emitCanvasState({hasContent: true});
     await press('canvas-save-to-note');
     expect(session.saveToNote).toHaveBeenCalledTimes(1);
+    expect(shows('Added to note')).toBe(false);
+  });
+
+  test('a refreshed thumbnail says so, rather than claiming one was added', async () => {
+    const session = createFakeSession();
+    session.saveToNote.mockResolvedValue('refreshed');
+    const {press, shows, emitCanvasState} = await render(session);
+    await emitCanvasState({hasContent: true});
+    await press('canvas-save-to-note');
+    expect(shows('Thumbnail updated')).toBe(true);
     expect(shows('Added to note')).toBe(false);
   });
 

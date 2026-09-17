@@ -17,7 +17,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 ## Features
 
 ### An infinite canvas inside your notes
-- **Endless space.** Pinch with two fingers to zoom (5% to 2000%), drag with the hand tool to pan. A minimap shows where you are while you move.
+- **Endless space.** Pinch with two fingers to zoom (5% to 2000%), drag with the hand tool to pan. A minimap shows where you are while you move; drag its rectangle, or tap anywhere on it, to travel across the canvas (with a finger while a drawing tool is in hand, so the pen keeps drawing).
 - **Palm rejection.** With a drawing tool, only the pen draws, just like Supernote's own notes. A hand resting on the screen never leaves a mark.
 - **First-run hints.** Every time Canvas opens, hand-drawn hints point at each control. Touch the canvas or pick a tool to dismiss them; tap **?** to bring them back.
 
@@ -39,6 +39,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 
 ### Working with your notes
 - **Save to Note** drops a thumbnail of the canvas into the current page. Lasso the thumbnail and tap **Open Canvas** to reopen that canvas, framed to fit its content.
+- **Saving again refreshes the thumbnail already on the page**, where it sits and at the size you gave it, rather than adding a second one. The notice says which happened.
 - Every thumbnail links to its own canvas, so one note can hold as many canvases as you like.
 - **Export to PDF:** the whole canvas on one page fitted to its content, in true colour with images included.
 - Closing Canvas saves it. Canvases are stored as structured, re-editable data, never flattened into ink.

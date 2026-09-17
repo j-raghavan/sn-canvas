@@ -6,15 +6,14 @@ import android.graphics.Paint
 import android.graphics.RectF
 
 /**
- * Draws Canvas's bottom-right minimap (the style panel owns the top
- * right; the toolbar and action bar are centered): every element as a thin outline plus
- * a shaded box for the currently visible area, both fitted via
- * [ViewTransforms.computeMinimapTransform] (content ∪ viewport, so the box
- * never falls outside the minimap however far the user has panned). The box
- * matches the view's aspect ratio so the viewport rectangle reads true.
+ * Draws Canvas's minimap: every element as a thin outline plus a shaded box
+ * for the currently visible area, inside the box [ViewTransforms.minimapLayout]
+ * measures and through the transform it computes (content ∪ viewport, so the
+ * box never falls outside the minimap however far the user has panned).
  *
  * [CanvasView] decides *when* the minimap shows (during pan/zoom, hidden
- * shortly after); this class owns only *what* it looks like. Its paints are
+ * shortly after) and routes touches on it; this class owns only *what* it
+ * looks like. Its paints are
  * thin on purpose — the live element paints and arrowheads are sized for
  * full-scale drawing, not a 300px overview.
  */
@@ -54,42 +53,32 @@ internal class MinimapRenderer {
             color = Color.BLACK
         }
 
+    /**
+     * Draws [elements] and the [visible] rectangle into [layout]'s box. The
+     * rectangle is passed in rather than read from [layout], so that while the
+     * minimap is being dragged the box and its transform stay where they were
+     * grabbed and only the rectangle moves.
+     */
     fun draw(
         canvas: Canvas,
-        state: CanvasState,
-        viewWidth: Int,
-        viewHeight: Int,
+        elements: List<Element>,
+        visible: WorldRect,
+        layout: MinimapLayout,
     ) {
-        if (viewWidth == 0 || viewHeight == 0) return
-        val boxHeight = (WIDTH_PX * viewHeight / viewWidth).coerceIn(MIN_HEIGHT_PX, MAX_HEIGHT_PX)
-        val boxLeft = viewWidth - MARGIN_PX - WIDTH_PX
-        val boxTop = viewHeight - MARGIN_PX - boxHeight
-        val visible =
-            WorldRect(
-                left = state.viewportX,
-                top = state.viewportY,
-                right = state.viewportX + viewWidth / state.zoom,
-                bottom = state.viewportY + viewHeight / state.zoom,
-            )
-        val fit =
-            ViewTransforms.computeMinimapTransform(
-                state.elements,
-                visible,
-                WIDTH_PX.toDouble(),
-                boxHeight.toDouble(),
-                PADDING_PX,
-            )
-
+        val boxLeft = layout.left.toFloat()
+        val boxTop = layout.top.toFloat()
+        val boxWidth = layout.width.toFloat()
+        val boxHeight = layout.height.toFloat()
         canvas.save()
         canvas.translate(boxLeft, boxTop)
-        canvas.drawRect(0f, 0f, WIDTH_PX, boxHeight, backgroundPaint)
-        canvas.clipRect(0f, 0f, WIDTH_PX, boxHeight)
-        val viewportBounds = toScreen(visible, fit)
+        canvas.drawRect(0f, 0f, boxWidth, boxHeight, backgroundPaint)
+        canvas.clipRect(0f, 0f, boxWidth, boxHeight)
+        val viewportBounds = toScreen(visible, layout.fit)
         canvas.drawRect(viewportBounds, viewportFillPaint)
-        for (element in state.elements) drawElement(canvas, element, state.elements, fit)
+        for (element in elements) drawElement(canvas, element, elements, layout.fit)
         canvas.drawRect(viewportBounds, viewportPaint)
         canvas.restore()
-        canvas.drawRect(boxLeft, boxTop, boxLeft + WIDTH_PX, boxTop + boxHeight, borderPaint)
+        canvas.drawRect(boxLeft, boxTop, boxLeft + boxWidth, boxTop + boxHeight, borderPaint)
     }
 
     private fun toScreen(
@@ -122,13 +111,5 @@ internal class MinimapRenderer {
         }
         val worldBounds = WorldRect(element.x, element.y, element.x + element.width, element.y + element.height)
         drawRotatedBox(canvas, element, toScreen(worldBounds, fit), elementPaint)
-    }
-
-    private companion object {
-        const val WIDTH_PX = 300f
-        const val MIN_HEIGHT_PX = 160f
-        const val MAX_HEIGHT_PX = 420f
-        const val MARGIN_PX = 24f
-        const val PADDING_PX = 12.0
     }
 }

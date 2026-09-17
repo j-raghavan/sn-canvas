@@ -120,8 +120,10 @@ export type FakeHost = HostPort & {
   accessRequests: number;
   /** The note page the user is on. */
   page: NotePage | null;
-  /** The numbers in the page of the pictures on that page, as getElements reports them. */
-  pictures: number[];
+  /** The elements on that page, as getElements reports them ([notePicture] builds one). */
+  elements: unknown[];
+  /** The notes saved before their elements were modified. */
+  noteSaves: number;
   tagSucceeds: boolean;
   /** The pictures tagged with a canvas, in order. */
   tagged: Array<{canvasId: string; picture: unknown; imagePath: string}>;
@@ -149,7 +151,8 @@ export const createFakeHost = (): FakeHost => {
     fileWrite: false,
     accessRequests: 0,
     page: {notePath: '/note.note', page: 0},
-    pictures: [],
+    elements: [],
+    noteSaves: 0,
     tagSucceeds: true,
     tagged: [],
     closeCount: 0,
@@ -173,8 +176,12 @@ export const createFakeHost = (): FakeHost => {
     async currentPage() {
       return host.page;
     },
-    async pagePictureNumbers() {
-      return host.pictures;
+    async pageElements() {
+      return host.elements;
+    },
+    async saveNote() {
+      host.noteSaves += 1;
+      return true;
     },
     async tagPicture(picture, canvasId, _at, imagePath) {
       if (!host.tagSucceeds) {
@@ -189,6 +196,14 @@ export const createFakeHost = (): FakeHost => {
   };
   return host;
 };
+
+/** A picture element on a note page, as getElements reports one: sn-plugin-lib's TYPE_PICTURE, numbered from 1. */
+export const notePicture = (numInPage: number, userData?: string): Record<string, unknown> => ({
+  type: 200,
+  numInPage,
+  picture: {picturePath: `/note/pictures/${numInPage}.png`, rect: {left: 0, top: 0, right: 100, bottom: 100}},
+  ...(userData === undefined ? {} : {userData}),
+});
 
 export type RecordingLogger = Logger & {lines: string[]};
 
