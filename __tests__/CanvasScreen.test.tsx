@@ -44,8 +44,6 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   insertImage: jest.fn().mockResolvedValue(true),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
   close: jest.fn().mockResolvedValue(undefined),
-  // The onboarding hints show on the first open since an install; most tests are that open.
-  isFirstOpen: jest.fn(() => true),
   currentCanvasId: jest.fn(() => 'default'),
 });
 
@@ -119,27 +117,34 @@ describe('help hints', () => {
     'Show or hide these hints',
   ];
 
-  test('show on the first open since an install, one for each control, and the help button reflects that', async () => {
-    const {has, labelled, isPressed} = await render();
+  /** An empty canvas finished opening: what the canvas reports when it has nothing on it. */
+  const openedEmpty = (emit: (payload: unknown) => Promise<void>) => emit({});
+
+  test('show on an empty canvas, one for each control, and the help button reflects that', async () => {
+    const {has, labelled, isPressed, emitCanvasState} = await render();
+    await openedEmpty(emitCanvasState);
     expect(has('canvas-hints')).toBe(true);
     expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true, true]);
     expect(isPressed('canvas-help')).toBe(true);
   });
 
   test('a tool press dismisses them', async () => {
-    const {press, has} = await render();
+    const {press, has, emitCanvasState} = await render();
+    await openedEmpty(emitCanvasState);
     await press('canvas-tool-rectangle');
     expect(has('canvas-hints')).toBe(false);
   });
 
   test('inserting an image dismisses them', async () => {
-    const {press, has} = await render();
+    const {press, has, emitCanvasState} = await render();
+    await openedEmpty(emitCanvasState);
     await press('canvas-insert-image');
     expect(has('canvas-hints')).toBe(false);
   });
 
   test('a touch on the canvas, by pen or finger, dismisses them', async () => {
-    const {renderer, has} = await render();
+    const {renderer, has, emitCanvasState} = await render();
+    await openedEmpty(emitCanvasState);
     await act(async () => {
       renderer.root.findByType(CanvasNativeView).props.onCanvasTouch({nativeEvent: {}});
     });
@@ -147,7 +152,8 @@ describe('help hints', () => {
   });
 
   test('the help button toggles them back on, and off again', async () => {
-    const {press, has, isPressed} = await render();
+    const {press, has, isPressed, emitCanvasState} = await render();
+    await openedEmpty(emitCanvasState);
     await press('canvas-tool-rectangle');
     expect(has('canvas-hints')).toBe(false);
     await press('canvas-help');
@@ -158,23 +164,29 @@ describe('help hints', () => {
     expect(isPressed('canvas-help')).toBe(false);
   });
 
-  test('a later open does not bring them back: they are read once, not on every reopen', async () => {
-    const session = createFakeSession();
-    const {press, has, buttons} = await render(session);
-    expect(has('canvas-hints')).toBe(true);
-    await press('canvas-tool-rectangle');
-    expect(has('canvas-hints')).toBe(false);
-    // Reopening from the note, with the install behind us.
-    session.isFirstOpen.mockReturnValue(false);
-    await act(async () => buttons.press(500));
+  test('a canvas with work on it opens without them, so they never cover the drawing', async () => {
+    const {has, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
     expect(has('canvas-hints')).toBe(false);
   });
 
-  test('an open that is not the first since an install shows none at all', async () => {
-    const session = createFakeSession();
-    session.isFirstOpen.mockReturnValue(false);
-    const {has} = await render(session);
+  test('a canvas cleared since is empty when it opens again, so they come back', async () => {
+    const {has, buttons, emitCanvasState} = await render();
+    await emitCanvasState({hasContent: true});
     expect(has('canvas-hints')).toBe(false);
+    // Reopened after a Clear canvas: nothing on it, so the hints have the room again.
+    await act(async () => buttons.press(500));
+    await openedEmpty(emitCanvasState);
+    expect(has('canvas-hints')).toBe(true);
+  });
+
+  test('a state that arrives without an open behind it leaves them as they are', async () => {
+    const {has, emitCanvasState} = await render();
+    await openedEmpty(emitCanvasState);
+    expect(has('canvas-hints')).toBe(true);
+    // A selection changing is not an open; drawing is what puts them away.
+    await emitCanvasState({hasSelection: true, hasContent: true});
+    expect(has('canvas-hints')).toBe(true);
   });
 });
 

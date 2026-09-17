@@ -141,18 +141,6 @@ describe('the first open after an install', () => {
     expect(later.session.currentCanvasId()).toBe('c-1');
   });
 
-  test('only that first open reports itself as one, so the hints show once and not on every reopen', async () => {
-    const first = setup({[canvasFile('c-9')]: 'nine'}, {installedJustNow: true});
-    await first.session.open(500);
-    expect(first.session.isFirstOpen()).toBe(true);
-    await first.session.open(501);
-    expect(first.session.isFirstOpen()).toBe(false);
-    // A later session, with the install marker already written.
-    const later = setup(Object.fromEntries(first.store.files), {installedJustNow: true});
-    await later.session.open(500);
-    expect(later.session.isFirstOpen()).toBe(false);
-  });
-
   test('Open Canvas as the first open still opens its thumbnail canvas, and a sidebar press after it stays there', async () => {
     const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'}, {installedJustNow: true});
     host.lassoed = [lassoedThumbnail('c-9')];

@@ -167,6 +167,8 @@ class CanvasView(
     /** Replaces the canvas content (after `loadCanvas`), restarts the undo history from it, and frames it (FR13). */
     fun setElements(elements: List<Element>) {
         controller.load(elements)
+        // Said again even when it reads the same as the last canvas, so the screen always hears what a load left it with.
+        controller.republish()
         fitToContent()
     }
 
