@@ -12,8 +12,9 @@
 // known to hold the session's canvas, never a freshly mounted, empty one.
 //
 // Nothing drawn is left out of reach: canvases live in MyStyle/SnCanvas,
-// which outlasts an uninstall, the sidebar reopens the canvas last open (the
-// first open after an install starts a new one instead), and
+// which outlasts an uninstall, the sidebar reopens the canvas the note it is
+// opened in was last left showing, each note keeping its own (the first open
+// after an install starts a new one instead), and
 // "Open Canvas" finds a thumbnail's canvas through the link index
 // (domain/canvasIndex.ts) and the tag it leaves on the picture itself
 // (domain/canvasTag.ts).
@@ -25,6 +26,7 @@ import {
   pictureNumbersOf,
   picturesOf,
   serializeCanvasIndex,
+  lastCanvasFor,
   withLastCanvas,
   withPending,
   type CanvasIndex,
@@ -125,7 +127,7 @@ export type CanvasSessionDeps = {
 };
 
 export type CanvasSession = {
-  /** Shows the canvas a button press asks for: Open Canvas the lassoed thumbnail's, any other press (or none yet) the last one open. */
+  /** Shows the canvas a button press asks for: Open Canvas the lassoed thumbnail's, any other press (or none yet) the open note's own. */
   open: (buttonId: number | null) => Promise<void>;
   /** Saves the canvas shown, then shows a new, empty one. */
   newCanvas: () => Promise<void>;
@@ -235,9 +237,37 @@ export function createCanvasSession({
   const newestCanvas = async (dir: string): Promise<string | null> =>
     (await store.savedCanvasIds(dir)).find(id => id !== DEFAULT_CANVAS_ID) ?? null;
 
-  /** The canvas last open; with none recorded (a first open, or canvases saved by a build without the index), the newest. */
-  const lastCanvasId = async (dir: string): Promise<string> =>
-    (await loadIndex(dir)).lastCanvasId ?? (await newestCanvas(dir)) ?? DEFAULT_CANVAS_ID;
+/**
+   * The canvas the note at [at] reopens: the one it was last left showing. A
+   * note that has none of its own gets a new, empty canvas, so opening Canvas
+   * in a note never shows another note's work. With no note to go by (the host
+   * could not say which is open) the canvas last open anywhere is the best
+   * guess there is.
+   */
+  const canvasForNote = async (dir: string, at: NotePage | null): Promise<string> => {
+    const saved = await loadIndex(dir);
+    const recorded = lastCanvasFor(saved, at?.notePath ?? null);
+    if (recorded !== null) {
+      return recorded;
+    }
+    // Nothing recorded at all is a build from before the index: the canvas saved last is the likeliest, and goes to
+    // the first note that asks, as a recorded last canvas does, so upgrading never shows an empty canvas over saved work.
+    const nothingRecorded = saved.lastCanvasId === null && Object.keys(saved.lastByNote).length === 0;
+    if (at === null || nothingRecorded) {
+      const newest = await newestCanvas(dir);
+      if (newest !== null || at === null) {
+        return newest ?? DEFAULT_CANVAS_ID;
+      }
+    }
+    // The scratch canvas goes to the first note to ask for it, and is free again once Save to Note gives it an
+    // id of its own. Any other note gets a canvas of its own rather than being shown the first note's work.
+    const spokenFor = Object.values((await loadIndex(dir)).lastByNote);
+    if (!spokenFor.includes(DEFAULT_CANVAS_ID)) {
+      return DEFAULT_CANVAS_ID;
+    }
+    logger.log(`${TAG} no canvas for this note yet: a new one`);
+    return newCanvasId();
+  };
 
   /**
    * A lassoed thumbnail not tagged yet: the canvas of the pending link it
@@ -298,7 +328,7 @@ export function createCanvasSession({
    * other press the canvas last open, or a new, empty one on the first open
    * since an install.
    */
-  const targetFor = async (dir: string, buttonId: number | null): Promise<string> => {
+  const targetFor = async (dir: string, buttonId: number | null, at: NotePage | null): Promise<string> => {
     const firstSinceInstall = await isFirstOpenSinceInstall();
     if (buttonId === BUTTON_ID_OPEN_LINKED) {
       return linkedCanvasId(dir);
@@ -307,11 +337,11 @@ export function createCanvasSession({
       logger.log(`${TAG} first open since install: a new canvas`);
       return newCanvasId();
     }
-    return lastCanvasId(dir);
+    return canvasForNote(dir, at);
   };
 
-  /** Shows [target], saving the canvas shown first, and records it as the one the sidebar reopens. */
-  const show = async (dir: string, target: string): Promise<void> => {
+  /** Shows [target], saving the canvas shown first, and records it as the canvas the note at [at] reopens. */
+  const show = async (dir: string, target: string, at: NotePage | null): Promise<void> => {
     if (hasOpened && target === canvasId) {
       return;
     }
@@ -321,7 +351,7 @@ export function createCanvasSession({
     canvasId = target;
     hasOpened = true;
     await store.load(canvasFilePath(dir, canvasId), imagesPath(dir));
-    await updateIndex(dir, current => withLastCanvas(current, canvasId));
+    await updateIndex(dir, current => withLastCanvas(current, canvasId, at?.notePath ?? null));
   };
 
   /**
@@ -343,8 +373,10 @@ export function createCanvasSession({
       if (!dir) {
         return;
       }
-      await show(dir, await targetFor(dir, buttonId));
-      logger.log(`${TAG} button=${buttonId} opened canvas=${canvasId}`);
+      // The note this open belongs to: which canvas it shows, and which note that canvas is recorded against.
+      const at = await host.currentPage();
+      await show(dir, await targetFor(dir, buttonId, at), at);
+      logger.log(`${TAG} button=${buttonId} note=${at?.notePath ?? 'unknown'} opened canvas=${canvasId}`);
     });
 
   const newCanvas = (): Promise<void> =>
@@ -353,7 +385,7 @@ export function createCanvasSession({
       if (!dir) {
         return;
       }
-      await show(dir, newCanvasId());
+      await show(dir, newCanvasId(), await host.currentPage());
       logger.log(`${TAG} new canvas=${canvasId}`);
     });
 
@@ -434,7 +466,7 @@ export function createCanvasSession({
       canvasId = linkedId;
       await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID));
     }
-    await updateIndex(dir, current => withLastCanvas(current, linkedId));
+    await updateIndex(dir, current => withLastCanvas(current, linkedId, already?.at?.notePath ?? null));
     logger.log(`${TAG}[LINK] ${existing === null ? 'inserted' : 'refreshed'} thumbnail for canvas=${linkedId}`);
     // A refreshed picture is already tagged with its canvas; only a new one has to be claimed once the note places it.
     return {dir, linkedId, refreshed: existing !== null, known: already};

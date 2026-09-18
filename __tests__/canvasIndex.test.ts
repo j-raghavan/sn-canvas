@@ -7,6 +7,7 @@ import {
   EMPTY_INDEX,
   MAX_PENDING,
   claimPending,
+  lastCanvasFor,
   elementSummary,
   notePageOf,
   numberOf,
@@ -27,9 +28,40 @@ const pendingFor = (canvasId: string, knownPictureNumbers: number[] = [], at: No
 });
 const pictureNumbered = (num: number) => ({uuid: 'copy', type: 200, numInPage: num});
 
-test('an index survives its save and load, last canvas and pending links alike', () => {
-  const index = withPending(withLastCanvas(EMPTY_INDEX, 'c-1'), pendingFor('c-2', [3, 7]));
+test('an index survives its save and load: the canvas each note reopens, and pending links alike', () => {
+  const index = withPending(withLastCanvas(EMPTY_INDEX, 'c-1', '/note.note'), pendingFor('c-2', [3, 7]));
   expect(parseCanvasIndex(serializeCanvasIndex(index))).toEqual(index);
+});
+
+test('a canvas is recorded against the note it was open in, and without one only as the last canvas', () => {
+  const inNote = withLastCanvas(EMPTY_INDEX, 'c-1', '/a.note');
+  expect(inNote.lastByNote).toEqual({'/a.note': 'c-1'});
+  expect(lastCanvasFor(inNote, '/a.note')).toBe('c-1');
+  // Another note has none of its own, and c-1 is spoken for, so it gets nothing.
+  expect(lastCanvasFor(inNote, '/b.note')).toBeNull();
+  // No note to go by: the canvas last open anywhere is the best guess there is.
+  expect(lastCanvasFor(inNote, null)).toBe('c-1');
+
+  const noNote = withLastCanvas(EMPTY_INDEX, 'c-9', null);
+  expect(noNote.lastByNote).toEqual({});
+  expect(noNote.lastCanvasId).toBe('c-9');
+});
+
+test('a canvas recorded before notes owned them goes to the first note that asks, and stays with it', () => {
+  // What an index saved by an earlier build looks like: a last canvas, and no note against it.
+  const upgraded = parseCanvasIndex(JSON.stringify({lastCanvasId: 'c-old', pending: []}));
+  expect(upgraded.lastByNote).toEqual({});
+  expect(lastCanvasFor(upgraded, '/a.note')).toBe('c-old');
+  // Once a note has claimed it, no other note is handed the same canvas.
+  const claimed = withLastCanvas(upgraded, 'c-old', '/a.note');
+  expect(lastCanvasFor(claimed, '/b.note')).toBeNull();
+});
+
+test('a damaged or missing lastByNote reads as no note owning anything', () => {
+  const pairs = JSON.stringify({lastByNote: {'/a.note': 'c-1', '/b.note': 'not a canvas', '': 'c-2'}, pending: []});
+  expect(parseCanvasIndex(pairs).lastByNote).toEqual({'/a.note': 'c-1'});
+  expect(parseCanvasIndex(JSON.stringify({lastByNote: ['c-1'], pending: []})).lastByNote).toEqual({});
+  expect(parseCanvasIndex(JSON.stringify({lastByNote: null, pending: []})).lastByNote).toEqual({});
 });
 
 test.each([

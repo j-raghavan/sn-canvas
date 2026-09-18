@@ -25,7 +25,17 @@ export type PendingLink = NotePage & {
 };
 
 export type CanvasIndex = {
-  /** The canvas the sidebar reopens; null before one was recorded. */
+  /**
+   * The canvas the sidebar reopens in each note, by note path: a canvas belongs
+   * to the note it was made in, so opening Canvas in one note never shows
+   * another note's work.
+   */
+  readonly lastByNote: Readonly<Record<string, string>>;
+  /**
+   * The canvas the sidebar reopened before canvases belonged to notes. Kept for
+   * the note that claims it first (see [lastCanvasFor]), and used when the host
+   * cannot say which note is open.
+   */
   readonly lastCanvasId: string | null;
   /** Oldest first. */
   readonly pending: readonly PendingLink[];
@@ -34,7 +44,7 @@ export type CanvasIndex = {
 /** A pending link a lassoed picture claims: the index without it, its canvas, and the picture to tag with it. */
 export type Claim = {readonly index: CanvasIndex; readonly canvasId: string; readonly picture: unknown};
 
-export const EMPTY_INDEX: CanvasIndex = {lastCanvasId: null, pending: []};
+export const EMPTY_INDEX: CanvasIndex = {lastByNote: {}, lastCanvasId: null, pending: []};
 
 /** Pending links kept, the newest: one for a thumbnail deleted before it was ever opened would otherwise wait for good. */
 export const MAX_PENDING = 20;
@@ -77,23 +87,61 @@ export function parseCanvasIndex(json: string | null): CanvasIndex {
   } catch {
     return EMPTY_INDEX;
   }
-  const saved = (raw ?? {}) as {lastCanvasId?: unknown; pending?: unknown};
+  const saved = (raw ?? {}) as {lastByNote?: unknown; lastCanvasId?: unknown; pending?: unknown};
   const pending = Array.isArray(saved.pending)
     ? saved.pending
         .map(pendingLinkOf)
         .filter((link): link is PendingLink => link !== null)
         .slice(-MAX_PENDING)
     : [];
-  return {lastCanvasId: isCanvasId(saved.lastCanvasId) ? saved.lastCanvasId : null, pending};
+  return {
+    lastByNote: lastByNoteOf(saved.lastByNote),
+    lastCanvasId: isCanvasId(saved.lastCanvasId) ? saved.lastCanvasId : null,
+    pending,
+  };
 }
+
+/** The canvas each note reopens, keeping only well-formed pairs; an index saved before notes owned canvases has none. */
+const lastByNoteOf = (value: unknown): Record<string, string> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {};
+  }
+  const pairs = Object.entries(value as Record<string, unknown>).filter(
+    (pair): pair is [string, string] => pair[0] !== '' && isCanvasId(pair[1]),
+  );
+  return Object.fromEntries(pairs);
+};
 
 export function serializeCanvasIndex(index: CanvasIndex): string {
   return JSON.stringify(index);
 }
 
-/** [index] with [canvasId] as the canvas the sidebar reopens. */
-export function withLastCanvas(index: CanvasIndex, canvasId: string): CanvasIndex {
-  return {...index, lastCanvasId: canvasId};
+/**
+ * [index] with [canvasId] as the canvas the sidebar reopens: in [notePath] when
+ * the host could say which note is open, and as the plain last canvas either
+ * way, which is what an open with no note to go by falls back to.
+ */
+export function withLastCanvas(index: CanvasIndex, canvasId: string, notePath: string | null): CanvasIndex {
+  const lastByNote = notePath === null ? index.lastByNote : {...index.lastByNote, [notePath]: canvasId};
+  return {...index, lastByNote, lastCanvasId: canvasId};
+}
+
+/**
+ * The canvas [notePath] reopens, or null when that note has none of its own
+ * yet. A canvas recorded before canvases belonged to notes goes to the first
+ * note that asks and stays with it, so upgrading does not strand the canvas
+ * that was open at the time.
+ */
+export function lastCanvasFor(index: CanvasIndex, notePath: string | null): string | null {
+  if (notePath === null) {
+    return index.lastCanvasId;
+  }
+  const own = index.lastByNote[notePath];
+  if (own !== undefined) {
+    return own;
+  }
+  const unclaimed = index.lastCanvasId !== null && !Object.values(index.lastByNote).includes(index.lastCanvasId);
+  return unclaimed ? index.lastCanvasId : null;
 }
 
 /** [index] with [link] waiting for its thumbnail; only the newest [MAX_PENDING] are kept. */

@@ -126,6 +126,76 @@ describe('open', () => {
   });
 });
 
+describe('each note has its own canvas', () => {
+  const A = {notePath: '/Note/a.note', page: 0};
+  const B = {notePath: '/Note/b.note', page: 0};
+
+  test("opening Canvas in another note shows that note's canvas, not the one last open elsewhere", async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'drawn in A'});
+    host.page = A;
+    await session.open(500);
+    expect(store.shown).toBe('drawn in A');
+    // The same install, a different note: the bug was that this showed A's canvas.
+    host.page = B;
+    await session.open(500);
+    expect(store.shown).toBe('');
+    expect(session.currentCanvasId()).toBe('c-1');
+  });
+
+  test('going back to a note reopens the canvas it was left showing', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'drawn in A'});
+    host.page = A;
+    await session.open(500);
+    host.page = B;
+    await session.open(500);
+    store.shown = 'drawn in B';
+    host.page = A;
+    await session.open(500);
+    expect(store.shown).toBe('drawn in A');
+    host.page = B;
+    await session.open(500);
+    expect(store.shown).toBe('drawn in B');
+  });
+
+  test('the scratch canvas goes to the first note that asks, and every other note gets a canvas of its own', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = A;
+    await session.open(500);
+    expect(session.currentCanvasId()).toBe('default');
+    host.page = B;
+    await session.open(500);
+    expect(session.currentCanvasId()).toBe('c-1');
+    expect(logger.lines).toContain('log [SNCANVAS] no canvas for this note yet: a new one');
+    expect(savedIndex(store).lastByNote).toEqual({[A.notePath]: 'default', [B.notePath]: 'c-1'});
+  });
+
+  test('a canvas an earlier build left as the last one goes to the first note that asks, and to no other', async () => {
+    const {store, host, session} = setup({
+      [canvasFile('c-old')]: 'my work',
+      [INDEX]: indexWith({lastCanvasId: 'c-old'}),
+    });
+    host.page = A;
+    await session.open(500);
+    // Upgrading does not strand the canvas that was open: the first note to ask gets it.
+    expect(store.shown).toBe('my work');
+    host.page = B;
+    await session.open(500);
+    expect(store.shown).not.toBe('my work');
+  });
+
+  test('Open Canvas on a thumbnail still opens its canvas, whichever note it is in', async () => {
+    const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
+    host.page = B;
+    host.lassoed = [lassoedThumbnail('c-9')];
+    await session.open(501);
+    expect(store.shown).toBe('nine');
+    // ...and the note it was opened in now reopens it from the sidebar too.
+    host.lassoed = [];
+    await session.open(500);
+    expect(store.shown).toBe('nine');
+  });
+});
+
 describe('the first open after an install', () => {
   test('starts a new, empty canvas; the canvases saved before stay, and later opens reopen the last one', async () => {
     const first = setup({[canvasFile('c-9')]: 'nine', [INDEX]: indexWith({lastCanvasId: 'c-9'})}, {installedJustNow: true});
@@ -386,7 +456,8 @@ describe('links back to a canvas', () => {
     await session.open(null);
     expect(await session.saveToNote()).toBe('inserted');
     await session.close();
-    expect(savedIndex(store)).toEqual({lastCanvasId: 'c-1', pending: []});
+    // With no note to go by, nothing is recorded against one either.
+    expect(savedIndex(store)).toEqual({lastByNote: {}, lastCanvasId: 'c-1', pending: []});
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] no note page; Open Canvas on this thumbnail will show the newest canvas',
     );
@@ -419,7 +490,7 @@ describe('links back to a canvas', () => {
     const {store, session} = setup({[SCRATCH]: 'scratch', [INDEX]: '{nope'});
     await session.open(500);
     expect(store.shown).toBe('scratch');
-    expect(savedIndex(store)).toEqual({lastCanvasId: 'default', pending: []});
+    expect(savedIndex(store)).toEqual({lastByNote: {'/note.note': 'default'}, lastCanvasId: 'default', pending: []});
   });
 });
 

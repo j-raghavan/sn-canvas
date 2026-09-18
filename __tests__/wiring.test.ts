@@ -53,7 +53,8 @@ test('a built session loads through the native module and logs what it opened', 
     expect(mockLoadCanvas).toHaveBeenCalledWith(
       expect.stringMatching(/^\/storage\/emulated\/0\/MyStyle\/SnCanvas\/c-[a-z0-9]+-[a-z0-9]{4}\.json$/),
     );
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[SNCANVAS\] button=null opened canvas=c-/));
+    // The note an open belongs to is logged with it, since which canvas opens now depends on it.
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[SNCANVAS\] button=null note=.* opened canvas=c-/));
   } finally {
     warn.mockRestore();
   }
