@@ -383,10 +383,10 @@ internal class CanvasRenderer(
         const val THUMBNAIL_TAG_LABEL = "Canvas"
 
         // The link glyph (FR7): a filled badge with a two-ring chain in it.
-        const val LINK_GLYPH_RADIUS_PX = 16f
-        const val LINK_GLYPH_RING_PX = 6f
-        const val LINK_GLYPH_RING_GAP_PX = 3.5f
-        const val LINK_GLYPH_STROKE_PX = 2.5f
+        const val LINK_GLYPH_RADIUS_PX = 28f
+        const val LINK_GLYPH_RING_PX = 10f
+        const val LINK_GLYPH_RING_GAP_PX = 6f
+        const val LINK_GLYPH_STROKE_PX = 4f
         const val LINK_GLYPH_ARC_START = 300f
         const val LINK_GLYPH_ARC_SWEEP = 120f
         const val HALF_TURN_DEGREES = 180f

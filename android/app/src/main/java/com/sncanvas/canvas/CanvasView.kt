@@ -706,7 +706,7 @@ class CanvasView(
         const val HANDLE_HIT_RADIUS_PX = 28f
 
         // A link glyph's tap radius; a touch this close to it follows the link (FR7).
-        const val LINK_GLYPH_HIT_PX = 24f
+        const val LINK_GLYPH_HIT_PX = 40f
 
         // Long enough after a pan to reach the minimap and take hold of it, since that is the only way it comes up.
         const val MINIMAP_LINGER_MS = 3000L
