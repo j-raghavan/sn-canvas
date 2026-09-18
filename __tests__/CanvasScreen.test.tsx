@@ -78,13 +78,18 @@ const render = async (session = createFakeSession(), buttons = createFakeButtons
       renderer.root.findByType(CanvasNativeView).props.onCanvasState({nativeEvent: payload});
     });
   };
+  const emitCanvasLoaded = async (payload: unknown) => {
+    await act(async () => {
+      renderer.root.findByType(CanvasNativeView).props.onCanvasLoaded({nativeEvent: payload});
+    });
+  };
   const isPressed = (testID: string) => Boolean(renderer.root.findByProps({testID}).props.style[1]);
   const isActive = (tool: string) => isPressed(`canvas-tool-${tool}`);
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const shows = (text: string) => renderer.root.findAllByProps({children: text}).length > 0;
   const has = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const labelled = (label: string) => renderer.root.findAllByProps({accessibilityLabel: label}).length > 0;
-  return {renderer: renderer!, session, buttons, press, emitCanvasState, isActive, isPressed, isDisabled, shows, has, labelled};
+  return {renderer: renderer!, session, buttons, press, emitCanvasState, emitCanvasLoaded, isActive, isPressed, isDisabled, shows, has, labelled};
 };
 
 beforeEach(() => {
@@ -119,34 +124,34 @@ describe('help hints', () => {
     'Show or hide these hints',
   ];
 
-  /** An empty canvas finished opening: what the canvas reports when it has nothing on it. */
-  const openedEmpty = (emit: (payload: unknown) => Promise<void>) => emit({});
+  /** An empty canvas finished loading: what the canvas reports when it has nothing on it. */
+  const openedEmpty = (emit: (payload: unknown) => Promise<void>) => emit({hasContent: false});
 
   test('show on an empty canvas, one for each control, and the help button reflects that', async () => {
-    const {has, labelled, isPressed, emitCanvasState} = await render();
-    await openedEmpty(emitCanvasState);
+    const {has, labelled, isPressed, emitCanvasLoaded} = await render();
+    await openedEmpty(emitCanvasLoaded);
     expect(has('canvas-hints')).toBe(true);
     expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true, true]);
     expect(isPressed('canvas-help')).toBe(true);
   });
 
   test('a tool press dismisses them', async () => {
-    const {press, has, emitCanvasState} = await render();
-    await openedEmpty(emitCanvasState);
+    const {press, has, emitCanvasLoaded} = await render();
+    await openedEmpty(emitCanvasLoaded);
     await press('canvas-tool-rectangle');
     expect(has('canvas-hints')).toBe(false);
   });
 
   test('inserting an image dismisses them', async () => {
-    const {press, has, emitCanvasState} = await render();
-    await openedEmpty(emitCanvasState);
+    const {press, has, emitCanvasLoaded} = await render();
+    await openedEmpty(emitCanvasLoaded);
     await press('canvas-insert-image');
     expect(has('canvas-hints')).toBe(false);
   });
 
   test('a touch on the canvas, by pen or finger, dismisses them', async () => {
-    const {renderer, has, emitCanvasState} = await render();
-    await openedEmpty(emitCanvasState);
+    const {renderer, has, emitCanvasLoaded} = await render();
+    await openedEmpty(emitCanvasLoaded);
     await act(async () => {
       renderer.root.findByType(CanvasNativeView).props.onCanvasTouch({nativeEvent: {}});
     });
@@ -154,8 +159,8 @@ describe('help hints', () => {
   });
 
   test('the help button toggles them back on, and off again', async () => {
-    const {press, has, isPressed, emitCanvasState} = await render();
-    await openedEmpty(emitCanvasState);
+    const {press, has, isPressed, emitCanvasLoaded} = await render();
+    await openedEmpty(emitCanvasLoaded);
     await press('canvas-tool-rectangle');
     expect(has('canvas-hints')).toBe(false);
     await press('canvas-help');
@@ -167,27 +172,37 @@ describe('help hints', () => {
   });
 
   test('a canvas with work on it opens without them, so they never cover the drawing', async () => {
-    const {has, emitCanvasState} = await render();
-    await emitCanvasState({hasContent: true});
+    const {has, emitCanvasLoaded} = await render();
+    await emitCanvasLoaded({hasContent: true});
     expect(has('canvas-hints')).toBe(false);
   });
 
   test('a canvas cleared since is empty when it opens again, so they come back', async () => {
-    const {has, buttons, emitCanvasState} = await render();
-    await emitCanvasState({hasContent: true});
+    const {has, buttons, emitCanvasLoaded} = await render();
+    await emitCanvasLoaded({hasContent: true});
     expect(has('canvas-hints')).toBe(false);
     // Reopened after a Clear canvas: nothing on it, so the hints have the room again.
     await act(async () => buttons.press(500));
-    await openedEmpty(emitCanvasState);
+    await openedEmpty(emitCanvasLoaded);
     expect(has('canvas-hints')).toBe(true);
   });
 
-  test('a state that arrives without an open behind it leaves them as they are', async () => {
-    const {has, emitCanvasState} = await render();
-    await openedEmpty(emitCanvasState);
+  test('a state that arrives without a load behind it leaves them as they are', async () => {
+    const {has, emitCanvasState, emitCanvasLoaded} = await render();
+    await openedEmpty(emitCanvasLoaded);
     expect(has('canvas-hints')).toBe(true);
     // A selection changing is not an open; drawing is what puts them away.
     await emitCanvasState({hasSelection: true, hasContent: true});
+    expect(has('canvas-hints')).toBe(true);
+  });
+
+  test('the last canvas, said again as the view re-attaches, does not keep them from an empty one opening', async () => {
+    const {has, buttons, emitCanvasState, emitCanvasLoaded} = await render();
+    await emitCanvasLoaded({hasContent: true});
+    // Another note's first open: the view first repeats the canvas it held, then loads this note's empty one.
+    await act(async () => buttons.press(500));
+    await emitCanvasState({hasContent: true});
+    await openedEmpty(emitCanvasLoaded);
     expect(has('canvas-hints')).toBe(true);
   });
 });

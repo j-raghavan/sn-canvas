@@ -48,6 +48,16 @@ class CanvasView(
         /** The canvas was touched, by pen or finger: once per touch, at its first contact (the onboarding hints go). */
         fun onTouched(view: CanvasView)
 
+        /**
+         * A canvas finished loading, with [hasContent] saying whether anything is on it: the one signal the screen
+         * decides the onboarding hints from. Not the canvas state, which the view also republishes as it re-attaches
+         * with the canvas it held before, so it cannot tell a load from a leftover.
+         */
+        fun onLoaded(
+            view: CanvasView,
+            hasContent: Boolean,
+        )
+
         /** A linked element's glyph was tapped (FR7): the screen follows it, since only JS can open a note. */
         fun onFollowLink(
             view: CanvasView,
@@ -175,6 +185,7 @@ class CanvasView(
         controller.load(elements)
         // Said again even when it reads the same as the last canvas, so the screen always hears what a load left it with.
         controller.republish()
+        events.onLoaded(this, elements.isNotEmpty())
         fitToContent()
     }
 

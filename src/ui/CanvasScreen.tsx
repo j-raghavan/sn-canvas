@@ -62,17 +62,11 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   // Clearing takes everything at once, so both ways in (the eraser's options, the ⋮ menu) ask here first.
   const [isConfirmingClear, setConfirmingClear] = useState(false);
   const canvasRef = useRef<CanvasViewRef>(null);
-  // Set while an open is in flight; the canvas state that follows it says whether the canvas came up empty.
-  const isOpening = useRef(false);
 
   // The plugin runtime stays warm between opens, so this screen can stay mounted across them: every press
-  // re-resolves which canvas to show. The hints come up with an empty canvas, which has nothing to hide behind
-  // them and nothing yet to do, and stay away from one with work on it; the (?) button brings them back.
+  // re-resolves which canvas to show.
   useEffect(() => {
-    const openCanvas = (buttonId: number | null) => {
-      isOpening.current = true;
-      session.open(buttonId);
-    };
+    const openCanvas = (buttonId: number | null) => session.open(buttonId);
     openCanvas(buttonEvents.lastButtonId());
     return buttonEvents.onButton(openCanvas);
   }, [session, buttonEvents]);
@@ -161,14 +155,11 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
           ref={canvasRef}
           style={StyleSheet.absoluteFill}
           toolMode={toolMode}
-          onCanvasState={event => {
-            const next = parseUiState(event.nativeEvent);
-            setUi(next);
-            if (isOpening.current) {
-              isOpening.current = false;
-              setShowHints(!next.hasContent);
-            }
-          }}
+          onCanvasState={event => setUi(parseUiState(event.nativeEvent))}
+          // The hints come up with an empty canvas, which has nothing to hide behind them and nothing yet to do, and
+          // stay away from one with work on it; the (?) button brings them back. Decided by the load alone: the canvas
+          // state also arrives as the view re-attaches, still saying what the canvas before this one held.
+          onCanvasLoaded={event => setShowHints(!parseUiState(event.nativeEvent).hasContent)}
           onEditText={event => setEditing(parseTextEditRequest(event.nativeEvent))}
           onCanvasTouch={() => setShowHints(false)}
           onFollowLink={event => followLink(event.nativeEvent)}
