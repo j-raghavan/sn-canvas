@@ -120,7 +120,7 @@ object CanvasCore {
     const val ROTATE_HANDLE_OFFSET_PX = 56.0
 
     /** Screen-space gap between a shape's top-right corner and its link glyph (FR7); divided by zoom as above. */
-    const val LINK_GLYPH_OFFSET_PX = 18.0
+    const val LINK_GLYPH_OFFSET_PX = 34.0
 
     /** Where a bbox [element]'s rotate handle sits: [ROTATE_HANDLE_OFFSET_PX] screen px above its top-center, rotated with it. */
     fun rotateHandlePoint(
