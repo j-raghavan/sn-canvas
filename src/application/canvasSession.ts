@@ -325,19 +325,21 @@ export function createCanvasSession({
 
   /**
    * The canvas a button press opens: Open Canvas the lassoed thumbnail's; any
-   * other press the canvas last open, or a new, empty one on the first open
-   * since an install.
+   * other press the note's own canvas, or a new, empty one on the first open
+   * since an install for a note that has none yet.
    */
   const targetFor = async (dir: string, buttonId: number | null, at: NotePage | null): Promise<string> => {
     const firstSinceInstall = await isFirstOpenSinceInstall();
     if (buttonId === BUTTON_ID_OPEN_LINKED) {
       return linkedCanvasId(dir);
     }
-    if (firstSinceInstall) {
+    // A note's own canvas outlasts a reinstall (an update is one): only a note with none starts afresh.
+    const own = at === null ? undefined : (await loadIndex(dir)).lastByNote[at.notePath];
+    if (firstSinceInstall && own === undefined) {
       logger.log(`${TAG} first open since install: a new canvas`);
       return newCanvasId();
     }
-    return canvasForNote(dir, at);
+    return own ?? canvasForNote(dir, at);
   };
 
   /** Shows [target], saving the canvas shown first, and records it as the canvas the note at [at] reopens. */

@@ -211,6 +211,15 @@ describe('the first open after an install', () => {
     expect(later.session.currentCanvasId()).toBe('c-1');
   });
 
+  test("a note with a canvas of its own reopens it: an update does not take a note's work away", async () => {
+    const index = JSON.stringify({lastByNote: {'/note.note': 'c-9'}, lastCanvasId: 'c-9', pending: []});
+    const {store, session, logger} = setup({[canvasFile('c-9')]: 'nine', [INDEX]: index}, {installedJustNow: true});
+    await session.open(500);
+    expect(store.shown).toBe('nine');
+    expect(store.files.get(MARKER)).toBe('opened');
+    expect(logger.lines).not.toContain('log [SNCANVAS] first open since install: a new canvas');
+  });
+
   test('Open Canvas as the first open still opens its thumbnail canvas, and a sidebar press after it stays there', async () => {
     const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'}, {installedJustNow: true});
     host.lassoed = [lassoedThumbnail('c-9')];
