@@ -777,6 +777,26 @@ describe('the trail back along followed links', () => {
     expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not go back to /Note/b.note page=0 canvas=default');
   });
 
+  test('Canvas the way back brought up steps aside for a picker, and comes back once the pick is made', async () => {
+    const {host, session} = await walkedToC();
+    await session.goBack();
+    host.steps.length = 0;
+    host.pickedNote = '/Note/d.note';
+    expect(await session.pickNoteLink()).toMatchObject({target: '/Note/d.note'});
+    host.picked = null;
+    await session.insertImage();
+    expect(host.steps).toEqual(['close', 'pick note', 'show', 'close', 'pick image', 'show']);
+  });
+
+  test('Canvas the note brought up is left to the host for a picker, as before', async () => {
+    const {host, session} = await walkedToC();
+    host.page = B;
+    await session.open(500);
+    host.steps.length = 0;
+    await session.pickNoteLink();
+    expect(host.steps).toEqual(['pick note']);
+  });
+
   test('a second tap while a step back runs is one step, not two', async () => {
     const {session} = await walkedToC();
     await Promise.all([session.goBack(), session.goBack()]);

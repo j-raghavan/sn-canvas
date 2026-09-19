@@ -155,9 +155,11 @@ export const createFakeHost = (): FakeHost => {
       return host.pen;
     },
     async pickImage() {
+      host.steps.push('pick image');
       return host.picked;
     },
     async pickNote() {
+      host.steps.push('pick note');
       return host.pickedNote;
     },
     async openNote(path, page) {

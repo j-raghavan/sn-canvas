@@ -219,6 +219,10 @@ export function createCanvasSession({
   // Whether Canvas is on screen, or stepped aside for a note a link opened: a step back that fails puts things
   // back as they were, and those are not the same.
   let isCanvasUp = false;
+  // Whether the note brought Canvas up (the sidebar, a thumbnail), and so hides it for anything it opens over it.
+  // Canvas brought up by the way back is not: the host unbinds it from the note as it hides, and only the note
+  // binds it again (seen in the host's PluginApp.closePluginView). Unbound, it stays in front of a picker.
+  let isBoundToNote = false;
   // Each operation starts after the previous one settles, so a button press
   // can never switch canvases halfway through a save.
   let tail: Promise<void> = Promise.resolve();
@@ -426,6 +430,7 @@ export function createCanvasSession({
       // Canvas is back by another way than the badge, which has nothing left to do.
       badge.hide();
       isCanvasUp = true;
+      isBoundToNote = true;
       await rememberNotePen();
       const dir = await resolveCanvasDir();
       if (!dir) {
@@ -581,7 +586,7 @@ export function createCanvasSession({
    * last left on, so linking asks for nothing but the note itself.
    */
   const pickNoteLink = async (): Promise<ElementLink | null> => {
-    const target = await host.pickNote();
+    const target = await pickOver(host.pickNote);
     if (target === null) {
       logger.log(`${TAG}[LINK] no note picked; nothing linked`);
       return null;
@@ -613,9 +618,32 @@ export function createCanvasSession({
    * back when the note will not open is the caller's to say.
    */
   const leaveFor = async (to: NotePage): Promise<boolean> => {
+    await stepAside();
+    return host.openNote(to.notePath, to.page);
+  };
+
+  /** Hides Canvas, which unbinds it from the note until the note opens it again. */
+  const stepAside = async (): Promise<void> => {
     await host.closeView();
     isCanvasUp = false;
-    return host.openNote(to.notePath, to.page);
+    isBoundToNote = false;
+  };
+
+  /**
+   * Runs one of the host's pickers over Canvas. Canvas the note brought up is
+   * hidden by the host for it; Canvas the way back brought up is not, and would
+   * cover it, so it steps aside itself and comes back once the pick is made.
+   */
+  const pickOver = async <T>(pick: () => Promise<T>): Promise<T> => {
+    if (isBoundToNote || !isCanvasUp) {
+      return pick();
+    }
+    await stepAside();
+    try {
+      return await pick();
+    } finally {
+      await comeBack();
+    }
   };
 
   /** Brings Canvas back to the front, as it was left. */
@@ -676,7 +704,7 @@ export function createCanvasSession({
 
   const insertImage = async (): Promise<boolean> => {
     // Picked outside the queue: the picker waits on the user, and must never hold up a save or a close.
-    const source = await host.pickImage();
+    const source = await pickOver(host.pickImage);
     if (source === null) {
       return false;
     }
@@ -717,8 +745,7 @@ export function createCanvasSession({
   const close = (): Promise<void> =>
     serially(async () => {
       await saveShown();
-      await host.closeView();
-      isCanvasUp = false;
+      await stepAside();
     });
 
   return {
