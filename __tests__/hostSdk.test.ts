@@ -154,25 +154,6 @@ test('openNote opens the note at the page it is given, and is false when the hos
   expect(await host.openNote('/n.note', 2)).toBe(false);
 });
 
-test('tagPicture writes the canvas into the picture as the lasso gave it, on its page, and is true once the note modified it', async () => {
-  const logger = createRecordingLogger();
-  const host = createHostSdk(logger, requestAccess);
-  const at = {notePath: '/n.note', page: 2};
-  const lassoed = {uuid: 'copy', type: 200, numInPage: 42, pageNum: -1, angles: {}, contoursSrc: {}};
-  mockModifyElements.mockResolvedValueOnce({success: true, result: [42]});
-  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(true);
-  expect(mockModifyElements).toHaveBeenCalledWith('/n.note', 2, [
-    {uuid: 'copy', type: 200, numInPage: 42, pageNum: 2, userData: 'sncanvas:c-1', picture: {picturePath: '/c/thumbnails/c-1.png'}},
-  ]);
-  mockModifyElements.mockResolvedValueOnce({success: true, result: []});
-  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
-  mockModifyElements.mockResolvedValueOnce({success: false, error: {code: 107, message: 'bad element'}});
-  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
-  expect(logger.lines).toContain('warn [SNCANVAS] modifyElements failed: {"success":false,"error":{"code":107,"message":"bad element"}}');
-  mockModifyElements.mockImplementationOnce(failure);
-  expect(await host.tagPicture(lassoed, 'c-1', at, '/c/thumbnails/c-1.png')).toBe(false);
-});
-
 test("notePen is the note's pen, logged as the host reported it, and null for anything but three numbers", async () => {
   const logger = createRecordingLogger();
   const host = createHostSdk(logger, requestAccess);

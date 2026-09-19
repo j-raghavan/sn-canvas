@@ -346,16 +346,6 @@ describe('session', () => {
     expect(shows('Added to note: place it on the page before anything else')).toBe(false);
   });
 
-  test('a refreshed thumbnail says so, rather than claiming one was added', async () => {
-    const session = createFakeSession();
-    session.saveToNote.mockResolvedValue('refreshed');
-    const {press, shows, emitCanvasState} = await render(session);
-    await emitCanvasState({hasContent: true});
-    await press('canvas-save-to-note');
-    expect(shows('Thumbnail updated')).toBe(true);
-    expect(shows('Added to note: place it on the page before anything else')).toBe(false);
-  });
-
   test('Close goes to the session', async () => {
     const {session, press} = await render();
     await press('canvas-close');

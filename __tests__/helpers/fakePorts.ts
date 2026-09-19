@@ -156,9 +156,6 @@ export type FakeHost = HostPort & {
   unsaved: unknown[];
   /** The notes saved before their elements were modified. */
   noteSaves: number;
-  tagSucceeds: boolean;
-  /** The pictures tagged with a canvas, in order. */
-  tagged: Array<{canvasId: string; picture: unknown; imagePath: string}>;
   closeCount: number;
   /** How often the plugin view was brought back to the front. */
   showCount: number;
@@ -211,8 +208,6 @@ export const createFakeHost = (): FakeHost => {
     elements: [],
     unsaved: [],
     noteSaves: 0,
-    tagSucceeds: true,
-    tagged: [],
     closeCount: 0,
     showCount: 0,
     steps: [],
@@ -243,13 +238,6 @@ export const createFakeHost = (): FakeHost => {
       host.noteSaves += 1;
       host.elements = [...host.elements, ...host.unsaved];
       host.unsaved = [];
-      return true;
-    },
-    async tagPicture(picture, canvasId, _at, imagePath) {
-      if (!host.tagSucceeds) {
-        return false;
-      }
-      host.tagged.push({canvasId, picture, imagePath});
       return true;
     },
     async closeView() {

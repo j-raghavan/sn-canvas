@@ -1,8 +1,8 @@
 /**
- * A thumbnail's own record of its canvas (FR13): the canvas id written into
- * the placed picture's userData, read back from any lasso of it.
+ * A thumbnail's own record of its canvas (FR13): a canvas id in the picture's
+ * userData, read back from any lasso of it. Only builds before #30 wrote one.
  */
-import {canvasIdFromTags, canvasTag, taggedCanvasId, taggedPicture} from '../src/domain/canvasTag';
+import {canvasIdFromTags, canvasTag, taggedCanvasId} from '../src/domain/canvasTag';
 
 test('a canvas id survives the round trip through the tag written into a picture', () => {
   expect(canvasTag('c-1')).toBe('sncanvas:c-1');
@@ -28,27 +28,3 @@ test('canvasIdFromTags is the canvas of the first tagged element among those las
   expect(canvasIdFromTags([{}, null])).toBeNull();
 });
 
-test('taggedPicture puts the picture on its page, shows it from a PNG that exists, tags it, and drops the native data the bridge cannot carry back', () => {
-  const lassoed = {
-    uuid: 'copy',
-    type: 200,
-    numInPage: 42,
-    pageNum: -1,
-    angles: {},
-    contoursSrc: {},
-    picture: {picturePath: 'plugin/1.png', rect: {left: 760, top: 1080, right: 1160, bottom: 1480}},
-  };
-  expect(taggedPicture(lassoed, 'c-1', 2, '/canvases/thumbnails/c-1.png')).toEqual({
-    uuid: 'copy',
-    type: 200,
-    numInPage: 42,
-    pageNum: 2,
-    picture: {picturePath: '/canvases/thumbnails/c-1.png', rect: {left: 760, top: 1080, right: 1160, bottom: 1480}},
-    userData: 'sncanvas:c-1',
-  });
-  expect(taggedPicture(null, 'c-1', 0, '/t.png')).toEqual({
-    pageNum: 0,
-    userData: 'sncanvas:c-1',
-    picture: {picturePath: '/t.png'},
-  });
-});

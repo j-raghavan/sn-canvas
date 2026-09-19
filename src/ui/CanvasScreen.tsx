@@ -157,7 +157,7 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   const saveToNote = async () => {
     const saved = await session.saveToNote();
     if (saved !== null) {
-      setNotice(saved === 'refreshed' ? 'Thumbnail updated' : ADDED_TO_NOTE);
+      setNotice(ADDED_TO_NOTE);
     }
   };
 

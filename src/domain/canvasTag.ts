@@ -1,9 +1,9 @@
-// A thumbnail's own record of its canvas (PRD FR13): the canvas id written
-// into the placed picture's userData, a free-form string the note keeps with
-// the element (as sn-drafting-pen's tag shows) and hands back with every
-// lasso. The lasso's copy of a picture gets a fresh uuid each time and the
-// picture can be moved, so this tag, not a uuid or a position, is what "Open
-// Canvas" reads.
+// A thumbnail's own record of its canvas (PRD FR13): a canvas id in the
+// picture's userData, which a lasso hands back. Canvas no longer writes one:
+// the write (modifyElements) does not take on this firmware, and the page's
+// pictures disappear on the note's next reload (#30, seen on device). Tags
+// written by earlier builds are still read, so the thumbnails they marked
+// still open their canvas.
 
 import {isCanvasId} from './canvasLink';
 
@@ -37,22 +37,4 @@ export function canvasIdFromTags(elements: readonly unknown[]): string | null {
     }
   }
   return null;
-}
-
-/**
- * [picture], as a lasso handed it over, ready for modifyElements to write back
- * tagged with [canvasId]: on page [page] (a lasso's copy says -1, which the SDK
- * rejects); showing the PNG at [imagePath], since the copy's own picture path
- * is a temporary one that doesn't exist for the note, which refuses a picture
- * without its PNG (error 1211, "PNG file does not exist"); and without its
- * native data accessors (angles, contoursSrc), which don't survive the trip
- * back across the bridge (sn-tables found "Cannot convert null value to
- * object"; both are optional).
- */
-export function taggedPicture(picture: unknown, canvasId: string, page: number, imagePath: string): Record<string, unknown> {
-  const copy = {...((picture ?? {}) as Record<string, unknown>)};
-  delete copy.angles;
-  delete copy.contoursSrc;
-  const shown = (copy.picture ?? {}) as Record<string, unknown>;
-  return {...copy, pageNum: page, userData: canvasTag(canvasId), picture: {...shown, picturePath: imagePath}};
 }
