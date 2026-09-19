@@ -707,10 +707,11 @@ describe('links to notes', () => {
     expect(session.backTo()).toBeNull();
   });
 
-  test('with no step to take, going back just brings Canvas up', async () => {
-    const {host, session} = setup({[SCRATCH]: 'scratch'});
+  test('with no step to take, going back does nothing but say so', async () => {
+    const {host, logger, session} = setup({[SCRATCH]: 'scratch'});
     await session.goBack();
-    expect(host.steps).toEqual(['show']);
+    expect(host.steps).toEqual([]);
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] nothing to go back to');
   });
 });
 
@@ -765,6 +766,17 @@ describe('the trail back along followed links', () => {
     );
   });
 
+  test('from the badge, a note that will not reopen leaves Canvas down and the badge back over the note', async () => {
+    const {host, badge, logger, session} = await walkedToC();
+    host.openNoteSucceeds = false;
+    host.steps.length = 0;
+    await session.goBack();
+    expect(host.steps).toEqual(['close']);
+    expect(badge.shown).toEqual({label: 'b', notePath: C.notePath});
+    expect(session.backTo()).toMatchObject({notePath: B.notePath});
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not go back to /Note/b.note page=0 canvas=default');
+  });
+
   test('a second tap while a step back runs is one step, not two', async () => {
     const {session} = await walkedToC();
     await Promise.all([session.goBack(), session.goBack()]);
@@ -777,7 +789,9 @@ describe('the trail back along followed links', () => {
     host.page = B;
     store.shown = 'drawn in B, and more';
     host.openNoteSucceeds = false;
+    host.steps.length = 0;
     await session.goBack();
+    expect(host.steps).toEqual(['close', 'show']);
     expect(store.shown).toBe('drawn in B, and more');
     expect(store.files.get(canvasFile('c-a'))).toBe('drawn in A');
     expect(session.backTo()).toMatchObject({notePath: A.notePath, canvasId: 'c-a'});

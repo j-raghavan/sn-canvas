@@ -36,6 +36,9 @@ class BackBadgeWindow(
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+    // Its measures are taken off this 300dpi screen; any other scales them, so it sits and reads the same.
+    private val scale = context.resources.displayMetrics.density / REFERENCE_DENSITY
     private var badge: View? = null
     private var verdict: BackBadgeWatch? = null
 
@@ -90,16 +93,16 @@ class BackBadgeWindow(
     private fun layoutParams() =
         WindowManager
             .LayoutParams(
-                WIDTH_PX,
-                HEIGHT_PX,
+                (WIDTH_PX * scale).toInt(),
+                (HEIGHT_PX * scale).toInt(),
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 // Touches outside the badge go on to the note.
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT,
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = LEFT_PX
-                y = TOP_PX
+                x = (LEFT_PX * scale).toInt()
+                y = (TOP_PX * scale).toInt()
             }
 
     private inner class BadgeView(
@@ -125,7 +128,11 @@ class BackBadgeWindow(
         private val arrow = Path()
 
         override fun onDraw(canvas: Canvas) {
-            boxRect.set(0f, 0f, width - ARROW_OVERHANG_PX, height.toFloat())
+            // Drawn in the reference screen's measures, scaled to this one.
+            canvas.scale(scale, scale)
+            val width = WIDTH_PX.toFloat()
+            val height = HEIGHT_PX.toFloat()
+            boxRect.set(0f, 0f, width - ARROW_OVERHANG_PX, height)
             canvas.drawRoundRect(boxRect, CORNER_PX, CORNER_PX, box)
             // The firmware's arrow: pointing left, its tail running past the box's right edge.
             val tipX = width - ARROW_TIP_FROM_RIGHT_PX
@@ -158,7 +165,9 @@ class BackBadgeWindow(
         /** How long a linked note may take to open before the badge gives up on it: three seconds, as ReturnTrip waits. */
         const val ARRIVAL_CHECKS = 6
 
-        // Measured off the firmware's own badge (1920x2560), moved right of the note's toolbar, which it would cover.
+        // Measured off the firmware's own badge on a 1920x2560, 300dpi screen (density 1.875), moved right of the
+        // note's toolbar, which it would cover.
+        const val REFERENCE_DENSITY = 1.875f
         const val LEFT_PX = 130
         const val TOP_PX = 25
         const val WIDTH_PX = 360
