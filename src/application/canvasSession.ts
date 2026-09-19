@@ -1,8 +1,9 @@
 // The canvas session: which canvas the mounted view shows, and what a user
 // does with it — open one (from a button press), start a new one, save it into
-// the note as a linked thumbnail, and close (PRD FR11-FR13).
+// the note as a linked thumbnail, follow a link from it and step back along the
+// links followed (#34), and close (PRD FR7, FR11-FR13).
 //
-// Pure orchestration over two ports, tested with in-memory fakes;
+// Pure orchestration over its ports, tested with in-memory fakes;
 // infrastructure/ holds the real adapters and wiring.ts plugs them in. Ports
 // never reject: a failed step reports false/null, and the session logs and
 // stops, so no user action can crash the plugin.
@@ -48,6 +49,7 @@ import {
   thumbnailPath,
 } from '../domain/canvasLink';
 import {canvasIdFromTags, taggedCanvasId} from '../domain/canvasTag';
+import {noteNameOf, trailKeptAt, withStep, type TrailStep} from '../domain/linkTrail';
 import {BUTTON_ID_OPEN_LINKED} from '../domain/entryPoints';
 import type {Logger} from '../sdk/types';
 
@@ -114,12 +116,35 @@ export type HostPort = {
    * the PNG at [imagePath], so every later lasso of it names its canvas; true once written.
    */
   tagPicture: (picture: unknown, canvasId: string, at: NotePage, imagePath: string) => Promise<boolean>;
-  closeView: () => void;
+  /** Hides the plugin view, leaving Canvas running behind whatever the user goes to; true once hidden. */
+  closeView: () => Promise<boolean>;
+  /** Brings the plugin view back to the front, as it was left; true once shown. */
+  showView: () => Promise<boolean>;
 };
+
+/**
+ * The way back from followed links (#34): the badge over a note a link opened,
+ * whose taps reach the screen, and the last leg of each trip back.
+ */
+export type BackBadgePort = {
+  /** Shows the badge reading [label] over the note at [notePath], until it is tapped or that note is left. */
+  show: (label: string, notePath: string) => void;
+  hide: () => void;
+  /**
+   * Once [notePath] has been asked to open, brings Canvas up over it as soon as
+   * it is on screen; true when Canvas came up over that note. Done natively: JS
+   * runs no timers while Canvas is covered.
+   */
+  arriveOver: (notePath: string) => Promise<boolean>;
+};
+
+/** The back badge's taps, which the screen hands to its session's goBack. */
+export type BackBadgeTaps = {onTapped: (listener: () => void) => () => void};
 
 export type CanvasSessionDeps = {
   store: CanvasStorePort;
   host: HostPort;
+  badge: BackBadgePort;
   newCanvasId: () => string;
   logger: Logger;
   /** The device's clock, which names each PDF export; the real one unless given. */
@@ -135,8 +160,19 @@ export type CanvasSession = {
   insertImage: () => Promise<boolean>;
   /** Asks for a note to link the selected element to (FR7); the link once one was picked, or null when the picker was cancelled. */
   pickNoteLink: () => Promise<ElementLink | null>;
-  /** Follows [link]: opens what it points at; false when it would not open. */
+  /**
+   * Follows [link]: saves the canvas, steps Canvas aside for the note it names,
+   * leaves a step on the trail back, and puts the back badge over that note;
+   * false when it would not open, and Canvas stays.
+   */
   followLink: (link: ElementLink) => Promise<boolean>;
+  /** Where one step back goes (the last link's canvas and note page), or null with no link to go back along. */
+  backTo: () => TrailStep | null;
+  /**
+   * Takes one step back along the trail: that note, at its page, with Canvas
+   * over it showing that canvas. One at a time: a call while one runs is ignored.
+   */
+  goBack: () => Promise<void>;
   /**
    * Puts the canvas into the note as a thumbnail that links back to it: a
    * thumbnail of this canvas already on the page is redrawn where it sits
@@ -164,6 +200,7 @@ type NoteLink = {
 export function createCanvasSession({
   store,
   host,
+  badge,
   newCanvasId,
   logger,
   now = () => new Date(),
@@ -175,6 +212,17 @@ export function createCanvasSession({
   let pluginDirPath: string | null = null;
   let checkedInstall = false;
   let index: CanvasIndex | null = null;
+  // Kept in memory: the plugin runtime outlives the notes a link opens over it (seen on device, #34).
+  let trail: readonly TrailStep[] = [];
+  // One step back at a time: a second tap while one runs (the e-ink screen is slow to show it) would take two.
+  let isGoingBack = false;
+  // Whether Canvas is on screen, or stepped aside for a note a link opened: a step back that fails puts things
+  // back as they were, and those are not the same.
+  let isCanvasUp = false;
+  // Whether the note brought Canvas up (the sidebar, a thumbnail), and so hides it for anything it opens over it.
+  // Canvas brought up by the way back is not: the host unbinds it from the note as it hides, and only the note
+  // binds it again (seen in the host's PluginApp.closePluginView). Unbound, it stays in front of a picker.
+  let isBoundToNote = false;
   // Each operation starts after the previous one settles, so a button press
   // can never switch canvases halfway through a save.
   let tail: Promise<void> = Promise.resolve();
@@ -182,6 +230,17 @@ export function createCanvasSession({
   const serially = (task: () => Promise<void>): Promise<void> => {
     tail = tail.then(task).catch(error => logger.error(`${TAG} ${String(error)}`));
     return tail;
+  };
+
+  /** Logs [message] as news when [ok], and as a warning when not. */
+  const report = (ok: boolean, message: string): void => (ok ? logger.log(message) : logger.warn(message));
+
+  /** Saves the canvas shown. Never before one was opened: the view would not hold it, and saving would overwrite it. */
+  const saveShown = async (): Promise<void> => {
+    const dir = hasOpened ? await resolveCanvasDir() : null;
+    if (dir) {
+      await store.save(canvasFilePath(dir, canvasId));
+    }
   };
 
   /** Moves the canvas files in [from] into MyStyle/SnCanvas, keeping any it has already; logs how many moved. */
@@ -347,9 +406,7 @@ export function createCanvasSession({
     if (hasOpened && target === canvasId) {
       return;
     }
-    if (hasOpened) {
-      await store.save(canvasFilePath(dir, canvasId));
-    }
+    await saveShown();
     canvasId = target;
     hasOpened = true;
     await store.load(canvasFilePath(dir, canvasId), imagesPath(dir));
@@ -370,6 +427,10 @@ export function createCanvasSession({
 
   const open = (buttonId: number | null): Promise<void> =>
     serially(async () => {
+      // Canvas is back by another way than the badge, which has nothing left to do.
+      badge.hide();
+      isCanvasUp = true;
+      isBoundToNote = true;
       await rememberNotePen();
       const dir = await resolveCanvasDir();
       if (!dir) {
@@ -378,6 +439,7 @@ export function createCanvasSession({
       // The note this open belongs to: which canvas it shows, and which note that canvas is recorded against.
       const at = await host.currentPage();
       await show(dir, await targetFor(dir, buttonId, at), at);
+      trail = trailKeptAt(trail, buttonId === BUTTON_ID_OPEN_LINKED ? null : at);
       logger.log(`${TAG} button=${buttonId} note=${at?.notePath ?? 'unknown'} opened canvas=${canvasId}`);
     });
 
@@ -388,6 +450,7 @@ export function createCanvasSession({
         return;
       }
       await show(dir, newCanvasId(), await host.currentPage());
+      trail = [];
       logger.log(`${TAG} new canvas=${canvasId}`);
     });
 
@@ -523,7 +586,7 @@ export function createCanvasSession({
    * last left on, so linking asks for nothing but the note itself.
    */
   const pickNoteLink = async (): Promise<ElementLink | null> => {
-    const target = await host.pickNote();
+    const target = await pickOver(host.pickNote);
     if (target === null) {
       logger.log(`${TAG}[LINK] no note picked; nothing linked`);
       return null;
@@ -533,19 +596,115 @@ export function createCanvasSession({
   };
 
   const followLink = async (link: ElementLink): Promise<boolean> => {
-    const opened = await host.openNote(link.target, link.page);
-    const said = `${TAG}[LINK] ${opened ? 'followed' : 'could not follow'} link to ${link.target} page=${link.page}`;
-    if (opened) {
-      logger.log(said);
-    } else {
-      logger.warn(said);
-    }
+    let opened = false;
+    await serially(async () => {
+      await saveShown();
+      const from = await host.currentPage();
+      opened = await leaveFor({notePath: link.target, page: link.page});
+      if (!opened) {
+        await comeBack();
+      } else if (from !== null) {
+        trail = withStep(trail, {...from, canvasId, to: link.target});
+        badge.show(noteNameOf(from.notePath), link.target);
+      }
+    });
+    report(opened, `${TAG}[LINK] ${opened ? 'followed' : 'could not follow'} link to ${link.target} page=${link.page}`);
     return opened;
   };
 
+  /**
+   * Opens the note page [to], Canvas stepping aside first: one brought up by
+   * the way back would otherwise stay in front of it. Whether Canvas comes
+   * back when the note will not open is the caller's to say.
+   */
+  const leaveFor = async (to: NotePage): Promise<boolean> => {
+    await stepAside();
+    return host.openNote(to.notePath, to.page);
+  };
+
+  /** Hides Canvas, which unbinds it from the note until the note opens it again. */
+  const stepAside = async (): Promise<void> => {
+    await host.closeView();
+    isCanvasUp = false;
+    isBoundToNote = false;
+  };
+
+  /**
+   * Runs one of the host's pickers over Canvas. Canvas the note brought up is
+   * hidden by the host for it; Canvas the way back brought up is not, and would
+   * cover it, so it steps aside itself and comes back once the pick is made.
+   */
+  const pickOver = async <T>(pick: () => Promise<T>): Promise<T> => {
+    if (isBoundToNote || !isCanvasUp) {
+      return pick();
+    }
+    await stepAside();
+    try {
+      return await pick();
+    } finally {
+      await comeBack();
+    }
+  };
+
+  /** Brings Canvas back to the front, as it was left. */
+  const comeBack = async (): Promise<void> => {
+    isCanvasUp = await host.showView();
+  };
+
+  const goBack = (): Promise<void> => {
+    if (isGoingBack) {
+      return tail;
+    }
+    isGoingBack = true;
+    return stepBack().finally(() => {
+      isGoingBack = false;
+    });
+  };
+
+  const stepBack = (): Promise<void> =>
+    serially(async () => {
+      badge.hide();
+      const step = trail.at(-1);
+      const dir = await resolveCanvasDir();
+      if (step === undefined || dir === null) {
+        // Nothing to go back to (never offered): bringing Canvas up would show a canvas over a note it may not be.
+        logger.warn(`${TAG}[LINK] nothing to go back to`);
+        return;
+      }
+      const said = `to ${step.notePath} page=${step.page} canvas=${step.canvasId}`;
+      const wasUp = isCanvasUp;
+      // A step further back than one: its canvas is not the one shown. Switched while Canvas is up, since a
+      // hidden Canvas has no view to save from or load into. From the badge over a note, it is the one shown.
+      const here = await host.currentPage();
+      const left = canvasId;
+      await show(dir, step.canvasId, step);
+      if (!(await leaveFor(step))) {
+        // Things go back as they were, and the step stays: Canvas up on the canvas it showed, or, from the badge,
+        // down with the badge back over the note.
+        if (wasUp) {
+          await comeBack();
+          await show(dir, left, here);
+        } else {
+          badge.show(noteNameOf(step.notePath), step.to);
+        }
+        logger.warn(`${TAG}[LINK] could not go back ${said}`);
+        return;
+      }
+      if (await badge.arriveOver(step.notePath)) {
+        isCanvasUp = true;
+        trail = trail.slice(0, -1);
+        logger.log(`${TAG}[LINK] back ${said}`);
+      } else {
+        // Canvas stays down over whichever note opened, and the step stays: the sidebar then opens that note's
+        // own canvas, or, back in the note the link led to, offers the step again. Bringing Canvas up here would
+        // show the step's canvas over a note it may not belong to.
+        logger.warn(`${TAG}[LINK] could not come back in time ${said}; Canvas stays down`);
+      }
+    });
+
   const insertImage = async (): Promise<boolean> => {
     // Picked outside the queue: the picker waits on the user, and must never hold up a save or a close.
-    const source = await host.pickImage();
+    const source = await pickOver(host.pickImage);
     if (source === null) {
       return false;
     }
@@ -585,13 +744,21 @@ export function createCanvasSession({
 
   const close = (): Promise<void> =>
     serially(async () => {
-      // Never saved before a canvas was opened: the view would not hold it, and saving would overwrite it.
-      const dir = hasOpened ? await resolveCanvasDir() : null;
-      if (dir) {
-        await store.save(canvasFilePath(dir, canvasId));
-      }
-      host.closeView();
+      await saveShown();
+      await stepAside();
     });
 
-  return {open, newCanvas, saveToNote, insertImage, pickNoteLink, followLink, exportPdf, close, currentCanvasId: () => canvasId};
+  return {
+    open,
+    newCanvas,
+    saveToNote,
+    insertImage,
+    pickNoteLink,
+    followLink,
+    backTo: () => trail.at(-1) ?? null,
+    goBack,
+    exportPdf,
+    close,
+    currentCanvasId: () => canvasId,
+  };
 }

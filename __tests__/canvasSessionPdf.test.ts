@@ -4,7 +4,7 @@
  * reported, never thrown.
  */
 import {createCanvasSession} from '../src/application/canvasSession';
-import {createFakeHost, createFakeStore, createRecordingLogger} from './helpers/fakePorts';
+import {createFakeBadge, createFakeHost, createFakeStore, createRecordingLogger} from './helpers/fakePorts';
 
 // Canvas has opened since it was installed, so no test here starts a new canvas.
 const MARKER = '/plugin/canvas-opened';
@@ -17,7 +17,7 @@ const setup = () => {
   const host = createFakeHost();
   host.fileWrite = true;
   const logger = createRecordingLogger();
-  const session = createCanvasSession({store, host, logger, newCanvasId: () => 'c-1', now: () => AT});
+  const session = createCanvasSession({store, host, badge: createFakeBadge(), logger, newCanvasId: () => 'c-1', now: () => AT});
   return {store, host, logger, session};
 };
 
@@ -48,6 +48,6 @@ test('without a clock given, an export is named by the real one', async () => {
   const store = createFakeStore({[MARKER]: 'opened'});
   const host = createFakeHost();
   host.fileWrite = true;
-  const session = createCanvasSession({store, host, logger: createRecordingLogger(), newCanvasId: () => 'c-1'});
+  const session = createCanvasSession({store, host, badge: createFakeBadge(), logger: createRecordingLogger(), newCanvasId: () => 'c-1'});
   expect(await session.exportPdf()).toMatch(/^\/storage\/emulated\/0\/EXPORT\/Canvas-\d{8}-\d{6}\.pdf$/);
 });
