@@ -2,7 +2,7 @@
 // plugin directory and `shown` for what the native view displays, so tests
 // assert outcomes (what got saved where) rather than call sequences.
 
-import type {CanvasStorePort, HostPort, NotePen} from '../../src/application/canvasSession';
+import type {BackBadgePort, CanvasStorePort, HostPort, NotePen} from '../../src/application/canvasSession';
 import type {NotePage} from '../../src/domain/canvasIndex';
 import {isCanvasId} from '../../src/domain/canvasLink';
 import type {Logger} from '../../src/sdk/types';
@@ -128,6 +128,10 @@ export type FakeHost = HostPort & {
   /** The pictures tagged with a canvas, in order. */
   tagged: Array<{canvasId: string; picture: unknown; imagePath: string}>;
   closeCount: number;
+  /** How often the plugin view was brought back to the front. */
+  showCount: number;
+  /** The order the view was hidden and shown, and notes opened, in: 'close', 'show' and 'open <path>'. */
+  steps: string[];
   /** The pen the note writes with, as getPenInfo reports it. */
   pen: NotePen | null;
   /** The image the user picks; null when they cancel the picker. */
@@ -161,6 +165,7 @@ export const createFakeHost = (): FakeHost => {
         return false;
       }
       host.openedNotes.push({path, page});
+      host.steps.push(`open ${path}`);
       return true;
     },
     lassoed: [],
@@ -174,6 +179,8 @@ export const createFakeHost = (): FakeHost => {
     tagSucceeds: true,
     tagged: [],
     closeCount: 0,
+    showCount: 0,
+    steps: [],
     async pluginDir() {
       return host.dir;
     },
@@ -208,11 +215,36 @@ export const createFakeHost = (): FakeHost => {
       host.tagged.push({canvasId, picture, imagePath});
       return true;
     },
-    closeView() {
+    async closeView() {
       host.closeCount += 1;
+      host.steps.push('close');
+      return true;
+    },
+    async showView() {
+      host.showCount += 1;
+      host.steps.push('show');
+      return true;
     },
   };
   return host;
+};
+
+/** The back badge, recording what it shows. */
+export type FakeBadge = BackBadgePort & {shown: {label: string; notePath: string} | null; hides: number};
+
+export const createFakeBadge = (): FakeBadge => {
+  const badge: FakeBadge = {
+    shown: null,
+    hides: 0,
+    show(label, notePath) {
+      badge.shown = {label, notePath};
+    },
+    hide() {
+      badge.hides += 1;
+      badge.shown = null;
+    },
+  };
+  return badge;
 };
 
 /** A picture element on a note page, as getElements reports one: sn-plugin-lib's TYPE_PICTURE, numbered from 1. */

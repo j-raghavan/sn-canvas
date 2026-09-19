@@ -5,7 +5,7 @@
  * the double-tap guard, new canvases, and close.
  */
 import {createCanvasSession} from '../src/application/canvasSession';
-import {createFakeHost, createFakeStore, createRecordingLogger, notePicture} from './helpers/fakePorts';
+import {createFakeBadge, createFakeHost, createFakeStore, createRecordingLogger, notePicture} from './helpers/fakePorts';
 
 const SCRATCH = '/plugin/Canvas/default.json';
 const INDEX = '/plugin/Canvas/links.json';
@@ -30,18 +30,20 @@ const savedIndex = (store: {files: Map<string, string>}) => JSON.parse(String(st
 const setup = (files: Record<string, string> = {}, {installedJustNow = false} = {}) => {
   const store = createFakeStore(installedJustNow ? files : {[MARKER]: 'opened', ...files});
   const host = createFakeHost();
+  const badge = createFakeBadge();
   const logger = createRecordingLogger();
   let minted = 0;
   const session = createCanvasSession({
     store,
     host,
+    badge,
     logger,
     newCanvasId: () => {
       minted += 1;
       return `c-${minted}`;
     },
   });
-  return {store, host, logger, session};
+  return {store, host, badge, logger, session};
 };
 
 describe('open', () => {
@@ -660,14 +662,51 @@ describe('links to notes', () => {
     expect(logger.lines).toContain('log [SNCANVAS][LINK] no note picked; nothing linked');
   });
 
-  test('following a link opens the note it names, and says so when it will not open', async () => {
-    const {host, logger, session} = setup({[SCRATCH]: 'scratch'});
-    const link = {kind: 'note', target: '/n.note', page: -1} as const;
+  const link = {kind: 'note', target: '/n.note', page: -1} as const;
+
+  test('following a link saves the canvas, steps Canvas aside for the note, and leaves the back badge over it', async () => {
+    const {store, host, badge, logger, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(500);
+    store.shown = 'scratch, and more';
     expect(await session.followLink(link)).toBe(true);
-    expect(host.openedNotes).toEqual([{path: '/n.note', page: -1}]);
+    expect(store.files.get(SCRATCH)).toBe('scratch, and more');
+    expect(host.steps).toEqual(['close', 'open /n.note']);
+    expect(badge.shown).toEqual({label: 'Canvas', notePath: '/n.note'});
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] followed link to /n.note page=-1');
+  });
+
+  test('a note that will not open brings Canvas straight back, with no badge, and says so', async () => {
+    const {host, badge, logger, session} = setup({[SCRATCH]: 'scratch'});
     host.openNoteSucceeds = false;
     expect(await session.followLink(link)).toBe(false);
+    expect(host.steps).toEqual(['close', 'show']);
+    expect(badge.shown).toBeNull();
     expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not follow link to /n.note page=-1');
+  });
+
+  test('a link followed before any canvas opened saves nothing over one', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    expect(await session.followLink(link)).toBe(true);
+    expect(store.files.get(SCRATCH)).toBe('scratch');
+    expect(host.openedNotes).toEqual([{path: '/n.note', page: -1}]);
+  });
+
+  test('a tap on the badge brings Canvas back as the link left it', async () => {
+    const {store, host, badge, logger, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(500);
+    await session.followLink(link);
+    await session.returnFromLink();
+    expect(badge.shown).toBeNull();
+    expect(host.steps).toEqual(['close', 'open /n.note', 'show']);
+    expect(store.shown).toBe('scratch');
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] back to canvas=default');
+  });
+
+  test('Canvas opened any other way takes the badge down', async () => {
+    const {badge, session} = setup({[SCRATCH]: 'scratch'});
+    await session.followLink(link);
+    await session.open(500);
+    expect(badge.shown).toBeNull();
   });
 });
 

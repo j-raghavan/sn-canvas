@@ -114,12 +114,29 @@ export type HostPort = {
    * the PNG at [imagePath], so every later lasso of it names its canvas; true once written.
    */
   tagPicture: (picture: unknown, canvasId: string, at: NotePage, imagePath: string) => Promise<boolean>;
-  closeView: () => void;
+  /** Hides the plugin view, leaving Canvas running behind whatever the user goes to; true once hidden. */
+  closeView: () => Promise<boolean>;
+  /** Brings the plugin view back to the front, as it was left; true once shown. */
+  showView: () => Promise<boolean>;
 };
+
+/**
+ * The badge over a note that a followed link opened (#34): one tap on it
+ * brings Canvas back. Shown and hidden here; its taps reach the screen.
+ */
+export type BackBadgePort = {
+  /** Shows the badge reading [label] over the note at [notePath], until it is tapped or that note is left. */
+  show: (label: string, notePath: string) => void;
+  hide: () => void;
+};
+
+/** The back badge's taps, which the screen hands to its session's returnFromLink. */
+export type BackBadgeTaps = {onTapped: (listener: () => void) => () => void};
 
 export type CanvasSessionDeps = {
   store: CanvasStorePort;
   host: HostPort;
+  badge: BackBadgePort;
   newCanvasId: () => string;
   logger: Logger;
   /** The device's clock, which names each PDF export; the real one unless given. */
@@ -135,8 +152,14 @@ export type CanvasSession = {
   insertImage: () => Promise<boolean>;
   /** Asks for a note to link the selected element to (FR7); the link once one was picked, or null when the picker was cancelled. */
   pickNoteLink: () => Promise<ElementLink | null>;
-  /** Follows [link]: opens what it points at; false when it would not open. */
+  /**
+   * Follows [link]: saves the canvas, steps Canvas aside for the note it names,
+   * and puts the back badge over that note; false when it would not open, and
+   * Canvas stays.
+   */
   followLink: (link: ElementLink) => Promise<boolean>;
+  /** The back badge was tapped: Canvas comes back as the link left it. */
+  returnFromLink: () => Promise<void>;
   /**
    * Puts the canvas into the note as a thumbnail that links back to it: a
    * thumbnail of this canvas already on the page is redrawn where it sits
@@ -153,6 +176,9 @@ export type CanvasSession = {
 
 const TAG = '[SNCANVAS]';
 
+/** What the back badge says: where a tap on it goes. */
+export const BACK_BADGE_LABEL = 'Canvas';
+
 /** A thumbnail just put into the note: which canvas, whether it was redrawn in place, and the page read on the way. */
 type NoteLink = {
   dir: string;
@@ -164,6 +190,7 @@ type NoteLink = {
 export function createCanvasSession({
   store,
   host,
+  badge,
   newCanvasId,
   logger,
   now = () => new Date(),
@@ -182,6 +209,17 @@ export function createCanvasSession({
   const serially = (task: () => Promise<void>): Promise<void> => {
     tail = tail.then(task).catch(error => logger.error(`${TAG} ${String(error)}`));
     return tail;
+  };
+
+  /** Logs [message] as news when [ok], and as a warning when not. */
+  const report = (ok: boolean, message: string): void => (ok ? logger.log(message) : logger.warn(message));
+
+  /** Saves the canvas shown. Never before one was opened: the view would not hold it, and saving would overwrite it. */
+  const saveShown = async (): Promise<void> => {
+    const dir = hasOpened ? await resolveCanvasDir() : null;
+    if (dir) {
+      await store.save(canvasFilePath(dir, canvasId));
+    }
   };
 
   /** Moves the canvas files in [from] into MyStyle/SnCanvas, keeping any it has already; logs how many moved. */
@@ -347,9 +385,7 @@ export function createCanvasSession({
     if (hasOpened && target === canvasId) {
       return;
     }
-    if (hasOpened) {
-      await store.save(canvasFilePath(dir, canvasId));
-    }
+    await saveShown();
     canvasId = target;
     hasOpened = true;
     await store.load(canvasFilePath(dir, canvasId), imagesPath(dir));
@@ -370,6 +406,8 @@ export function createCanvasSession({
 
   const open = (buttonId: number | null): Promise<void> =>
     serially(async () => {
+      // Canvas is back by another way than the badge, which has nothing left to do.
+      badge.hide();
       await rememberNotePen();
       const dir = await resolveCanvasDir();
       if (!dir) {
@@ -533,15 +571,27 @@ export function createCanvasSession({
   };
 
   const followLink = async (link: ElementLink): Promise<boolean> => {
-    const opened = await host.openNote(link.target, link.page);
-    const said = `${TAG}[LINK] ${opened ? 'followed' : 'could not follow'} link to ${link.target} page=${link.page}`;
-    if (opened) {
-      logger.log(said);
-    } else {
-      logger.warn(said);
-    }
+    let opened = false;
+    await serially(async () => {
+      await saveShown();
+      // Canvas steps aside first: one brought back by the badge would otherwise stay in front of the note.
+      await host.closeView();
+      opened = await host.openNote(link.target, link.page);
+      if (opened) {
+        badge.show(BACK_BADGE_LABEL, link.target);
+      } else {
+        await host.showView();
+      }
+    });
+    report(opened, `${TAG}[LINK] ${opened ? 'followed' : 'could not follow'} link to ${link.target} page=${link.page}`);
     return opened;
   };
+
+  const returnFromLink = (): Promise<void> =>
+    serially(async () => {
+      badge.hide();
+      report(await host.showView(), `${TAG}[LINK] back to canvas=${canvasId}`);
+    });
 
   const insertImage = async (): Promise<boolean> => {
     // Picked outside the queue: the picker waits on the user, and must never hold up a save or a close.
@@ -585,13 +635,20 @@ export function createCanvasSession({
 
   const close = (): Promise<void> =>
     serially(async () => {
-      // Never saved before a canvas was opened: the view would not hold it, and saving would overwrite it.
-      const dir = hasOpened ? await resolveCanvasDir() : null;
-      if (dir) {
-        await store.save(canvasFilePath(dir, canvasId));
-      }
-      host.closeView();
+      await saveShown();
+      await host.closeView();
     });
 
-  return {open, newCanvas, saveToNote, insertImage, pickNoteLink, followLink, exportPdf, close, currentCanvasId: () => canvasId};
+  return {
+    open,
+    newCanvas,
+    saveToNote,
+    insertImage,
+    pickNoteLink,
+    followLink,
+    returnFromLink,
+    exportPdf,
+    close,
+    currentCanvasId: () => canvasId,
+  };
 }

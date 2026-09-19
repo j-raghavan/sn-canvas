@@ -44,6 +44,7 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   insertImage: jest.fn().mockResolvedValue(true),
   pickNoteLink: jest.fn().mockResolvedValue({kind: 'note', target: '/storage/emulated/0/Note/plan.note', page: -1}),
   followLink: jest.fn().mockResolvedValue(true),
+  returnFromLink: jest.fn().mockResolvedValue(undefined),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
   close: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
@@ -63,10 +64,25 @@ const createFakeButtons = (lastButtonId: number | null = null) => {
   return buttons;
 };
 
-const render = async (session = createFakeSession(), buttons = createFakeButtons()) => {
+/** The back badge's taps: [tap] is the user tapping it over the note. */
+const createFakeBadgeTaps = () => {
+  const listeners = new Set<() => void>();
+  return {
+    onTapped: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    tap: () => listeners.forEach(listener => listener()),
+    listenerCount: () => listeners.size,
+  };
+};
+
+const render = async (session = createFakeSession(), buttons = createFakeButtons(), badgeTaps = createFakeBadgeTaps()) => {
   let renderer: ReactTestRenderer.ReactTestRenderer;
   await act(async () => {
-    renderer = ReactTestRenderer.create(<CanvasScreen createSession={() => session} buttonEvents={buttons} />);
+    renderer = ReactTestRenderer.create(
+      <CanvasScreen createSession={() => session} buttonEvents={buttons} backBadgeTaps={badgeTaps} />,
+    );
   });
   const press = async (testID: string) => {
     await act(async () => {
@@ -288,10 +304,14 @@ describe('session', () => {
     const buttons = createFakeButtons();
     let renderer: ReactTestRenderer.ReactTestRenderer;
     await act(async () => {
-      renderer = ReactTestRenderer.create(<CanvasScreen createSession={createSession} buttonEvents={buttons} />);
+      renderer = ReactTestRenderer.create(
+        <CanvasScreen createSession={createSession} buttonEvents={buttons} backBadgeTaps={createFakeBadgeTaps()} />,
+      );
     });
     await act(async () => {
-      renderer.update(<CanvasScreen createSession={createSession} buttonEvents={buttons} />);
+      renderer.update(
+        <CanvasScreen createSession={createSession} buttonEvents={buttons} backBadgeTaps={createFakeBadgeTaps()} />,
+      );
     });
     expect(createSession).toHaveBeenCalledTimes(1);
   });
@@ -483,6 +503,18 @@ describe('links', () => {
     expect(shows('Could not open that note')).toBe(true);
     await follow({kind: 'canvas', target: ''});
     expect(session.followLink).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the back badge', () => {
+  test('a tap on it brings Canvas back through the session, and unmounting stops listening', async () => {
+    const session = createFakeSession();
+    const badgeTaps = createFakeBadgeTaps();
+    const {renderer} = await render(session, createFakeButtons(), badgeTaps);
+    await act(async () => badgeTaps.tap());
+    expect(session.returnFromLink).toHaveBeenCalledTimes(1);
+    await act(async () => renderer.unmount());
+    expect(badgeTaps.listenerCount()).toBe(0);
   });
 });
 

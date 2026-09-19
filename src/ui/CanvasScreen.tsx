@@ -7,7 +7,7 @@
 
 import React, {useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
-import type {CanvasSession} from '../application/canvasSession';
+import type {BackBadgeTaps, CanvasSession} from '../application/canvasSession';
 import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
 import {parseElementLink} from '../domain/canvasLink';
 import {parseTextEditRequest, type TextEditRequest} from '../domain/textEdit';
@@ -36,6 +36,8 @@ type Props = {
   /** Called once per mount: a session belongs to the native view it drives. */
   createSession: () => CanvasSession;
   buttonEvents: ButtonEventSource;
+  /** Taps on the badge a followed link leaves over the note (#34), each bringing Canvas back. */
+  backBadgeTaps: BackBadgeTaps;
 };
 
 // FR23: Save to Note has its own icon; the upward arrow is kept for Export to PDF.
@@ -49,7 +51,7 @@ const CLOSE_ICON = require('../../assets/icons/action-close.png');
 /** How long the "Added to note" confirmation stays up. */
 export const NOTICE_MS = 2500;
 
-export default function CanvasScreen({createSession, buttonEvents}: Props): React.JSX.Element {
+export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps}: Props): React.JSX.Element {
   const [session] = useState(createSession);
   const [einkGrays] = useState(nativeEinkGrays);
   const [toolMode, setToolMode] = useState<ToolMode>('select');
@@ -70,6 +72,8 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
     openCanvas(buttonEvents.lastButtonId());
     return buttonEvents.onButton(openCanvas);
   }, [session, buttonEvents]);
+
+  useEffect(() => backBadgeTaps.onTapped(session.returnFromLink), [session, backBadgeTaps]);
 
   useEffect(() => {
     if (notice === null) {

@@ -4,6 +4,7 @@
  */
 const mockGetPluginDirPath = jest.fn();
 const mockClosePluginView = jest.fn();
+const mockShowPluginView = jest.fn();
 const mockGetLassoElements = jest.fn();
 const mockInsertImage = jest.fn();
 const mockGetCurrentFilePath = jest.fn();
@@ -19,6 +20,7 @@ jest.mock('sn-plugin-lib', () => ({
   PluginManager: {
     getPluginDirPath: () => mockGetPluginDirPath(),
     closePluginView: () => mockClosePluginView(),
+    showPluginView: () => mockShowPluginView(),
   },
   PluginCommAPI: {
     getPenInfo: () => mockGetPenInfo(),
@@ -208,12 +210,16 @@ test('pickImage asks the file picker for one image, and is its path, or null for
   expect(await host.pickImage()).toBeNull();
 });
 
-test('closeView closes the plugin view, and a failure to close is only logged', async () => {
+test('closeView and showView hide and bring back the plugin view; a failure is only logged', async () => {
   const logger = createRecordingLogger();
   const host = createHostSdk(logger, requestAccess);
+  mockClosePluginView.mockResolvedValueOnce(true);
+  expect(await host.closeView()).toBe(true);
+  mockShowPluginView.mockResolvedValueOnce(true);
+  expect(await host.showView()).toBe(true);
   mockClosePluginView.mockImplementationOnce(failure);
-  host.closeView();
-  await new Promise(resolve => setImmediate(resolve));
-  expect(mockClosePluginView).toHaveBeenCalledTimes(1);
+  expect(await host.closeView()).toBe(false);
+  mockShowPluginView.mockResolvedValueOnce(undefined);
+  expect(await host.showView()).toBe(false);
   expect(logger.lines).toEqual(['warn [SNCANVAS] closePluginView failed: Error: host said no']);
 });

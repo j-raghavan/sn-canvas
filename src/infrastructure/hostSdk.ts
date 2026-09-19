@@ -107,8 +107,7 @@ export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<b
         }
         return true;
       }),
-    closeView: () => {
-      attempt('closePluginView', false, () => PluginManager.closePluginView());
-    },
+    closeView: () => attempt('closePluginView', false, async () => (await PluginManager.closePluginView()) === true),
+    showView: () => attempt('showPluginView', false, async () => (await PluginManager.showPluginView()) === true),
   };
 }
