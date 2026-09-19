@@ -4,7 +4,7 @@
  * cancelled picker or a missing canvas folder adds nothing.
  */
 import {createCanvasSession} from '../src/application/canvasSession';
-import {createFakeHost, createFakeStore, createRecordingLogger} from './helpers/fakePorts';
+import {createFakeBadge, createFakeHost, createFakeStore, createRecordingLogger} from './helpers/fakePorts';
 
 // Canvas has opened since it was installed, so no test here starts a new canvas.
 const MARKER = '/plugin/canvas-opened';
@@ -14,7 +14,7 @@ const setup = () => {
   const store = createFakeStore({[MARKER]: 'opened'});
   const host = createFakeHost();
   const logger = createRecordingLogger();
-  const session = createCanvasSession({store, host, logger, newCanvasId: () => 'c-1'});
+  const session = createCanvasSession({store, host, badge: createFakeBadge(), logger, newCanvasId: () => 'c-1'});
   return {store, host, logger, session};
 };
 

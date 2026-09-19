@@ -5,11 +5,12 @@
 // session and the button presses are injected (wiring.ts, via App.tsx), and
 // the action bar and style panel follow the state the canvas reports.
 
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
-import type {CanvasSession} from '../application/canvasSession';
+import type {BackBadgeTaps, CanvasSession} from '../application/canvasSession';
 import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
 import {parseElementLink} from '../domain/canvasLink';
+import {noteNameOf, type TrailStep} from '../domain/linkTrail';
 import {parseTextEditRequest, type TextEditRequest} from '../domain/textEdit';
 import ActionBar from './ActionBar';
 import HelpHints from './HelpHints';
@@ -36,6 +37,8 @@ type Props = {
   /** Called once per mount: a session belongs to the native view it drives. */
   createSession: () => CanvasSession;
   buttonEvents: ButtonEventSource;
+  /** Taps on the badge a followed link leaves over the note (#34), each bringing Canvas back. */
+  backBadgeTaps: BackBadgeTaps;
 };
 
 // FR23: Save to Note has its own icon; the upward arrow is kept for Export to PDF.
@@ -45,11 +48,13 @@ const EXPORT_PDF_ICON = require('../../assets/icons/action-save.png');
 // A notice names a file from the storage root down, as the device's file manager shows it.
 const STORAGE_ROOT = '/storage/emulated/0';
 const CLOSE_ICON = require('../../assets/icons/action-close.png');
+// #34: the firmware's return-badge arrow, white outlined in black, shown untinted.
+const BACK_ARROW_ICON = require('../../assets/icons/badge-back-arrow.png');
 
 /** How long the "Added to note" confirmation stays up. */
 export const NOTICE_MS = 2500;
 
-export default function CanvasScreen({createSession, buttonEvents}: Props): React.JSX.Element {
+export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps}: Props): React.JSX.Element {
   const [session] = useState(createSession);
   const [einkGrays] = useState(nativeEinkGrays);
   const [toolMode, setToolMode] = useState<ToolMode>('select');
@@ -62,14 +67,20 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   // Clearing takes everything at once, so both ways in (the eraser's options, the ⋮ menu) ask here first.
   const [isConfirmingClear, setConfirmingClear] = useState(false);
   const canvasRef = useRef<CanvasViewRef>(null);
+  // #34: one step back along the links followed to this canvas, offered as the firmware offers its own.
+  const [back, setBack] = useState<TrailStep | null>(null);
+  const goBack = useCallback(() => session.goBack().then(() => setBack(session.backTo())), [session]);
 
   // The plugin runtime stays warm between opens, so this screen can stay mounted across them: every press
   // re-resolves which canvas to show.
   useEffect(() => {
-    const openCanvas = (buttonId: number | null) => session.open(buttonId);
+    const openCanvas = (buttonId: number | null) => session.open(buttonId).then(() => setBack(session.backTo()));
     openCanvas(buttonEvents.lastButtonId());
     return buttonEvents.onButton(openCanvas);
   }, [session, buttonEvents]);
+
+  // The badge over a note a link opened: a tap is one step back, as the header's is.
+  useEffect(() => backBadgeTaps.onTapped(goBack), [goBack, backBadgeTaps]);
 
   useEffect(() => {
     if (notice === null) {
@@ -118,6 +129,11 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
     }
   };
 
+  const newCanvas = async () => {
+    await session.newCanvas();
+    setBack(session.backTo());
+  };
+
   // FR12: confirm what happened, so the thumbnail isn't added twice for want of feedback, and a
   // refresh of the one already on the page doesn't look like nothing happened.
   const saveToNote = async () => {
@@ -130,7 +146,23 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Canvas</Text>
+        <View style={styles.headerStart}>
+          {back !== null && (
+            <Pressable
+              testID="canvas-back"
+              accessibilityLabel={`Back to ${noteNameOf(back.notePath)}`}
+              style={styles.backBadge}
+              onPress={goBack}>
+              <View style={styles.backBox}>
+                <Text style={styles.backLabel} numberOfLines={1}>
+                  {noteNameOf(back.notePath)}
+                </Text>
+              </View>
+              <Image source={BACK_ARROW_ICON} style={styles.backArrow} />
+            </Pressable>
+          )}
+          <Text style={styles.title}>Canvas</Text>
+        </View>
         <View style={styles.headerActions}>
           {/* An empty canvas has nothing to export or to show in a note: both would produce a blank page. */}
           <HeaderButton
@@ -167,7 +199,7 @@ export default function CanvasScreen({createSession, buttonEvents}: Props): Reac
         <ActionBar
           ui={ui}
           onCommand={runCommand}
-          onNewCanvas={session.newCanvas}
+          onNewCanvas={newCanvas}
           onClearCanvas={() => setConfirmingClear(true)}
           onLinkToNote={linkToNote}
           onMenuOpen={() => setShowHints(false)}
@@ -267,6 +299,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#000000',
+  },
+  headerStart: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  // The firmware's return badge: a black box with a white label, its arrow running past the box's right edge.
+  backBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    flexShrink: 1,
+  },
+  backBox: {
+    backgroundColor: '#000000',
+    borderRadius: 4,
+    paddingLeft: 14,
+    paddingRight: 30,
+    paddingVertical: 6,
+    flexShrink: 1,
+  },
+  backLabel: {
+    fontSize: 16,
+    color: '#ffffff',
+  },
+  backArrow: {
+    width: 34,
+    height: 34,
+    marginLeft: -24,
   },
   headerActions: {
     flexDirection: 'row',

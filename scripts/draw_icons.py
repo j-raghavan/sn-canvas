@@ -207,6 +207,16 @@ def tool_table():
     save(image, "tool-table")
 
 
+def badge_back_arrow():
+    """The back badge's arrow (#34): white, outlined in black, pointing left, as the firmware's return badge
+    draws it and BackBadgeWindow.kt copies it. Shown untinted, over the badge's black box."""
+    image, draw = new_canvas()
+    corners = [(0, 0), (36, -30), (36, -12), (80, -12), (80, 12), (36, 12), (36, 30)]
+    points = [((8 + x * 1.4) * SCALE, (64 + y * 1.4) * SCALE) for x, y in corners]
+    draw.polygon(points, fill="white", outline="black", width=7 * SCALE)
+    save(image, "badge-back-arrow")
+
+
 ICONS = [
     action_save_to_note,
     action_duplicate,
@@ -229,6 +239,7 @@ ICONS = [
     tool_text,
     tool_note,
     tool_table,
+    badge_back_arrow,
 ]
 
 if __name__ == "__main__":

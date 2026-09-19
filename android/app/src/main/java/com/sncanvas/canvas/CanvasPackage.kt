@@ -7,7 +7,8 @@ import com.facebook.react.uimanager.ViewManager
 
 /**
  * Native composition root: registers [CanvasModule] (save/load/thumbnail
- * calls) and [CanvasViewManager] (the `<CanvasView>` surface), and
+ * calls), [BackBadgeModule] (the way back from a followed link) and
+ * [CanvasViewManager] (the `<CanvasView>` surface), and
  * wires the two dependencies they share: the [ActiveViewRegistry] that tells
  * the module which canvas view is live, and the [ImageCache] that the module
  * imports images into and the view draws them from (FR22). Registered in
@@ -18,7 +19,7 @@ class CanvasPackage : ReactPackage {
     private val images = ImageCache()
 
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-        listOf(CanvasModule(reactContext, canvasRegistry, images))
+        listOf(CanvasModule(reactContext, canvasRegistry, images), BackBadgeModule(reactContext))
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
         listOf(CanvasViewManager(canvasRegistry, images))
