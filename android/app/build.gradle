@@ -269,7 +269,7 @@ kover {
                     "com.sncanvas.canvas.CanvasModule*",
                     "com.sncanvas.canvas.CanvasPackage*",
                     // The back badge's window and bridge: Android WindowManager and RN glue, verified on the
-                    // device; when it goes is BackBadgeRule, covered.
+                    // device; when it goes is BackBadgeWatch, and the trip back ReturnTrip, both covered.
                     "com.sncanvas.canvas.BackBadgeWindow*",
                     "com.sncanvas.canvas.BackBadgeModule*",
                     // Android Canvas drawing only — same reason as CanvasView; the math

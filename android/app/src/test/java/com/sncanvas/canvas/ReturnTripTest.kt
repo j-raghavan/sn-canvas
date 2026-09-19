@@ -10,14 +10,16 @@ class ReturnTripTest {
     private class FakeHost(
         private var checksUntilOpen: Int,
         private val note: String,
+        private val canShow: Boolean = true,
     ) : ReturnTrip.Host {
         var shown = 0
         var waited = 0L
 
         override fun openNotePath(): String? = if (checksUntilOpen-- <= 0) note else "/other.note"
 
-        override fun showCanvas() {
+        override fun showCanvas(): Boolean {
             shown += 1
+            return canShow
         }
     }
 
@@ -38,12 +40,21 @@ class ReturnTripTest {
     }
 
     @Test
-    fun `a note that never comes up still brings Canvas back, and says so`() {
+    fun `a note that never comes up leaves Canvas for the caller, and says so`() {
         val host = FakeHost(checksUntilOpen = Int.MAX_VALUE, note = note)
         var result: Boolean? = null
         trip(host).arriveOver(note) { result = it }
-        assertEquals(1, host.shown)
+        assertEquals(0, host.shown)
         assertEquals(ReturnTrip.CHECKS * ReturnTrip.CHECK_MS, host.waited)
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun `a Canvas that will not come up is reported, not taken for arrived`() {
+        val host = FakeHost(checksUntilOpen = 0, note = note, canShow = false)
+        var result: Boolean? = null
+        trip(host).arriveOver(note) { result = it }
+        assertEquals(1, host.shown)
         assertEquals(false, result)
     }
 }

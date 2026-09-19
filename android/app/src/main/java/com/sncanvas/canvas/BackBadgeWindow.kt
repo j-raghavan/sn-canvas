@@ -9,6 +9,8 @@ import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
+import android.text.TextPaint
+import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -25,7 +27,7 @@ import android.view.WindowManager
  *
  * It watches which note is open ([openNote], checked on the main looper, which
  * runs while Canvas is covered, unlike JS timers) and goes once the user is
- * somewhere else ([BackBadgeRule]). Main thread only.
+ * somewhere else ([BackBadgeWatch]). Main thread only.
  */
 class BackBadgeWindow(
     private val context: Context,
@@ -35,13 +37,13 @@ class BackBadgeWindow(
     private val main = Handler(Looper.getMainLooper())
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var badge: View? = null
-    private var linkedNote: String? = null
+    private var verdict: BackBadgeWatch? = null
 
     private val watch =
         object : Runnable {
             override fun run() {
-                val linked = linkedNote ?: return
-                if (BackBadgeRule.isStillWanted(linked, openNote())) {
+                val current = verdict ?: return
+                if (current.isStillWanted(openNote())) {
                     main.postDelayed(this, WATCH_MS)
                 } else {
                     Log.i(TAG, "left the linked note; back badge hidden")
@@ -68,14 +70,13 @@ class BackBadgeWindow(
             return
         }
         badge = view
-        linkedNote = note
-        // The note takes a moment to become the open one; the first look waits for it.
-        main.postDelayed(watch, FIRST_WATCH_MS)
+        verdict = BackBadgeWatch(note, ARRIVAL_CHECKS)
+        main.postDelayed(watch, WATCH_MS)
     }
 
     fun hide() {
         main.removeCallbacks(watch)
-        linkedNote = null
+        verdict = null
         val view = badge ?: return
         badge = null
         try {
@@ -107,7 +108,7 @@ class BackBadgeWindow(
     ) : View(context) {
         private val box = Paint().apply { color = Color.BLACK }
         private val text =
-            Paint().apply {
+            TextPaint().apply {
                 color = Color.WHITE
                 textSize = LABEL_SIZE_PX
                 isAntiAlias = true
@@ -126,9 +127,11 @@ class BackBadgeWindow(
         override fun onDraw(canvas: Canvas) {
             boxRect.set(0f, 0f, width - ARROW_OVERHANG_PX, height.toFloat())
             canvas.drawRoundRect(boxRect, CORNER_PX, CORNER_PX, box)
-            canvas.drawText(label, LABEL_LEFT_PX, height / 2f + LABEL_DROP_PX, text)
             // The firmware's arrow: pointing left, its tail running past the box's right edge.
             val tipX = width - ARROW_TIP_FROM_RIGHT_PX
+            // A long note name (the device names new ones by date and time) ends in an ellipsis before the arrow.
+            val shown = TextUtils.ellipsize(label, text, tipX - LABEL_LEFT_PX - LABEL_GAP_PX, TextUtils.TruncateAt.END)
+            canvas.drawText(shown, 0, shown.length, LABEL_LEFT_PX, height / 2f + LABEL_DROP_PX, text)
             val midY = height / 2f
             arrow.reset()
             ARROW.forEachIndexed { index, (dx, dy) ->
@@ -150,8 +153,10 @@ class BackBadgeWindow(
 
     private companion object {
         const val TAG = "SNCANVAS"
-        const val FIRST_WATCH_MS = 1500L
         const val WATCH_MS = 500L
+
+        /** How long a linked note may take to open before the badge gives up on it: three seconds, as ReturnTrip waits. */
+        const val ARRIVAL_CHECKS = 6
 
         // Measured off the firmware's own badge (1920x2560), moved right of the note's toolbar, which it would cover.
         const val LEFT_PX = 130
@@ -161,6 +166,7 @@ class BackBadgeWindow(
         const val CORNER_PX = 10f
         const val LABEL_SIZE_PX = 44f
         const val LABEL_LEFT_PX = 40f
+        const val LABEL_GAP_PX = 12f
         const val LABEL_DROP_PX = 15f
         const val ARROW_OVERHANG_PX = 30f
         const val ARROW_TIP_FROM_RIGHT_PX = 95f

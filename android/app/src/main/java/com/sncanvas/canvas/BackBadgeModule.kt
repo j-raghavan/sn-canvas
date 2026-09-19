@@ -47,8 +47,10 @@ class BackBadgeModule(
             object : ReturnTrip.Host {
                 override fun openNotePath(): String? = openNotePath.invoke()
 
-                override fun showCanvas() {
-                    pluginApp?.showPluginView()
+                override fun showCanvas(): Boolean {
+                    val app = pluginApp ?: return false
+                    app.showPluginView()
+                    return true
                 }
             },
         ) { delayMs, task -> main.postDelayed(task, delayMs) }

@@ -753,15 +753,22 @@ describe('the trail back along followed links', () => {
     expect(session.backTo()).toBeNull();
   });
 
-  test('a trip back that does not come up over its note still brings Canvas up, and says so', async () => {
+  test('a note that does not come back in time leaves Canvas down and the step in place, and says so', async () => {
     const {host, badge, logger, session} = await walkedToC();
     badge.arrives = false;
     host.steps.length = 0;
     await session.goBack();
-    expect(host.steps).toEqual(['close', `open ${B.notePath}`, 'show']);
+    expect(host.steps).toEqual(['close', `open ${B.notePath}`]);
+    expect(session.backTo()).toMatchObject({notePath: B.notePath});
     expect(logger.lines).toContain(
-      'warn [SNCANVAS][LINK] came back, but not over its note, to /Note/b.note page=0 canvas=default',
+      'warn [SNCANVAS][LINK] could not come back in time to /Note/b.note page=0 canvas=default; Canvas stays down',
     );
+  });
+
+  test('a second tap while a step back runs is one step, not two', async () => {
+    const {session} = await walkedToC();
+    await Promise.all([session.goBack(), session.goBack()]);
+    expect(session.backTo()).toMatchObject({notePath: A.notePath});
   });
 
   test('a note that will not reopen leaves Canvas on the canvas it showed, with the step still there to take', async () => {

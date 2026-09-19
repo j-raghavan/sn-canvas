@@ -210,6 +210,8 @@ export function createCanvasSession({
   let index: CanvasIndex | null = null;
   // Kept in memory: the plugin runtime outlives the notes a link opens over it (seen on device, #34).
   let trail: readonly TrailStep[] = [];
+  // One step back at a time: a second tap while one runs (the e-ink screen is slow to show it) would take two.
+  let isGoingBack = false;
   // Each operation starts after the previous one settles, so a button press
   // can never switch canvases halfway through a save.
   let tail: Promise<void> = Promise.resolve();
@@ -609,7 +611,17 @@ export function createCanvasSession({
     return opened;
   };
 
-  const goBack = (): Promise<void> =>
+  const goBack = (): Promise<void> => {
+    if (isGoingBack) {
+      return tail;
+    }
+    isGoingBack = true;
+    return stepBack().finally(() => {
+      isGoingBack = false;
+    });
+  };
+
+  const stepBack = (): Promise<void> =>
     serially(async () => {
       badge.hide();
       const step = trail.at(-1);
@@ -630,13 +642,15 @@ export function createCanvasSession({
         report(false, `${TAG}[LINK] could not go back ${said}`);
         return;
       }
-      trail = trail.slice(0, -1);
-      const over = await badge.arriveOver(step.notePath);
-      if (!over) {
-        // Never leave the user without Canvas: it comes up over whatever is open.
-        await host.showView();
+      if (await badge.arriveOver(step.notePath)) {
+        trail = trail.slice(0, -1);
+        logger.log(`${TAG}[LINK] back ${said}`);
+      } else {
+        // Canvas stays down over whichever note opened, and the step stays: the sidebar then opens that note's
+        // own canvas, or, back in the note the link led to, offers the step again. Bringing Canvas up here would
+        // show the step's canvas over a note it may not belong to.
+        logger.warn(`${TAG}[LINK] could not come back in time ${said}; Canvas stays down`);
       }
-      report(over, `${TAG}[LINK] ${over ? 'back' : 'came back, but not over its note,'} ${said}`);
     });
 
   const insertImage = async (): Promise<boolean> => {

@@ -22,10 +22,14 @@ class ReturnTrip(
         /** The note the host has open, or null when none is. */
         fun openNotePath(): String?
 
-        fun showCanvas()
+        /** Brings Canvas up; false when it could not. */
+        fun showCanvas(): Boolean
     }
 
-    /** Brings Canvas up over [note] once it is open; [done] says whether it came up over that note. */
+    /**
+     * Brings Canvas up over [note] once it is open; [done] says whether it came up over that note. When it
+     * didn't (the note never opened, or Canvas would not come up), Canvas is left for the caller to bring up.
+     */
     fun arriveOver(
         note: String,
         done: (backOverNote: Boolean) -> Unit,
@@ -37,19 +41,10 @@ class ReturnTrip(
         done: (Boolean) -> Unit,
     ) {
         when {
-            host.openNotePath() == note -> schedule(SETTLE_MS) { arrive(true, done) }
-            // Canvas comes back all the same, over whatever is open: never leave the user without it.
-            checksLeft == 0 -> arrive(false, done)
+            host.openNotePath() == note -> schedule(SETTLE_MS) { done(host.showCanvas()) }
+            checksLeft == 0 -> done(false)
             else -> schedule(CHECK_MS) { awaitNote(note, checksLeft - 1, done) }
         }
-    }
-
-    private fun arrive(
-        backOverNote: Boolean,
-        done: (Boolean) -> Unit,
-    ) {
-        host.showCanvas()
-        done(backOverNote)
     }
 
     companion object {
