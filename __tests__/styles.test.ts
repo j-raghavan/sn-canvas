@@ -47,6 +47,7 @@ test('parseUiState reads a well-formed event body', () => {
       hasContent: true,
       selectionCount: 3,
       canUngroup: true,
+      hasLink: true,
       selectedType: 'table',
       style,
     }),
@@ -57,6 +58,7 @@ test('parseUiState reads a well-formed event body', () => {
     hasContent: true,
     selectionCount: 3,
     canUngroup: true,
+    hasLink: true,
     selectedType: 'table',
     style,
   });

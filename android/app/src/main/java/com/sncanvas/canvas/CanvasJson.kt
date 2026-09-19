@@ -6,6 +6,7 @@ package com.sncanvas.canvas
  * saveCanvas/loadCanvas. Hand-rolled rather than `org.json` (see
  * [serializeElements]) so it stays plain-JUnit testable.
  */
+@Suppress("TooManyFunctions") // one reader or writer per nested type in the schema, by design
 object CanvasJson {
     private const val PERSISTENCE_SCHEMA_VERSION = 1
 
@@ -76,6 +77,13 @@ object CanvasJson {
                     number("height", image.pixelHeight.toDouble())
                 }
             }
+            element.link?.let { link ->
+                obj("link") {
+                    string("kind", link.kind)
+                    string("target", link.target)
+                    number("page", link.page.toDouble())
+                }
+            }
         }
         return sb.append('}').toString()
     }
@@ -136,12 +144,22 @@ object CanvasJson {
             // Absent in strokes saved before it existed, or unusable: the stroke then draws at its style's size.
             strokeWidth = obj.number("strokeWidth")?.takeIf { it.isFinite() && it > 0 },
             table = tableFromJson(obj.entries["table"] as? JsonValue.Obj),
+            // Absent in canvases saved before links existed, and dropped when it names a kind this build cannot follow.
+            link = linkFromJson(obj.entries["link"] as? JsonValue.Obj),
             // An image's file and pixel size; a name that isn't plain, or no size, throws, which skips just this element.
             image =
                 (obj.entries["image"] as? JsonValue.Obj)?.let {
                     ImageData(it.string("file").orEmpty(), it.number("width")?.toInt() ?: 0, it.number("height")?.toInt() ?: 0)
                 },
         )
+
+    /** Where an element links to, or null when it links nowhere, names a kind this build does not know, or has no target. */
+    private fun linkFromJson(obj: JsonValue.Obj?): ElementLink? {
+        val kind = obj?.string("kind")
+        val target = obj?.string("target")
+        if (!ElementLink.isKnown(kind) || target.isNullOrBlank()) return null
+        return ElementLink(kind!!, target, obj.number("page")?.toInt() ?: ElementLink.LAST_PAGE)
+    }
 
     /** A stroke's [x, y, pressure, ...] triples; anything but whole triples of numbers drops them (the stroke then draws nothing). */
     private fun pointsFromJson(arr: JsonValue.Arr?): List<StrokePoint>? {

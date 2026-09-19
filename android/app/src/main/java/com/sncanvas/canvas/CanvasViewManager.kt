@@ -52,6 +52,16 @@ class CanvasViewManager(
                 ) = dispatch(reactContext, view, EVENT_EDIT_TEXT, request.toPayload())
 
                 override fun onTouched(view: CanvasView) = dispatch(reactContext, view, EVENT_TOUCH, emptyMap())
+
+                override fun onFollowLink(
+                    view: CanvasView,
+                    link: ElementLink,
+                ) = dispatch(
+                    reactContext,
+                    view,
+                    EVENT_FOLLOW_LINK,
+                    mapOf("kind" to link.kind, "target" to link.target, "page" to link.page),
+                )
             },
             images,
         )
@@ -88,6 +98,7 @@ class CanvasViewManager(
             EVENT_CANVAS_STATE to mapOf("registrationName" to "onCanvasState"),
             EVENT_EDIT_TEXT to mapOf("registrationName" to "onEditText"),
             EVENT_TOUCH to mapOf("registrationName" to "onCanvasTouch"),
+            EVENT_FOLLOW_LINK to mapOf("registrationName" to "onFollowLink"),
         )
 
     override fun getExportedViewConstants(): MutableMap<String, Any> =
@@ -102,6 +113,11 @@ class CanvasViewManager(
         when (command) {
             "setStyle" -> if (strings.size >= 2) root.controller.setStyle(strings[0], strings[1])
             "setText" -> if (strings.isNotEmpty()) root.controller.finishEdit(strings[0])
+            // A link's target can hold anything a path holds, so it crosses as a string, with its page beside it.
+            "linkSelected" ->
+                if (strings.size >= 3) {
+                    root.controller.linkSelected(ElementLink(strings[0], strings[1], strings[2].toIntOrNull() ?: ElementLink.LAST_PAGE))
+                }
             else -> SIMPLE_COMMANDS[command]?.invoke(root)
         }
     }
@@ -132,6 +148,7 @@ class CanvasViewManager(
         private const val EVENT_CANVAS_STATE = "topCanvasState"
         private const val EVENT_EDIT_TEXT = "topEditText"
         private const val EVENT_TOUCH = "topCanvasTouch"
+        private const val EVENT_FOLLOW_LINK = "topFollowLink"
 
         // The commands that take no arguments, as the view runs them.
         private val SIMPLE_COMMANDS: Map<String, (CanvasView) -> Unit> =
@@ -149,12 +166,15 @@ class CanvasViewManager(
                 "tableRemoveRow" to { view -> view.controller.removeTableRow() },
                 "tableRemoveColumn" to { view -> view.controller.removeTableColumn() },
                 "clearCanvas" to { view -> view.controller.clearCanvas() },
+                "unlinkSelected" to { view -> view.controller.unlinkSelected() },
                 "group" to { view -> view.groupSelected() },
                 "ungroup" to { view -> view.ungroupSelected() },
             )
 
         // Command names and the numeric ids the Int overload receives (delete/undo/redo keep 1-3).
         private val COMMAND_IDS =
-            (SIMPLE_COMMANDS.keys + listOf("setStyle", "setText")).withIndex().associate { (index, name) -> name to index + 1 }
+            (SIMPLE_COMMANDS.keys + listOf("setStyle", "setText", "linkSelected"))
+                .withIndex()
+                .associate { (index, name) -> name to index + 1 }
     }
 }

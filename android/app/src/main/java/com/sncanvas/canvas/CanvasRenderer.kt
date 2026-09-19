@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -89,6 +90,15 @@ internal class CanvasRenderer(
             isAntiAlias = true
         }
 
+    private val linkGlyphPath = Path()
+
+    private val linkGlyphPaint =
+        Paint().apply {
+            style = Paint.Style.FILL
+            color = Color.WHITE
+            isAntiAlias = true
+        }
+
     private val rotateStemPaint =
         Paint().apply {
             style = Paint.Style.STROKE
@@ -164,6 +174,31 @@ internal class CanvasRenderer(
         } else {
             for (corner in CanvasCore.cornerPoints(element)) drawHandle(canvas, screenPoint(corner, transform))
             drawRotateHandle(canvas, element, transform)
+        }
+    }
+
+    /**
+     * The glyph on every linked element (FR7): a lightning bolt in a filled round
+     * badge, drawn at a fixed size whatever the zoom, so it stays tappable and
+     * says at a glance that the element goes somewhere.
+     */
+    fun drawLinkGlyphs(
+        canvas: Canvas,
+        elements: List<Element>,
+        transform: ViewTransform,
+    ) {
+        for (element in elements.filter { it.link != null }) {
+            val at = CanvasCore.linkGlyphPoint(element, transform.zoom)
+            val x = transform.screenX(at.x).toFloat()
+            val y = transform.screenY(at.y).toFloat()
+            canvas.drawCircle(x, y, LINK_GLYPH_RADIUS_PX, handlePaint)
+            // A lightning bolt in the badge's own white: this element jumps somewhere.
+            linkGlyphPath.reset()
+            LINK_GLYPH_BOLT.forEachIndexed { index, (dx, dy) ->
+                if (index == 0) linkGlyphPath.moveTo(x + dx, y + dy) else linkGlyphPath.lineTo(x + dx, y + dy)
+            }
+            linkGlyphPath.close()
+            canvas.drawPath(linkGlyphPath, linkGlyphPaint)
         }
     }
 
@@ -340,6 +375,12 @@ internal class CanvasRenderer(
         const val THUMBNAIL_TAG_Y_PX = 10f
         const val THUMBNAIL_TAG_TILT_DEGREES = -4f
         const val THUMBNAIL_TAG_LABEL = "Canvas"
+
+        // The link glyph (FR7): a filled badge with a lightning bolt in it, its corners as offsets from the centre.
+        const val LINK_GLYPH_RADIUS_PX = 28f
+        val LINK_GLYPH_BOLT =
+            listOf(4f to -17f, -10f to 3f, -1f to 3f, -4f to 17f, 10f to -3f, 1f to -3f)
+
         const val HANDLE_DRAW_SIZE_PX = 24f
         const val ROTATE_HANDLE_RADIUS_PX = 22f
         const val PREVIEW_ARROWHEAD_PX = 28f

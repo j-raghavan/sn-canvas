@@ -60,6 +60,20 @@ export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<b
         const path: unknown = Array.isArray(paths) ? paths[0] : null;
         return typeof path === 'string' && path !== '' ? path : null;
       }),
+    // The same picker as an image, filtered to notes; a cancel comes back empty.
+    pickNote: () =>
+      attempt('selectFile', null, async () => {
+        const paths: unknown = await RattaFileSelector.selectFile({
+          selectType: SINGLE_FILE,
+          suffixList: ['note'],
+          maxNum: 1,
+          title: 'Link to a note',
+        });
+        const path: unknown = Array.isArray(paths) ? paths[0] : null;
+        return typeof path === 'string' && path !== '' ? path : null;
+      }),
+    // -1 for the page opens the note where it was last left (sn-plugin-lib's own meaning for it).
+    openNote: (path, page) => attempt('openFile', false, async () => succeeded(await PluginFileAPI.openFile(path, page))),
     lassoedElements: () => attempt('getLassoElements', [], async () => listOf(await PluginCommAPI.getLassoElements())),
     insertImage: path => attempt('insertImage', false, async () => succeeded(await PluginNoteAPI.insertImage(path))),
     currentPage: () =>

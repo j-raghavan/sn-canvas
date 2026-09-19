@@ -52,4 +52,20 @@ class CanvasActionsTest {
         val result = CanvasActions.restyle(state, "b", red)
         assertEquals(listOf(ShapeStyle.LEGACY, red, ShapeStyle.LEGACY), result.elements.map { it.style })
     }
+
+    @Test
+    fun `relink puts a link on an element, and takes it off again`() {
+        val link = ElementLink(ElementLink.KIND_NOTE, "/n.note", page = 3)
+        val linked = CanvasActions.relink(baseState, "a", link)
+        assertEquals(link, linked.elements.first { it.id == "a" }.link)
+        // Everything else is left as it was.
+        assertNull(linked.elements.first { it.id == "b" }.link)
+        assertNull(
+            CanvasActions
+                .relink(linked, "a", null)
+                .elements
+                .first { it.id == "a" }
+                .link,
+        )
+    }
 }

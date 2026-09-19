@@ -55,6 +55,12 @@ export type NotePen = {type: number; width: number; color: number};
 /** What "Save to Note" did: redrew the thumbnail already on the page, added one, or neither. */
 export type SaveToNoteResult = 'refreshed' | 'inserted' | null;
 
+/** Where an element links to (FR7); the shapes the canvas stores and the screen follows. */
+export type ElementLink = {kind: 'note'; target: string; page: number};
+
+/** Open the target where it was last left, rather than at a page of Canvas's choosing. */
+export const LINK_LAST_PAGE = -1;
+
 /** The live canvas view's persistence, by absolute path, the canvas folder's own small files, and the pen it gives back. */
 export type CanvasStorePort = {
   /** Remembers the note's pen, for the canvas to set back as it gives the pen back to the note; false when it can't. */
@@ -89,6 +95,10 @@ export type HostPort = {
   notePen: () => Promise<NotePen | null>;
   /** An image the user picks with the device's picker (FR22), by path; null when they cancel. */
   pickImage: () => Promise<string | null>;
+  /** A note the user picks with the device's picker, by path; null when they cancel. */
+  pickNote: () => Promise<string | null>;
+  /** Opens the note at [path], at [page] (-1 keeps the page it was last left on); false when it would not open. */
+  openNote: (path: string, page: number) => Promise<boolean>;
   lassoedElements: () => Promise<unknown[]>;
   insertImage: (path: string) => Promise<boolean>;
   /** The note page the user is on; null when the host can't say. */
@@ -121,6 +131,10 @@ export type CanvasSession = {
   newCanvas: () => Promise<void>;
   /** Puts an image the user picks on the canvas shown (FR22), copied into the canvas folder; true once it is there. */
   insertImage: () => Promise<boolean>;
+  /** Asks for a note to link the selected element to (FR7); the link once one was picked, or null when the picker was cancelled. */
+  pickNoteLink: () => Promise<ElementLink | null>;
+  /** Follows [link]: opens what it points at; false when it would not open. */
+  followLink: (link: ElementLink) => Promise<boolean>;
   /**
    * Puts the canvas into the note as a thumbnail that links back to it: a
    * thumbnail of this canvas already on the page is redrawn where it sits
@@ -470,6 +484,31 @@ export function createCanvasSession({
     });
   };
 
+  /**
+   * A note to link the selected element to. The page is the one the note was
+   * last left on, so linking asks for nothing but the note itself.
+   */
+  const pickNoteLink = async (): Promise<ElementLink | null> => {
+    const target = await host.pickNote();
+    if (target === null) {
+      logger.log(`${TAG}[LINK] no note picked; nothing linked`);
+      return null;
+    }
+    logger.log(`${TAG}[LINK] linking to note=${target}`);
+    return {kind: 'note', target, page: LINK_LAST_PAGE};
+  };
+
+  const followLink = async (link: ElementLink): Promise<boolean> => {
+    const opened = await host.openNote(link.target, link.page);
+    const said = `${TAG}[LINK] ${opened ? 'followed' : 'could not follow'} link to ${link.target} page=${link.page}`;
+    if (opened) {
+      logger.log(said);
+    } else {
+      logger.warn(said);
+    }
+    return opened;
+  };
+
   const insertImage = async (): Promise<boolean> => {
     // Picked outside the queue: the picker waits on the user, and must never hold up a save or a close.
     const source = await host.pickImage();
@@ -520,5 +559,5 @@ export function createCanvasSession({
       host.closeView();
     });
 
-  return {open, newCanvas, saveToNote, insertImage, exportPdf, close, currentCanvasId: () => canvasId};
+  return {open, newCanvas, saveToNote, insertImage, pickNoteLink, followLink, exportPdf, close, currentCanvasId: () => canvasId};
 }

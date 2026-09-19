@@ -62,13 +62,15 @@ const ACTIONS: readonly Action[] = [
 ];
 
 type MenuItem = {
-  /** A canvas command, or 'newCanvas', which the screen's session handles. */
-  action: CanvasCommand | 'newCanvas';
+  /** A canvas command, or one the screen's session handles ('newCanvas', 'linkToNote'). */
+  action: CanvasCommand | 'newCanvas' | 'linkToNote';
   label: string;
   /** Greyed out with nothing selected. */
   needsSelection?: boolean;
   /** Greyed out on an empty canvas. */
   needsContent?: boolean;
+  /** Greyed out unless the selected element links somewhere. */
+  needsLink?: boolean;
   /** Listed only while a table is selected (FR24). */
   tableOnly?: boolean;
 };
@@ -80,6 +82,8 @@ const MENU: readonly MenuItem[] = [
   {action: 'tableAddColumn', label: 'Add column', tableOnly: true},
   {action: 'tableRemoveRow', label: 'Remove last row', tableOnly: true},
   {action: 'tableRemoveColumn', label: 'Remove last column', tableOnly: true},
+  {action: 'linkToNote', label: 'Link to note…', needsSelection: true},
+  {action: 'unlinkSelected', label: 'Remove link', needsLink: true},
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},
@@ -95,11 +99,13 @@ type Props = {
   onNewCanvas: () => void;
   /** Asks to clear the canvas; the screen confirms it first. */
   onClearCanvas: () => void;
+  /** Asks for a note to link the selected element to; the screen runs the picker. */
+  onLinkToNote: () => void;
   /** The ⋮ menu is opening: the screen puts the onboarding hints away, so neither is drawn over the other. */
   onMenuOpen: () => void;
 };
 
-export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, onMenuOpen}: Props): React.JSX.Element {
+export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onMenuOpen}: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -108,7 +114,10 @@ export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, on
       {isMenuOpen && (
         <View style={styles.menu}>
           {MENU.filter(item => !item.tableOnly || ui.selectedType === 'table').map(item => {
-            const enabled = (!item.needsSelection || ui.hasSelection) && (!item.needsContent || ui.hasContent);
+            const enabled =
+              (!item.needsSelection || ui.hasSelection) &&
+              (!item.needsContent || ui.hasContent) &&
+              (!item.needsLink || ui.hasLink);
             return (
               <Pressable
                 key={item.action}
@@ -120,6 +129,8 @@ export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, on
                   setMenuOpen(false);
                   if (item.action === 'newCanvas') {
                     onNewCanvas();
+                  } else if (item.action === 'linkToNote') {
+                    onLinkToNote();
                   } else if (item.action === 'clearCanvas') {
                     onClearCanvas();
                   } else {

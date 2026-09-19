@@ -13,6 +13,11 @@ internal sealed interface CanvasGesture {
     /** Dragging a selection rectangle out over the canvas with the pen (FR7); what it covers is selected on release. */
     data object Marquee : CanvasGesture
 
+    /** A touch that landed on the link glyph of element [elementId] (FR7); a tap on it follows the link. */
+    data class FollowLink(
+        val elementId: String,
+    ) : CanvasGesture
+
     /** Dragging the selected element's body; the world-space offset accumulates until release. */
     data class Move(
         val dx: Double = 0.0,

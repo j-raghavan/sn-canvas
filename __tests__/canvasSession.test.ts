@@ -566,6 +566,31 @@ test('an operation that throws is logged and does not block the ones after it', 
   expect(host.closeCount).toBe(1);
 });
 
+describe('links to notes', () => {
+  test('picking a note gives a link to it, opened where it was last left', async () => {
+    const {host, logger, session} = setup({[SCRATCH]: 'scratch'});
+    host.pickedNote = '/storage/emulated/0/Note/plan.note';
+    expect(await session.pickNoteLink()).toEqual({kind: 'note', target: '/storage/emulated/0/Note/plan.note', page: -1});
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] linking to note=/storage/emulated/0/Note/plan.note');
+  });
+
+  test('a cancelled picker links nothing', async () => {
+    const {logger, session} = setup({[SCRATCH]: 'scratch'});
+    expect(await session.pickNoteLink()).toBeNull();
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] no note picked; nothing linked');
+  });
+
+  test('following a link opens the note it names, and says so when it will not open', async () => {
+    const {host, logger, session} = setup({[SCRATCH]: 'scratch'});
+    const link = {kind: 'note', target: '/n.note', page: -1} as const;
+    expect(await session.followLink(link)).toBe(true);
+    expect(host.openedNotes).toEqual([{path: '/n.note', page: -1}]);
+    host.openNoteSucceeds = false;
+    expect(await session.followLink(link)).toBe(false);
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not follow link to /n.note page=-1');
+  });
+});
+
 describe('saveToNote result', () => {
   test("is 'inserted' once the thumbnail is in the note, null when it is not", async () => {
     const {host, session} = setup({[SCRATCH]: 'scratch'});

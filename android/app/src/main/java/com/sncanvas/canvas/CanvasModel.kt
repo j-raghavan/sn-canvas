@@ -129,6 +129,33 @@ data class TableData(
 }
 
 /**
+ * Where an element links to (FR7): a note, by its path, opened at [page] (-1
+ * keeps the page it was last left on). [kind] says what the target is, so a
+ * canvas can be linked to later without the stored shape changing; a link of a
+ * kind this build does not know is dropped as it loads rather than followed.
+ */
+data class ElementLink(
+    val kind: String,
+    val target: String,
+    val page: Int = LAST_PAGE,
+) {
+    init {
+        require(target.isNotBlank()) { "a link has a target" }
+    }
+
+    companion object {
+        /** A note the canvas links to; [target] is its file path. */
+        const val KIND_NOTE = "note"
+
+        /** Open the target where it was last left, rather than at a page of our choosing. */
+        const val LAST_PAGE = -1
+
+        /** The link [kind]s this build follows. */
+        fun isKnown(kind: String?): Boolean = kind == KIND_NOTE
+    }
+}
+
+/**
  * An image element's picture (FR22): its [file] in the canvas folder's
  * `images` folder, by name alone, so a canvas folder can move (to MyStyle,
  * say) with its images, and its size in pixels, whose proportions a resize keeps.
@@ -215,6 +242,8 @@ data class Element(
     // FR7: the group this element belongs to, if any. Elements sharing an id are
     // selected, moved and deleted as one; null for an element of its own.
     val groupId: String? = null,
+    // FR7: where this element links to, if anywhere; its glyph is what follows it.
+    val link: ElementLink? = null,
 ) {
     init {
         require(rotation.isFinite()) { "rotation must be finite" }

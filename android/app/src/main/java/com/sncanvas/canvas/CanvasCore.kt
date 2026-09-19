@@ -119,11 +119,50 @@ object CanvasCore {
     /** Screen-space gap between a shape's top edge and its rotate handle; divided by zoom to get world units. */
     const val ROTATE_HANDLE_OFFSET_PX = 56.0
 
+    /** Screen-space gap between a shape's top-right corner and its link glyph (FR7); divided by zoom as above. */
+    const val LINK_GLYPH_OFFSET_PX = 34.0
+
     /** Where a bbox [element]'s rotate handle sits: [ROTATE_HANDLE_OFFSET_PX] screen px above its top-center, rotated with it. */
     fun rotateHandlePoint(
         element: Element,
         zoom: Double,
     ): Point = element.toWorld(element.x + element.width / 2, element.y - ROTATE_HANDLE_OFFSET_PX / zoom)
+
+    /**
+     * Where a linked element's glyph sits (FR7): just outside its top-right
+     * corner, at a fixed size on screen, so it is as tappable zoomed out as
+     * zoomed in. A connector carries it at the end it points to.
+     */
+    fun linkGlyphPoint(
+        element: Element,
+        zoom: Double,
+    ): Point =
+        if (element.hasEndpoints()) {
+            Point(element.endX ?: 0.0, element.endY ?: 0.0)
+        } else {
+            element.toWorld(element.x + element.width + LINK_GLYPH_OFFSET_PX / zoom, element.y - LINK_GLYPH_OFFSET_PX / zoom)
+        }
+
+    /**
+     * The topmost linked element whose glyph is under the world point, or null
+     * when the point is on none. Topmost first, as hit-testing is, so a glyph
+     * over another element's answers before the one beneath it.
+     */
+    fun linkGlyphAt(
+        worldX: Double,
+        worldY: Double,
+        elements: List<Element>,
+        zoom: Double,
+        toleranceWorld: Double,
+    ): Element? =
+        elements.lastOrNull { element ->
+            if (element.link == null) {
+                false
+            } else {
+                val glyph = linkGlyphPoint(element, zoom)
+                distance(worldX, worldY, glyph.x, glyph.y) <= toleranceWorld
+            }
+        }
 
     /**
      * Hit-tests a world-space point against the selected element's resize/endpoint

@@ -42,6 +42,8 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   saveToNote: jest.fn().mockResolvedValue('inserted'),
   newCanvas: jest.fn().mockResolvedValue(undefined),
   insertImage: jest.fn().mockResolvedValue(true),
+  pickNoteLink: jest.fn().mockResolvedValue({kind: 'note', target: '/storage/emulated/0/Note/plan.note', page: -1}),
+  followLink: jest.fn().mockResolvedValue(true),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
   close: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
@@ -415,6 +417,57 @@ describe('clear canvas', () => {
     await press('canvas-clear-confirm-action');
     expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'clearCanvas', []);
     expect(has('canvas-clear-confirm')).toBe(false);
+  });
+});
+
+describe('links', () => {
+  test('Link to note stores what the picker named, on whatever is selected', async () => {
+    const {session, press, shows, emitCanvasState} = await render();
+    await emitCanvasState({hasSelection: true, hasContent: true});
+    await press('canvas-more');
+    await press('canvas-menu-linkToNote');
+    expect(session.pickNoteLink).toHaveBeenCalledTimes(1);
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'linkSelected', [
+      'note',
+      '/storage/emulated/0/Note/plan.note',
+      '-1',
+    ]);
+    expect(shows('Linked to the note')).toBe(true);
+  });
+
+  test('a cancelled picker links nothing', async () => {
+    const session = createFakeSession();
+    session.pickNoteLink.mockResolvedValue(null);
+    const {press, shows, emitCanvasState} = await render(session);
+    await emitCanvasState({hasSelection: true, hasContent: true});
+    await press('canvas-more');
+    await press('canvas-menu-linkToNote');
+    expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'linkSelected', expect.anything());
+    expect(shows('Linked to the note')).toBe(false);
+  });
+
+  test('a tap on a glyph follows the link the canvas reports', async () => {
+    const {session, renderer} = await render();
+    await act(async () => {
+      renderer.root
+        .findByType(CanvasNativeView)
+        .props.onFollowLink({nativeEvent: {kind: 'note', target: '/n.note', page: 2}});
+    });
+    expect(session.followLink).toHaveBeenCalledWith({kind: 'note', target: '/n.note', page: 2});
+  });
+
+  test('a link that will not open says so, and one the bridge cannot read is ignored', async () => {
+    const session = createFakeSession();
+    session.followLink.mockResolvedValue(false);
+    const {renderer, shows} = await render(session);
+    const follow = (payload: unknown) =>
+      act(async () => {
+        renderer.root.findByType(CanvasNativeView).props.onFollowLink({nativeEvent: payload});
+      });
+    await follow({kind: 'note', target: '/n.note', page: -1});
+    expect(shows('Could not open that note')).toBe(true);
+    await follow({kind: 'canvas', target: ''});
+    expect(session.followLink).toHaveBeenCalledTimes(1);
   });
 });
 

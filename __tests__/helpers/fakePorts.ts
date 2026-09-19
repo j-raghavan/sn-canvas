@@ -132,6 +132,11 @@ export type FakeHost = HostPort & {
   pen: NotePen | null;
   /** The image the user picks; null when they cancel the picker. */
   picked: string | null;
+  /** The note the user picks to link to; null when they cancel the picker. */
+  pickedNote: string | null;
+  /** The notes opened by following a link, in order. */
+  openedNotes: Array<{path: string; page: number}>;
+  openNoteSucceeds: boolean;
 };
 
 export const createFakeHost = (): FakeHost => {
@@ -139,11 +144,24 @@ export const createFakeHost = (): FakeHost => {
     dir: '/plugin',
     pen: null,
     picked: null,
+    pickedNote: null,
+    openedNotes: [],
+    openNoteSucceeds: true,
     async notePen() {
       return host.pen;
     },
     async pickImage() {
       return host.picked;
+    },
+    async pickNote() {
+      return host.pickedNote;
+    },
+    async openNote(path, page) {
+      if (!host.openNoteSucceeds) {
+        return false;
+      }
+      host.openedNotes.push({path, page});
+      return true;
     },
     lassoed: [],
     inserted: [],
