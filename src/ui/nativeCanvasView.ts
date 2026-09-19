@@ -53,6 +53,8 @@ type NativeProps = ViewProps & {
   onEditText?: (event: NativeSyntheticEvent<unknown>) => void;
   /** The canvas was touched, by pen or finger: once per touch, with no body. */
   onCanvasTouch?: (event: NativeSyntheticEvent<unknown>) => void;
+  /** A canvas finished loading; its body says whether it has anything on it ({hasContent}). */
+  onCanvasLoaded?: (event: NativeSyntheticEvent<unknown>) => void;
   /** A linked element's glyph was tapped (FR7); validate its body with parseElementLink. */
   onFollowLink?: (event: NativeSyntheticEvent<unknown>) => void;
 };

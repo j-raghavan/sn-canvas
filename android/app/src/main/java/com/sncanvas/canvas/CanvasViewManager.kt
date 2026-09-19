@@ -53,6 +53,11 @@ class CanvasViewManager(
 
                 override fun onTouched(view: CanvasView) = dispatch(reactContext, view, EVENT_TOUCH, emptyMap())
 
+                override fun onLoaded(
+                    view: CanvasView,
+                    hasContent: Boolean,
+                ) = dispatch(reactContext, view, EVENT_LOADED, mapOf("hasContent" to hasContent))
+
                 override fun onFollowLink(
                     view: CanvasView,
                     link: ElementLink,
@@ -98,6 +103,7 @@ class CanvasViewManager(
             EVENT_CANVAS_STATE to mapOf("registrationName" to "onCanvasState"),
             EVENT_EDIT_TEXT to mapOf("registrationName" to "onEditText"),
             EVENT_TOUCH to mapOf("registrationName" to "onCanvasTouch"),
+            EVENT_LOADED to mapOf("registrationName" to "onCanvasLoaded"),
             EVENT_FOLLOW_LINK to mapOf("registrationName" to "onFollowLink"),
         )
 
@@ -148,6 +154,7 @@ class CanvasViewManager(
         private const val EVENT_CANVAS_STATE = "topCanvasState"
         private const val EVENT_EDIT_TEXT = "topEditText"
         private const val EVENT_TOUCH = "topCanvasTouch"
+        private const val EVENT_LOADED = "topCanvasLoaded"
         private const val EVENT_FOLLOW_LINK = "topFollowLink"
 
         // The commands that take no arguments, as the view runs them.
