@@ -48,6 +48,7 @@ import {
   thumbnailPath,
 } from '../domain/canvasLink';
 import {canvasIdFromTags, taggedCanvasId} from '../domain/canvasTag';
+import {noteNameOf, trailKeptAt, withStep, type TrailStep} from '../domain/linkTrail';
 import {BUTTON_ID_OPEN_LINKED} from '../domain/entryPoints';
 import type {Logger} from '../sdk/types';
 
@@ -121,16 +122,22 @@ export type HostPort = {
 };
 
 /**
- * The badge over a note that a followed link opened (#34): one tap on it
- * brings Canvas back. Shown and hidden here; its taps reach the screen.
+ * The way back from followed links (#34): the badge over a note a link opened,
+ * whose taps reach the screen, and the last leg of each trip back.
  */
 export type BackBadgePort = {
   /** Shows the badge reading [label] over the note at [notePath], until it is tapped or that note is left. */
   show: (label: string, notePath: string) => void;
   hide: () => void;
+  /**
+   * Once [notePath] has been asked to open, brings Canvas up over it as soon as
+   * it is on screen; true when Canvas came up over that note. Done natively: JS
+   * runs no timers while Canvas is covered.
+   */
+  arriveOver: (notePath: string) => Promise<boolean>;
 };
 
-/** The back badge's taps, which the screen hands to its session's returnFromLink. */
+/** The back badge's taps, which the screen hands to its session's goBack. */
 export type BackBadgeTaps = {onTapped: (listener: () => void) => () => void};
 
 export type CanvasSessionDeps = {
@@ -154,12 +161,14 @@ export type CanvasSession = {
   pickNoteLink: () => Promise<ElementLink | null>;
   /**
    * Follows [link]: saves the canvas, steps Canvas aside for the note it names,
-   * and puts the back badge over that note; false when it would not open, and
-   * Canvas stays.
+   * leaves a step on the trail back, and puts the back badge over that note;
+   * false when it would not open, and Canvas stays.
    */
   followLink: (link: ElementLink) => Promise<boolean>;
-  /** The back badge was tapped: Canvas comes back as the link left it. */
-  returnFromLink: () => Promise<void>;
+  /** Where one step back goes (the last link's canvas and note page), or null with no link to go back along. */
+  backTo: () => TrailStep | null;
+  /** Takes one step back along the trail: that note, at its page, with Canvas over it showing that canvas. */
+  goBack: () => Promise<void>;
   /**
    * Puts the canvas into the note as a thumbnail that links back to it: a
    * thumbnail of this canvas already on the page is redrawn where it sits
@@ -175,9 +184,6 @@ export type CanvasSession = {
 };
 
 const TAG = '[SNCANVAS]';
-
-/** What the back badge says: where a tap on it goes. */
-export const BACK_BADGE_LABEL = 'Canvas';
 
 /** A thumbnail just put into the note: which canvas, whether it was redrawn in place, and the page read on the way. */
 type NoteLink = {
@@ -202,6 +208,8 @@ export function createCanvasSession({
   let pluginDirPath: string | null = null;
   let checkedInstall = false;
   let index: CanvasIndex | null = null;
+  // Kept in memory: the plugin runtime outlives the notes a link opens over it (seen on device, #34).
+  let trail: readonly TrailStep[] = [];
   // Each operation starts after the previous one settles, so a button press
   // can never switch canvases halfway through a save.
   let tail: Promise<void> = Promise.resolve();
@@ -416,6 +424,7 @@ export function createCanvasSession({
       // The note this open belongs to: which canvas it shows, and which note that canvas is recorded against.
       const at = await host.currentPage();
       await show(dir, await targetFor(dir, buttonId, at), at);
+      trail = trailKeptAt(trail, buttonId === BUTTON_ID_OPEN_LINKED ? null : at);
       logger.log(`${TAG} button=${buttonId} note=${at?.notePath ?? 'unknown'} opened canvas=${canvasId}`);
     });
 
@@ -426,6 +435,7 @@ export function createCanvasSession({
         return;
       }
       await show(dir, newCanvasId(), await host.currentPage());
+      trail = [];
       logger.log(`${TAG} new canvas=${canvasId}`);
     });
 
@@ -574,23 +584,49 @@ export function createCanvasSession({
     let opened = false;
     await serially(async () => {
       await saveShown();
-      // Canvas steps aside first: one brought back by the badge would otherwise stay in front of the note.
-      await host.closeView();
-      opened = await host.openNote(link.target, link.page);
-      if (opened) {
-        badge.show(BACK_BADGE_LABEL, link.target);
-      } else {
-        await host.showView();
+      const from = await host.currentPage();
+      opened = await leaveFor({notePath: link.target, page: link.page});
+      if (opened && from !== null) {
+        trail = withStep(trail, {...from, canvasId, to: link.target});
+        badge.show(noteNameOf(from.notePath), link.target);
       }
     });
     report(opened, `${TAG}[LINK] ${opened ? 'followed' : 'could not follow'} link to ${link.target} page=${link.page}`);
     return opened;
   };
 
-  const returnFromLink = (): Promise<void> =>
+  /**
+   * Opens the note page [to], Canvas stepping aside first: one brought up by
+   * the way back would otherwise stay in front of it. A note that will not
+   * open brings Canvas straight back.
+   */
+  const leaveFor = async (to: NotePage): Promise<boolean> => {
+    await host.closeView();
+    const opened = await host.openNote(to.notePath, to.page);
+    if (!opened) {
+      await host.showView();
+    }
+    return opened;
+  };
+
+  const goBack = (): Promise<void> =>
     serially(async () => {
       badge.hide();
-      report(await host.showView(), `${TAG}[LINK] back to canvas=${canvasId}`);
+      const step = trail.at(-1);
+      const dir = await resolveCanvasDir();
+      if (step === undefined || dir === null) {
+        await host.showView();
+        return;
+      }
+      trail = trail.slice(0, -1);
+      // A step further back than one: its canvas is not the one shown.
+      await show(dir, step.canvasId, step);
+      const over = (await leaveFor(step)) && (await badge.arriveOver(step.notePath));
+      if (!over) {
+        // Never leave the user without Canvas: it comes up over whatever is open.
+        await host.showView();
+      }
+      report(over, `${TAG}[LINK] ${over ? 'back' : 'could not go back'} to ${step.notePath} page=${step.page} canvas=${canvasId}`);
     });
 
   const insertImage = async (): Promise<boolean> => {
@@ -646,7 +682,8 @@ export function createCanvasSession({
     insertImage,
     pickNoteLink,
     followLink,
-    returnFromLink,
+    backTo: () => trail.at(-1) ?? null,
+    goBack,
     exportPdf,
     close,
     currentCanvasId: () => canvasId,

@@ -11,6 +11,7 @@ import type {Logger} from '../sdk/types';
 export type NativeBackBadgeModule = NativeModule & {
   show: (label: string, notePath: string) => void;
   hide: () => void;
+  arriveOver: (notePath: string) => Promise<boolean>;
 };
 
 /** What BackBadgeModule.kt emits as the badge is tapped. */
@@ -22,12 +23,20 @@ export function createNativeBackBadge(
 ): BackBadgePort & BackBadgeTaps {
   if (!native) {
     logger.warn('[SNCANVAS] NativeModules.BackBadge is missing; no way back from a followed link but the sidebar');
-    return {show: () => undefined, hide: () => undefined, onTapped: () => () => undefined};
+    return {show: () => undefined, hide: () => undefined, arriveOver: async () => false, onTapped: () => () => undefined};
   }
   const emitter = new NativeEventEmitter(native);
   return {
     show: (label, notePath) => native.show(label, notePath),
     hide: () => native.hide(),
+    arriveOver: async notePath => {
+      try {
+        return (await native.arriveOver(notePath)) === true;
+      } catch (error) {
+        logger.warn(`[SNCANVAS] arriveOver failed: ${String(error)}`);
+        return false;
+      }
+    },
     onTapped: listener => {
       const subscription = emitter.addListener(BACK_BADGE_TAPPED, listener);
       return () => subscription.remove();

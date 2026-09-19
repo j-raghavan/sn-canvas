@@ -230,18 +230,31 @@ export const createFakeHost = (): FakeHost => {
 };
 
 /** The back badge, recording what it shows. */
-export type FakeBadge = BackBadgePort & {shown: {label: string; notePath: string} | null; hides: number};
+export type FakeBadge = BackBadgePort & {
+  shown: {label: string; notePath: string} | null;
+  hides: number;
+  /** Whether Canvas comes up over the note a trip back reopens. */
+  arrives: boolean;
+  /** The notes Canvas was brought up over, in order. */
+  arrivals: string[];
+};
 
 export const createFakeBadge = (): FakeBadge => {
   const badge: FakeBadge = {
     shown: null,
     hides: 0,
+    arrives: true,
+    arrivals: [],
     show(label, notePath) {
       badge.shown = {label, notePath};
     },
     hide() {
       badge.hides += 1;
       badge.shown = null;
+    },
+    async arriveOver(notePath) {
+      badge.arrivals.push(notePath);
+      return badge.arrives;
     },
   };
   return badge;

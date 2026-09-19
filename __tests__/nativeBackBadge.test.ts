@@ -19,7 +19,7 @@ import {BACK_BADGE_TAPPED, createNativeBackBadge, type NativeBackBadgeModule} fr
 import {createRecordingLogger} from './helpers/fakePorts';
 
 const createNative = () =>
-  ({show: jest.fn(), hide: jest.fn(), addListener: jest.fn(), removeListeners: jest.fn()}) as unknown as jest.Mocked<
+  ({show: jest.fn(), hide: jest.fn(), arriveOver: jest.fn(), addListener: jest.fn(), removeListeners: jest.fn()}) as unknown as jest.Mocked<
     NativeBackBadgeModule
   >;
 
@@ -37,12 +37,25 @@ test('shows and hides the native badge, and hears its taps until unsubscribed', 
   expect(mockRemove).toHaveBeenCalledTimes(1);
 });
 
-test('without the native module the badge is never shown, and that is said once', () => {
+test('Canvas comes up over a note through the module; a failure is logged and reads as not over it', async () => {
+  const native = createNative();
+  const logger = createRecordingLogger();
+  const badge = createNativeBackBadge(logger, native);
+  native.arriveOver.mockResolvedValueOnce(true);
+  expect(await badge.arriveOver('/n.note')).toBe(true);
+  expect(native.arriveOver).toHaveBeenCalledWith('/n.note');
+  native.arriveOver.mockRejectedValueOnce(new Error('host said no'));
+  expect(await badge.arriveOver('/n.note')).toBe(false);
+  expect(logger.lines).toEqual(['warn [SNCANVAS] arriveOver failed: Error: host said no']);
+});
+
+test('without the native module the badge is never shown, and that is said once', async () => {
   const logger = createRecordingLogger();
   const badge = createNativeBackBadge(logger);
   badge.show('Canvas', '/n.note');
   badge.hide();
   badge.onTapped(jest.fn())();
+  expect(await badge.arriveOver('/n.note')).toBe(false);
   expect(logger.lines).toEqual([
     'warn [SNCANVAS] NativeModules.BackBadge is missing; no way back from a followed link but the sidebar',
   ]);

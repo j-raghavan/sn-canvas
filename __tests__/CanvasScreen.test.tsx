@@ -44,7 +44,8 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   insertImage: jest.fn().mockResolvedValue(true),
   pickNoteLink: jest.fn().mockResolvedValue({kind: 'note', target: '/storage/emulated/0/Note/plan.note', page: -1}),
   followLink: jest.fn().mockResolvedValue(true),
-  returnFromLink: jest.fn().mockResolvedValue(undefined),
+  backTo: jest.fn(() => null),
+  goBack: jest.fn().mockResolvedValue(undefined),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
   close: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
@@ -506,15 +507,39 @@ describe('links', () => {
   });
 });
 
-describe('the back badge', () => {
-  test('a tap on it brings Canvas back through the session, and unmounting stops listening', async () => {
+describe('the way back along followed links', () => {
+  const STEP = {notePath: '/storage/emulated/0/Note/Work/presenting.note', page: 3, canvasId: 'c-1', to: '/n.note'};
+
+  test("a tap on the note's badge steps back through the session, and unmounting stops listening", async () => {
     const session = createFakeSession();
     const badgeTaps = createFakeBadgeTaps();
     const {renderer} = await render(session, createFakeButtons(), badgeTaps);
     await act(async () => badgeTaps.tap());
-    expect(session.returnFromLink).toHaveBeenCalledTimes(1);
+    expect(session.goBack).toHaveBeenCalledTimes(1);
     await act(async () => renderer.unmount());
     expect(badgeTaps.listenerCount()).toBe(0);
+  });
+
+  test('with a step to take, the header offers it by the note it goes to, and a tap takes it', async () => {
+    const session = createFakeSession();
+    session.backTo.mockReturnValue(STEP);
+    const {press, has, labelled} = await render(session);
+    expect(labelled('Back to presenting')).toBe(true);
+    session.backTo.mockReturnValue(null);
+    await press('canvas-back');
+    expect(session.goBack).toHaveBeenCalledTimes(1);
+    expect(has('canvas-back')).toBe(false);
+  });
+
+  test('New canvas lets the way back go', async () => {
+    const session = createFakeSession();
+    session.backTo.mockReturnValue(STEP);
+    const {press, has} = await render(session);
+    session.backTo.mockReturnValue(null);
+    await press('canvas-more');
+    await press('canvas-menu-newCanvas');
+    expect(session.newCanvas).toHaveBeenCalled();
+    expect(has('canvas-back')).toBe(false);
   });
 });
 

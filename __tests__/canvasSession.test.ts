@@ -671,42 +671,104 @@ describe('links to notes', () => {
     expect(await session.followLink(link)).toBe(true);
     expect(store.files.get(SCRATCH)).toBe('scratch, and more');
     expect(host.steps).toEqual(['close', 'open /n.note']);
-    expect(badge.shown).toEqual({label: 'Canvas', notePath: '/n.note'});
+    expect(badge.shown).toEqual({label: 'note', notePath: '/n.note'});
+    expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, canvasId: 'default', to: '/n.note'});
     expect(logger.lines).toContain('log [SNCANVAS][LINK] followed link to /n.note page=-1');
   });
 
-  test('a note that will not open brings Canvas straight back, with no badge, and says so', async () => {
+  test('a note that will not open brings Canvas straight back, with no badge and no step, and says so', async () => {
     const {host, badge, logger, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(500);
     host.openNoteSucceeds = false;
     expect(await session.followLink(link)).toBe(false);
     expect(host.steps).toEqual(['close', 'show']);
     expect(badge.shown).toBeNull();
+    expect(session.backTo()).toBeNull();
     expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not follow link to /n.note page=-1');
   });
 
-  test('a link followed before any canvas opened saves nothing over one', async () => {
-    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+  test('a link followed before any canvas opened, or from a page the host cannot name, keeps no way back', async () => {
+    const {store, host, badge, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = null;
     expect(await session.followLink(link)).toBe(true);
     expect(store.files.get(SCRATCH)).toBe('scratch');
     expect(host.openedNotes).toEqual([{path: '/n.note', page: -1}]);
+    expect(badge.shown).toBeNull();
+    expect(session.backTo()).toBeNull();
   });
 
-  test('a tap on the badge brings Canvas back as the link left it', async () => {
-    const {store, host, badge, logger, session} = setup({[SCRATCH]: 'scratch'});
+  test('Canvas opened anywhere but the note the link led to takes the badge down and lets the trail go', async () => {
+    const {host, badge, session} = setup({[SCRATCH]: 'scratch'});
     await session.open(500);
     await session.followLink(link);
-    await session.returnFromLink();
+    host.page = {notePath: '/elsewhere.note', page: 0};
+    await session.open(500);
     expect(badge.shown).toBeNull();
-    expect(host.steps).toEqual(['close', 'open /n.note', 'show']);
-    expect(store.shown).toBe('scratch');
-    expect(logger.lines).toContain('log [SNCANVAS][LINK] back to canvas=default');
+    expect(session.backTo()).toBeNull();
   });
 
-  test('Canvas opened any other way takes the badge down', async () => {
-    const {badge, session} = setup({[SCRATCH]: 'scratch'});
-    await session.followLink(link);
+  test('with no step to take, going back just brings Canvas up', async () => {
+    const {host, session} = setup({[SCRATCH]: 'scratch'});
+    await session.goBack();
+    expect(host.steps).toEqual(['show']);
+  });
+});
+
+describe('the trail back along followed links', () => {
+  const A = {notePath: '/Note/a.note', page: 2};
+  const B = {notePath: '/Note/b.note', page: 0};
+  const C = {notePath: '/Note/c.note', page: 0};
+  const to = (note: {notePath: string}) => ({kind: 'note', target: note.notePath, page: -1}) as const;
+
+  /** Note A's canvas links to B; in B, B's own canvas links to C. */
+  const walkedToC = async () => {
+    const context = setup({[canvasFile('c-a')]: 'drawn in A', [INDEX]: JSON.stringify({lastByNote: {[A.notePath]: 'c-a'}})});
+    const {store, host, session} = context;
+    host.page = A;
     await session.open(500);
-    expect(badge.shown).toBeNull();
+    await session.followLink(to(B));
+    host.page = B;
+    await session.open(500);
+    store.shown = 'drawn in B';
+    await session.followLink(to(C));
+    host.page = C;
+    return context;
+  };
+
+  test('each step back reopens the note the link left, at its page, with Canvas over it showing its canvas', async () => {
+    const {store, host, badge, logger, session} = await walkedToC();
+    expect(badge.shown).toEqual({label: 'b', notePath: C.notePath});
+    host.steps.length = 0;
+    await session.goBack();
+    expect(host.steps).toEqual(['close', `open ${B.notePath}`]);
+    expect(badge.arrivals).toEqual([B.notePath]);
+    expect(store.shown).toBe('drawn in B');
+    expect(session.backTo()).toMatchObject({notePath: A.notePath, canvasId: 'c-a'});
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] back to /Note/b.note page=0 canvas=default');
+    host.page = B;
+    await session.goBack();
+    expect(host.openedNotes.at(-1)).toEqual({path: A.notePath, page: 2});
+    expect(store.shown).toBe('drawn in A');
+    expect(store.files.get(SCRATCH)).toBe('drawn in B');
+    expect(session.backTo()).toBeNull();
+  });
+
+  test('a trip back that does not come up over its note still brings Canvas up, and says so', async () => {
+    const {host, badge, logger, session} = await walkedToC();
+    badge.arrives = false;
+    host.steps.length = 0;
+    await session.goBack();
+    expect(host.steps).toEqual(['close', `open ${B.notePath}`, 'show']);
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not go back to /Note/b.note page=0 canvas=default');
+  });
+
+  test('a thumbnail, or New canvas, lets the trail go', async () => {
+    const fromThumbnail = await walkedToC();
+    await fromThumbnail.session.open(501);
+    expect(fromThumbnail.session.backTo()).toBeNull();
+    const fresh = await walkedToC();
+    await fresh.session.newCanvas();
+    expect(fresh.session.backTo()).toBeNull();
   });
 });
 
