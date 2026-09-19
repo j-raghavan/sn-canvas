@@ -759,7 +759,23 @@ describe('the trail back along followed links', () => {
     host.steps.length = 0;
     await session.goBack();
     expect(host.steps).toEqual(['close', `open ${B.notePath}`, 'show']);
-    expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not go back to /Note/b.note page=0 canvas=default');
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] came back, but not over its note, to /Note/b.note page=0 canvas=default',
+    );
+  });
+
+  test('a note that will not reopen leaves Canvas on the canvas it showed, with the step still there to take', async () => {
+    const {store, host, logger, session} = await walkedToC();
+    await session.goBack();
+    host.page = B;
+    store.shown = 'drawn in B, and more';
+    host.openNoteSucceeds = false;
+    await session.goBack();
+    expect(store.shown).toBe('drawn in B, and more');
+    expect(store.files.get(canvasFile('c-a'))).toBe('drawn in A');
+    expect(session.backTo()).toMatchObject({notePath: A.notePath, canvasId: 'c-a'});
+    expect(savedIndex(store).lastByNote[B.notePath]).toBe('default');
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not go back to /Note/a.note page=2 canvas=c-a');
   });
 
   test('a thumbnail, or New canvas, lets the trail go', async () => {

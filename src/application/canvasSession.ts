@@ -618,15 +618,25 @@ export function createCanvasSession({
         await host.showView();
         return;
       }
-      trail = trail.slice(0, -1);
-      // A step further back than one: its canvas is not the one shown.
+      const said = `to ${step.notePath} page=${step.page} canvas=${step.canvasId}`;
+      // A step further back than one: its canvas is not the one shown. Switched while Canvas is up, since a
+      // hidden Canvas has no view to save from or load into.
+      const here = await host.currentPage();
+      const left = canvasId;
       await show(dir, step.canvasId, step);
-      const over = (await leaveFor(step)) && (await badge.arriveOver(step.notePath));
+      if (!(await leaveFor(step))) {
+        // Canvas is back up over the note it was on: it shows that note's canvas again, and the step stays.
+        await show(dir, left, here);
+        report(false, `${TAG}[LINK] could not go back ${said}`);
+        return;
+      }
+      trail = trail.slice(0, -1);
+      const over = await badge.arriveOver(step.notePath);
       if (!over) {
         // Never leave the user without Canvas: it comes up over whatever is open.
         await host.showView();
       }
-      report(over, `${TAG}[LINK] ${over ? 'back' : 'could not go back'} to ${step.notePath} page=${step.page} canvas=${canvasId}`);
+      report(over, `${TAG}[LINK] ${over ? 'back' : 'came back, but not over its note,'} ${said}`);
     });
 
   const insertImage = async (): Promise<boolean> => {
