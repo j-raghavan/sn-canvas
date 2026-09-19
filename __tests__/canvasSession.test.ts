@@ -316,6 +316,34 @@ describe('links back to a canvas', () => {
     expect(again.host.tagged).toEqual([]);
   });
 
+  test('two canvases saved to one page each keep a thumbnail that opens its own canvas (#30)', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
+    host.tagSucceeds = false; // Tagging a lasso's copy does not take on this firmware.
+    await session.open(500);
+    await session.saveToNote();
+    // The note places the first thumbnail; it is in the note's file only once the note is saved.
+    host.unsaved = [notePicture(1)];
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    host.unsaved = [...host.unsaved, notePicture(2)];
+    await session.close();
+    const pending = savedIndex(store).pending.map((link: {canvasId: string; knownPictureNumbers: number[]}) => [
+      link.canvasId,
+      link.knownPictureNumbers,
+    ]);
+    expect(pending).toEqual([
+      ['c-1', []],
+      ['c-2', [1]],
+    ]);
+    host.lassoed = [lassoedPicture(1)];
+    await session.open(501);
+    expect(store.shown).toBe('first drawing');
+    host.lassoed = [lassoedPicture(2)];
+    await session.open(501);
+    expect(store.shown).toBe('second drawing');
+  });
+
   test('Save to Note refreshes the thumbnail of this canvas already on the page instead of adding a second', async () => {
     const {store, host, logger, session} = setup({[canvasFile('c-1')]: 'drawing', [INDEX]: indexWith({lastCanvasId: 'c-1'})});
     await session.open(null);
@@ -468,7 +496,7 @@ describe('links back to a canvas', () => {
     expect(await session.saveToNote()).toBe('inserted');
     await session.close();
     // With no note to go by, nothing is recorded against one either.
-    expect(savedIndex(store)).toEqual({lastByNote: {}, lastCanvasId: 'c-1', pending: []});
+    expect(savedIndex(store)).toEqual({canvasesByNote: {}, lastByNote: {}, lastCanvasId: 'c-1', pending: []});
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] no note page; Open Canvas on this thumbnail will show the newest canvas',
     );
@@ -501,7 +529,12 @@ describe('links back to a canvas', () => {
     const {store, session} = setup({[SCRATCH]: 'scratch', [INDEX]: '{nope'});
     await session.open(500);
     expect(store.shown).toBe('scratch');
-    expect(savedIndex(store)).toEqual({lastByNote: {'/note.note': 'default'}, lastCanvasId: 'default', pending: []});
+    expect(savedIndex(store)).toEqual({
+      canvasesByNote: {'/note.note': ['default']},
+      lastByNote: {'/note.note': 'default'},
+      lastCanvasId: 'default',
+      pending: [],
+    });
   });
 });
 
@@ -827,6 +860,64 @@ describe('the trail back along followed links', () => {
     await fresh.session.newCanvas();
     expect(fresh.session.backTo()).toBeNull();
   });
+});
+
+describe("a note's canvases (#30)", () => {
+  /** Two canvases saved to one page, as on device: the note keeps the first thumbnail and drops the second. */
+  const secondDropped = async () => {
+    const context = setup({[SCRATCH]: 'first drawing'});
+    const {store, host, session} = context;
+    await session.open(500);
+    await session.saveToNote();
+    host.unsaved = [notePicture(117)];
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    return context;
+  };
+
+  test("the scratch canvas saved to a note stays that note's canvas under its new id, and reopens there", async () => {
+    const {store, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    await session.saveToNote();
+    await session.close();
+    await session.open(500);
+    expect(store.shown).toBe('first drawing');
+    expect(savedIndex(store).lastByNote['/note.note']).toBe('c-1');
+  });
+
+  test("the note's canvases list the one shown first, and any of them is a tap away", async () => {
+    const {store, session} = await secondDropped();
+    const listed = await session.canvasesHere();
+    expect(listed.map(canvas => [canvas.canvasId, canvas.isShown])).toEqual([
+      ['c-2', true],
+      ['c-1', false],
+    ]);
+    expect(listed[1]).toEqual({canvasId: 'c-1', madeAt: null, thumbnail: thumbnail('c-1'), isShown: false});
+    await session.switchTo('c-1');
+    expect(store.shown).toBe('first drawing');
+    expect(store.files.get(canvasFile('c-2'))).toBe('second drawing');
+    // A canvas deleted since is not offered.
+    store.files.delete(canvasFile('c-2'));
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-1']);
+  });
+
+  test('without a folder for canvases there is nothing to list or switch to', async () => {
+    const {host, store, session} = setup();
+    host.dir = null;
+    expect(await session.canvasesHere()).toEqual([]);
+    await session.switchTo('c-1');
+    expect(store.shown).toBe('');
+  });
+
+  test('with no note to go by, the list holds the canvas shown, and a switch still shows the one picked', async () => {
+    const {store, host, session} = await secondDropped();
+    host.page = null;
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-2']);
+    await session.switchTo('c-1');
+    expect(store.shown).toBe('first drawing');
+  });
+
 });
 
 describe('saveToNote result', () => {

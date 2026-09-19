@@ -122,6 +122,11 @@ export type FakeHost = HostPort & {
   page: NotePage | null;
   /** The elements on that page, as getElements reports them ([notePicture] builds one). */
   elements: unknown[];
+  /**
+   * Pictures placed since the note was last saved: getElements reads the note's file, so a page read sees them
+   * only once saveNote has written them (seen on device).
+   */
+  unsaved: unknown[];
   /** The notes saved before their elements were modified. */
   noteSaves: number;
   tagSucceeds: boolean;
@@ -177,6 +182,7 @@ export const createFakeHost = (): FakeHost => {
     accessRequests: 0,
     page: {notePath: '/note.note', page: 0},
     elements: [],
+    unsaved: [],
     noteSaves: 0,
     tagSucceeds: true,
     tagged: [],
@@ -208,6 +214,8 @@ export const createFakeHost = (): FakeHost => {
     },
     async saveNote() {
       host.noteSaves += 1;
+      host.elements = [...host.elements, ...host.unsaved];
+      host.unsaved = [];
       return true;
     },
     async tagPicture(picture, canvasId, _at, imagePath) {

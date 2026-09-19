@@ -7,12 +7,14 @@
 
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
-import type {BackBadgeTaps, CanvasSession} from '../application/canvasSession';
+import type {BackBadgeTaps, CanvasSession, NoteCanvas} from '../application/canvasSession';
 import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
 import {parseElementLink} from '../domain/canvasLink';
 import {noteNameOf, type TrailStep} from '../domain/linkTrail';
 import {parseTextEditRequest, type TextEditRequest} from '../domain/textEdit';
 import ActionBar from './ActionBar';
+import CanvasList from './CanvasList';
+import ConfirmDialog from './ConfirmDialog';
 import HelpHints from './HelpHints';
 import StylePanel from './StylePanel';
 import TextEditor from './TextEditor';
@@ -51,6 +53,12 @@ const CLOSE_ICON = require('../../assets/icons/action-close.png');
 // #34: the firmware's return-badge arrow, white outlined in black, shown untinted.
 const BACK_ARROW_ICON = require('../../assets/icons/badge-back-arrow.png');
 
+/**
+ * What Save to Note says once the thumbnail is in: it waits on the page to be placed, and the note drops it if
+ * something else is done first (#30).
+ */
+const ADDED_TO_NOTE = 'Added to note: place it on the page before anything else';
+
 /** How long the "Added to note" confirmation stays up. */
 export const NOTICE_MS = 2500;
 
@@ -67,6 +75,8 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   // Clearing takes everything at once, so both ways in (the eraser's options, the ⋮ menu) ask here first.
   const [isConfirmingClear, setConfirmingClear] = useState(false);
   const canvasRef = useRef<CanvasViewRef>(null);
+  // #30: the canvases made in this note, while the list of them is open.
+  const [noteCanvases, setNoteCanvases] = useState<readonly NoteCanvas[] | null>(null);
   // #34: one step back along the links followed to this canvas, offered as the firmware offers its own.
   const [back, setBack] = useState<TrailStep | null>(null);
   const goBack = useCallback(() => session.goBack().then(() => setBack(session.backTo())), [session]);
@@ -129,6 +139,14 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
     }
   };
 
+  const showNoteCanvases = async () => setNoteCanvases(await session.canvasesHere());
+
+  const switchCanvas = async (canvasId: string) => {
+    setNoteCanvases(null);
+    await session.switchTo(canvasId);
+    setBack(session.backTo());
+  };
+
   const newCanvas = async () => {
     await session.newCanvas();
     setBack(session.backTo());
@@ -139,7 +157,7 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   const saveToNote = async () => {
     const saved = await session.saveToNote();
     if (saved !== null) {
-      setNotice(saved === 'refreshed' ? 'Thumbnail updated' : 'Added to note');
+      setNotice(saved === 'refreshed' ? 'Thumbnail updated' : ADDED_TO_NOTE);
     }
   };
 
@@ -202,6 +220,7 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           onNewCanvas={newCanvas}
           onClearCanvas={() => setConfirmingClear(true)}
           onLinkToNote={linkToNote}
+          onNoteCanvases={showNoteCanvases}
           onMenuOpen={() => setShowHints(false)}
         />
         {/* Over the action bar, which is always there and sits across the middle tools: the eraser's hint has to
@@ -224,31 +243,23 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           canClearCanvas={ui.hasContent}
         />
         {isConfirmingClear && (
-          <View testID="canvas-clear-confirm" style={styles.confirmOverlay}>
-            <View style={styles.confirmCard}>
-              <Text style={styles.confirmTitle}>Clear the whole canvas?</Text>
-              <Text style={styles.confirmBody}>Everything on it goes. Undo brings it back.</Text>
-              <View style={styles.confirmActions}>
-                <Pressable
-                  testID="canvas-clear-cancel"
-                  accessibilityLabel="Keep the canvas"
-                  style={styles.confirmButton}
-                  onPress={() => setConfirmingClear(false)}>
-                  <Text style={styles.confirmButtonText}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  testID="canvas-clear-confirm-action"
-                  accessibilityLabel="Clear the canvas"
-                  style={[styles.confirmButton, styles.confirmButtonPrimary]}
-                  onPress={() => {
-                    setConfirmingClear(false);
-                    runCommand('clearCanvas');
-                  }}>
-                  <Text style={[styles.confirmButtonText, styles.confirmButtonTextPrimary]}>Clear canvas</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
+          <ConfirmDialog
+            testID="canvas-clear-confirm"
+            title="Clear the whole canvas?"
+            body="Everything on it goes. Undo brings it back."
+            cancelLabel="Cancel"
+            cancelAccessibilityLabel="Keep the canvas"
+            actionLabel="Clear canvas"
+            actionAccessibilityLabel="Clear the canvas"
+            onCancel={() => setConfirmingClear(false)}
+            onAction={() => {
+              setConfirmingClear(false);
+              runCommand('clearCanvas');
+            }}
+          />
+        )}
+        {noteCanvases !== null && (
+          <CanvasList canvases={noteCanvases} onPick={switchCanvas} onClose={() => setNoteCanvases(null)} />
         )}
         {editing !== null && (
           <TextEditor
@@ -360,55 +371,6 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     fontSize: 15,
-    color: '#ffffff',
-  },
-  // Over the canvas and its controls: nothing else is tappable while the question stands.
-  confirmOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-  },
-  confirmCard: {
-    width: 320,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#000000',
-    backgroundColor: '#ffffff',
-  },
-  confirmTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#000000',
-  },
-  confirmBody: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#444444',
-  },
-  confirmActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 18,
-  },
-  confirmButton: {
-    marginLeft: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#000000',
-  },
-  confirmButtonPrimary: {
-    backgroundColor: '#000000',
-  },
-  confirmButtonText: {
-    fontSize: 15,
-    color: '#000000',
-  },
-  confirmButtonTextPrimary: {
     color: '#ffffff',
   },
 });

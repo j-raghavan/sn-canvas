@@ -12,6 +12,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onNewCanvas = jest.fn();
   const onClearCanvas = jest.fn();
   const onLinkToNote = jest.fn();
+  const onNoteCanvases = jest.fn();
   const onMenuOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
@@ -22,6 +23,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
         onNewCanvas={onNewCanvas}
         onClearCanvas={onClearCanvas}
         onLinkToNote={onLinkToNote}
+        onNoteCanvases={onNoteCanvases}
         onMenuOpen={onMenuOpen}
       />,
     );
@@ -33,7 +35,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onNoteCanvases, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
@@ -155,4 +157,13 @@ test('New canvas, last in the menu, goes to the session rather than the canvas',
   expect(onNewCanvas).toHaveBeenCalledTimes(1);
   expect(onCommand).not.toHaveBeenCalled();
   expect(isMenuOpen()).toBe(false);
+});
+
+test('Canvases in this note goes to the screen, which lists them, and is there whatever is selected', () => {
+  const {press, onCommand, onNoteCanvases, isDisabled} = renderBar();
+  press('canvas-more');
+  expect(isDisabled('canvas-menu-noteCanvases')).toBe(false);
+  press('canvas-menu-noteCanvases');
+  expect(onNoteCanvases).toHaveBeenCalledTimes(1);
+  expect(onCommand).not.toHaveBeenCalled();
 });

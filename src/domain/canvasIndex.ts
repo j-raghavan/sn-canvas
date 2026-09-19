@@ -32,6 +32,12 @@ export type CanvasIndex = {
    */
   readonly lastByNote: Readonly<Record<string, string>>;
   /**
+   * Every canvas shown in each note, most recent first: a note's canvases
+   * stay within reach from Canvas itself, whatever became of their thumbnails
+   * (#30). Canvases deleted since are left for the reader to skip.
+   */
+  readonly canvasesByNote: Readonly<Record<string, readonly string[]>>;
+  /**
    * The canvas the sidebar reopened before canvases belonged to notes. Kept for
    * the note that claims it first (see [lastCanvasFor]), and used when the host
    * cannot say which note is open.
@@ -44,7 +50,7 @@ export type CanvasIndex = {
 /** A pending link a lassoed picture claims: the index without it, its canvas, and the picture to tag with it. */
 export type Claim = {readonly index: CanvasIndex; readonly canvasId: string; readonly picture: unknown};
 
-export const EMPTY_INDEX: CanvasIndex = {lastByNote: {}, lastCanvasId: null, pending: []};
+export const EMPTY_INDEX: CanvasIndex = {canvasesByNote: {}, lastByNote: {}, lastCanvasId: null, pending: []};
 
 /** Pending links kept, the newest: one for a thumbnail deleted before it was ever opened would otherwise wait for good. */
 export const MAX_PENDING = 20;
@@ -87,19 +93,47 @@ export function parseCanvasIndex(json: string | null): CanvasIndex {
   } catch {
     return EMPTY_INDEX;
   }
-  const saved = (raw ?? {}) as {lastByNote?: unknown; lastCanvasId?: unknown; pending?: unknown};
+  const saved = (raw ?? {}) as {canvasesByNote?: unknown; lastByNote?: unknown; lastCanvasId?: unknown; pending?: unknown};
   const pending = Array.isArray(saved.pending)
     ? saved.pending
         .map(pendingLinkOf)
         .filter((link): link is PendingLink => link !== null)
         .slice(-MAX_PENDING)
     : [];
+  const lastByNote = lastByNoteOf(saved.lastByNote);
   return {
-    lastByNote: lastByNoteOf(saved.lastByNote),
+    canvasesByNote:
+      saved.canvasesByNote === undefined ? canvasesKnownFrom(lastByNote, pending) : canvasesByNoteOf(saved.canvasesByNote),
+    lastByNote,
     lastCanvasId: isCanvasId(saved.lastCanvasId) ? saved.lastCanvasId : null,
     pending,
   };
 }
+
+/** Each note's canvases as saved, keeping only well-formed lists of canvas ids. */
+const canvasesByNoteOf = (value: unknown): Record<string, string[]> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {};
+  }
+  const lists = Object.entries(value as Record<string, unknown>)
+    .filter((pair): pair is [string, unknown[]] => pair[0] !== '' && Array.isArray(pair[1]))
+    .map(([note, ids]) => [note, ids.filter(isCanvasId)] as const);
+  return Object.fromEntries(lists);
+};
+
+/**
+ * Each note's canvases for an index saved before they were kept: the canvas it
+ * reopens, then those its thumbnails' pending links name, newest first.
+ */
+const canvasesKnownFrom = (lastByNote: Record<string, string>, pending: readonly PendingLink[]): Record<string, string[]> => {
+  const known: Record<string, string[]> = {};
+  const add = (note: string, canvasId: string) => {
+    known[note] = [...(known[note] ?? []).filter(id => id !== canvasId), canvasId];
+  };
+  pending.forEach(link => add(link.notePath, link.canvasId));
+  Object.entries(lastByNote).forEach(([note, canvasId]) => add(note, canvasId));
+  return Object.fromEntries(Object.entries(known).map(([note, ids]) => [note, [...ids].reverse()]));
+};
 
 /** The canvas each note reopens, keeping only well-formed pairs; an index saved before notes owned canvases has none. */
 const lastByNoteOf = (value: unknown): Record<string, string> => {
@@ -122,8 +156,21 @@ export function serializeCanvasIndex(index: CanvasIndex): string {
  * way, which is what an open with no note to go by falls back to.
  */
 export function withLastCanvas(index: CanvasIndex, canvasId: string, notePath: string | null): CanvasIndex {
-  const lastByNote = notePath === null ? index.lastByNote : {...index.lastByNote, [notePath]: canvasId};
-  return {...index, lastByNote, lastCanvasId: canvasId};
+  if (notePath === null) {
+    return {...index, lastCanvasId: canvasId};
+  }
+  const others = (index.canvasesByNote[notePath] ?? []).filter(id => id !== canvasId);
+  return {
+    ...index,
+    canvasesByNote: {...index.canvasesByNote, [notePath]: [canvasId, ...others]},
+    lastByNote: {...index.lastByNote, [notePath]: canvasId},
+    lastCanvasId: canvasId,
+  };
+}
+
+/** The canvases shown in [notePath], most recent first; none when the host cannot say which note is open. */
+export function canvasesIn(index: CanvasIndex, notePath: string | null): readonly string[] {
+  return notePath === null ? [] : (index.canvasesByNote[notePath] ?? []);
 }
 
 /**

@@ -21,6 +21,7 @@
 // (domain/canvasTag.ts).
 
 import {
+  canvasesIn,
   claimPending,
   elementSummary,
   parseCanvasIndex,
@@ -40,6 +41,7 @@ import {
   canvasFilePath,
   canvasIdFromLassoedElements,
   canvasIdFromThumbnailPath,
+  canvasMadeAt,
   imagesPath,
   picturePathOf,
   indexPath,
@@ -138,6 +140,16 @@ export type BackBadgePort = {
   arriveOver: (notePath: string) => Promise<boolean>;
 };
 
+/** A canvas made in the open note, as the note's canvas list shows it (#30). */
+export type NoteCanvas = {
+  canvasId: string;
+  /** When it was made; null for the scratch canvas. */
+  madeAt: number | null;
+  /** Where its thumbnail is drawn once it has been saved to the note; the file may not exist before. */
+  thumbnail: string;
+  isShown: boolean;
+};
+
 /** The back badge's taps, which the screen hands to its session's goBack. */
 export type BackBadgeTaps = {onTapped: (listener: () => void) => () => void};
 
@@ -166,6 +178,13 @@ export type CanvasSession = {
    * false when it would not open, and Canvas stays.
    */
   followLink: (link: ElementLink) => Promise<boolean>;
+  /**
+   * The canvases made in the open note, the one shown first, then the most
+   * recently shown: each stays within reach whatever became of its thumbnail.
+   */
+  canvasesHere: () => Promise<NoteCanvas[]>;
+  /** Saves the canvas shown, then shows [canvasId]. */
+  switchTo: (canvasId: string) => Promise<void>;
   /** Where one step back goes (the last link's canvas and note page), or null with no link to go back along. */
   backTo: () => TrailStep | null;
   /**
@@ -455,23 +474,17 @@ export function createCanvasSession({
     });
 
   /**
-   * The page the note is on and the pictures already there, read once per save
-   * — it takes seconds — and only when a thumbnail of this canvas could
-   * already be on the page. A canvas that has never been linked cannot have
-   * one, so its save doesn't wait for the read at all.
+   * The pictures on page [at]. It takes seconds, so it is read only when it
+   * decides something.
    *
    * The note is saved first: getElements reads the note's file, so a thumbnail
    * placed since the last save is not in it yet, and the page comes back
    * looking emptier than it is (seen on device: a page with a thumbnail on it
    * read back as having no pictures at all).
    */
-  const pageAlready = async (couldHoldOne: boolean): Promise<{at: NotePage; pictures: unknown[]} | null> => {
-    if (!couldHoldOne) {
-      return null;
-    }
+  const picturesOn = async (at: NotePage): Promise<unknown[]> => {
     await host.saveNote();
-    const at = await host.currentPage();
-    return at === null ? null : {at, pictures: picturesOf(await host.pageElements(at))};
+    return picturesOf(await host.pageElements(at));
   };
 
   /**
@@ -487,7 +500,7 @@ export function createCanvasSession({
    * The thumbnail already in the note, redrawn: the note re-reads the PNG as it
    * takes the modified picture, so the picture keeps the place and the size the
    * user gave it and only what it shows changes. The picture handed over is the
-   * note's own, as [pageAlready] read it, not a lasso's copy of one: a copy
+   * note's own, as [picturesOn] read it, not a lasso's copy of one: a copy
    * carries a number in the page that the note doesn't match, and modifying it
    * changes nothing (seen on device as `modifyElements failed: {"result":[]}`).
    */
@@ -510,7 +523,9 @@ export function createCanvasSession({
     const linkedId = fromScratch ? newCanvasId() : canvasId;
     const canvasFile = canvasFilePath(dir, linkedId);
     const thumbnail = thumbnailPath(dir, linkedId);
-    const already = await pageAlready(!fromScratch);
+    // Read only when a thumbnail of this canvas could already be on the page: one never linked cannot have one.
+    const at = fromScratch ? null : await host.currentPage();
+    const already = at === null ? null : {at, pictures: await picturesOn(at)};
     const existing = already?.pictures.find(picture => showsCanvas(picture, linkedId)) ?? null;
     const drawn = (await store.save(canvasFile)) && (await store.renderThumbnail(thumbnail));
     const placed =
@@ -531,7 +546,10 @@ export function createCanvasSession({
       canvasId = linkedId;
       await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID));
     }
-    await updateIndex(dir, current => withLastCanvas(current, linkedId, already?.at?.notePath ?? null));
+    // The note it went into reopens it: asked of the host when no page was read (the scratch canvas's first save),
+    // or the note would go on naming the scratch canvas, whose file is gone, and reopen empty (#30).
+    const into = already?.at ?? (await host.currentPage());
+    await updateIndex(dir, current => withLastCanvas(current, linkedId, into?.notePath ?? null));
     logger.log(`${TAG}[LINK] ${existing === null ? 'inserted' : 'refreshed'} thumbnail for canvas=${linkedId}`);
     // A refreshed picture is already tagged with its canvas; only a new one has to be claimed once the note places it.
     return {dir, linkedId, refreshed: existing !== null, known: already};
@@ -702,6 +720,30 @@ export function createCanvasSession({
       }
     });
 
+  const canvasesHere = async (): Promise<NoteCanvas[]> => {
+    const dir = await resolveCanvasDir();
+    if (dir === null) {
+      return [];
+    }
+    const at = await host.currentPage();
+    const saved = new Set(await store.savedCanvasIds(dir));
+    // The canvas shown may be new and unsaved yet; any other must still have its file.
+    const ids = [canvasId, ...canvasesIn(await loadIndex(dir), at?.notePath ?? null).filter(id => id !== canvasId && saved.has(id))];
+    return ids.map(id => ({canvasId: id, madeAt: canvasMadeAt(id), thumbnail: thumbnailPath(dir, id), isShown: id === canvasId}));
+  };
+
+  const switchTo = (target: string): Promise<void> =>
+    serially(async () => {
+      const dir = await resolveCanvasDir();
+      if (dir === null) {
+        return;
+      }
+      const at = await host.currentPage();
+      await show(dir, target, at);
+      trail = [];
+      logger.log(`${TAG} switched to canvas=${canvasId} note=${at?.notePath ?? 'unknown'}`);
+    });
+
   const insertImage = async (): Promise<boolean> => {
     // Picked outside the queue: the picker waits on the user, and must never hold up a save or a close.
     const source = await pickOver(host.pickImage);
@@ -755,6 +797,8 @@ export function createCanvasSession({
     insertImage,
     pickNoteLink,
     followLink,
+    canvasesHere,
+    switchTo,
     backTo: () => trail.at(-1) ?? null,
     goBack,
     exportPdf,
