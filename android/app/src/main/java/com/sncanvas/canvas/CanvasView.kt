@@ -180,8 +180,30 @@ class CanvasView(
         liveInk.notePen = pen
     }
 
-    /** Replaces the canvas content (after `loadCanvas`), restarts the undo history from it, and frames it (FR13). */
-    fun setElements(elements: List<Element>) {
+    /**
+     * The file the canvas shown was loaded from, or saved under since: the one
+     * file it may be saved to (see `saveCanvas`). Null until a canvas is shown.
+     */
+    @Volatile
+    var heldPath: String? = null
+        private set
+
+    /** Shows the canvas loaded from [path]: its [elements], and the file it may from now on be saved to. */
+    fun show(
+        path: String,
+        elements: List<Element>,
+    ) {
+        heldPath = path
+        setElements(elements)
+    }
+
+    /** The canvas shown is now kept at [path] (the scratch canvas, given its own id as it goes into a note). */
+    fun rebind(path: String?) {
+        heldPath = path
+    }
+
+    /** Replaces the canvas content, restarts the undo history from it, and frames it (FR13). */
+    private fun setElements(elements: List<Element>) {
         controller.load(elements)
         // Said again even when it reads the same as the last canvas, so the screen always hears what a load left it with.
         controller.republish()

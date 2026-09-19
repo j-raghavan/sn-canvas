@@ -578,7 +578,7 @@ describe('saveToNote', () => {
   });
 
   test.each([
-    ['saving the canvas', 'save'],
+    ['saving the canvas under its new id', 'saveAs'],
     ['rendering the thumbnail', 'renderThumbnail'],
     ['inserting the image', 'insertImage'],
   ])('when %s fails, the scratch canvas stays as it was and no new files are left behind', async (_step, failing) => {
@@ -587,11 +587,15 @@ describe('saveToNote', () => {
     if (failing === 'insertImage') {
       host.insertSucceeds = false;
     } else {
-      store.failing.add(failing as 'save' | 'renderThumbnail');
+      store.failing.add(failing as 'saveAs' | 'renderThumbnail');
     }
     await session.saveToNote();
     expect(session.currentCanvasId()).toBe('default');
-    expect([...store.files.keys()]).toEqual([MARKER, SCRATCH, INDEX]);
+    expect([...store.files.keys()].sort()).toEqual([INDEX, MARKER, SCRATCH].sort());
+    expect(store.files.get(SCRATCH)).toBe('scratch');
+    // And the view keeps the scratch canvas's file: a later save goes there.
+    await session.close();
+    expect(store.refused).toEqual([]);
     expect(host.inserted).toEqual([]);
     expect(logger.lines).toContain('warn [SNCANVAS][LINK] save to note failed; canvas=default unchanged');
   });
@@ -859,6 +863,32 @@ describe('the trail back along followed links', () => {
     const fresh = await walkedToC();
     await fresh.session.newCanvas();
     expect(fresh.session.backTo()).toBeNull();
+  });
+});
+
+describe('a canvas file only ever holds the canvas loaded from it (#30)', () => {
+  test('reopening the canvas the session last showed reloads it when the view came back without it', async () => {
+    const {store, session} = setup({[canvasFile('c-2')]: 'second drawing', [INDEX]: indexWith({lastCanvasId: 'c-2'})});
+    await session.open(500);
+    await session.close();
+    // As on device at 13:20: Canvas comes back, its view empty, the session still naming c-2.
+    store.emptyView();
+    await session.open(500);
+    expect(store.shown).toBe('second drawing');
+    // Moving on saves the drawing where it came from, not an empty view over it.
+    await session.newCanvas();
+    expect(store.files.get(canvasFile('c-2'))).toBe('second drawing');
+  });
+
+  test('a load that never reached the view leaves the canvas it named untouched by every later save', async () => {
+    const {store, session} = setup({[canvasFile('c-2')]: 'second drawing', [INDEX]: indexWith({lastCanvasId: 'c-2'})});
+    store.failing.add('load');
+    await session.open(500);
+    store.shown = 'whatever the view happened to show';
+    await session.newCanvas();
+    await session.close();
+    expect(store.files.get(canvasFile('c-2'))).toBe('second drawing');
+    expect(store.refused).toContain(canvasFile('c-2'));
   });
 });
 

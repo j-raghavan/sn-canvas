@@ -9,6 +9,8 @@ import com.facebook.react.bridge.ReactMethod
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * RN bridge for the infrequent file operations on the live canvas: save, load,
@@ -37,7 +39,13 @@ class CanvasModule(
 ) : ReactContextBaseJavaModule(reactContext) {
     override fun getName(): String = NAME
 
-    /** Writes the live canvas's elements to [path] as JSON, creating parent directories as needed. */
+    /**
+     * Writes the live canvas's elements to [path] as JSON, creating parent
+     * directories as needed; only when [path] is the file the view holds
+     * ([CanvasView.heldPath]). A view that holds another canvas, or none (it
+     * was not there as a canvas loaded), is refused, never written: a canvas
+     * file is only ever written with the canvas loaded from it (#30).
+     */
     @ReactMethod
     fun saveCanvas(
         path: String,
@@ -45,15 +53,51 @@ class CanvasModule(
     ) {
         val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to save from")
         view.post {
-            val elements = view.getState().elements
-            inBackground(promise) {
-                val file = File(path)
-                file.parentFile?.mkdirs()
-                file.writeText(CanvasJson.serializeElements(elements))
-                true
+            val held = view.heldPath
+            if (held != path) {
+                promise.reject(ERR_NOT_HELD, "The canvas view holds ${held ?: "no canvas"}, not $path; not saved")
+                return@post
             }
+            val elements = view.getState().elements
+            inBackground(promise) { writeCanvas(path, elements) }
         }
     }
+
+    /**
+     * Writes the live canvas to [path], a file it was not loaded from, and
+     * keeps it there from now on: the scratch canvas, given its own id as it
+     * goes into a note. Should the write fail, the view keeps the file it held.
+     */
+    @ReactMethod
+    fun saveCanvasAs(
+        path: String,
+        promise: Promise,
+    ) {
+        val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to save from")
+        view.post {
+            val held = view.heldPath
+            val elements = view.getState().elements
+            view.rebind(path)
+            Thread {
+                try {
+                    promise.resolve(writeCanvas(path, elements))
+                } catch (e: IOException) {
+                    view.post { view.rebind(held) }
+                    promise.reject(ERR_IO, e.message, e)
+                } catch (e: SecurityException) {
+                    view.post { view.rebind(held) }
+                    promise.reject(ERR_DENIED, e.message, e)
+                }
+            }.start()
+        }
+    }
+
+    /** Whether the live view holds the canvas saved at [path]: shown from it, so switching to it needs no load. */
+    @ReactMethod
+    fun holdsCanvas(
+        path: String,
+        promise: Promise,
+    ) = promise.resolve(registry.current()?.heldPath == path)
 
     /**
      * Shows the canvas saved at [path] in the live view, its images drawn from
@@ -61,6 +105,11 @@ class CanvasModule(
      * empty canvas and resolves `false`: that is a canvas never saved yet, not
      * an error. Replacing either way matters when the session switches
      * canvases in a view that stays mounted.
+     *
+     * The view may not be there yet (it attaches as Canvas comes up, after the
+     * open that loads into it), so the load waits for it, and settles only once
+     * the canvas is in it. A view that never comes rejects the load, and the
+     * load is called off: it must not land later, over another canvas (#30).
      */
     @ReactMethod
     fun loadCanvas(
@@ -72,7 +121,17 @@ class CanvasModule(
         val exists = file.exists()
         val elements = if (exists) CanvasJson.deserializeElements(file.readText()) else emptyList()
         images.folder = File(imageDir)
-        registry.current()?.let { view -> view.post { view.setElements(elements) } }
+        val handoff = Handoff()
+        val landed = CountDownLatch(1)
+        registry.whenAttached { view ->
+            view.post {
+                handoff.deliver { view.show(path, elements) }
+                landed.countDown()
+            }
+        }
+        if (!landed.await(LOAD_WAIT_SECONDS, TimeUnit.SECONDS) && handoff.abandon()) {
+            throw IOException("No canvas view came to load $path into")
+        }
         exists
     }
 
@@ -211,10 +270,25 @@ class CanvasModule(
     companion object {
         const val NAME = "CanvasModule"
         const val ERR_NO_ACTIVE_VIEW = "E_NO_ACTIVE_VIEW"
+        const val ERR_NOT_HELD = "E_NOT_HELD"
         const val ERR_IO = "E_IO"
         const val ERR_DENIED = "E_DENIED"
         private const val PNG_QUALITY = 100
+
+        /** How long a load waits for the view to come up: it attaches well within a second of Canvas showing. */
+        private const val LOAD_WAIT_SECONDS = 5L
     }
+}
+
+/** Writes [elements] to [path] as canvas JSON, making its folder as needed; true once written. */
+private fun writeCanvas(
+    path: String,
+    elements: List<Element>,
+): Boolean {
+    val file = File(path)
+    file.parentFile?.mkdirs()
+    file.writeText(CanvasJson.serializeElements(elements))
+    return true
 }
 
 /**

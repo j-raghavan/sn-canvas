@@ -73,14 +73,24 @@ export type CanvasStorePort = {
   rememberNotePen: (pen: NotePen) => Promise<boolean>;
   /**
    * Shows the canvas saved at [path], its images in [imageDir], replacing the
-   * view's content; a missing file shows an empty canvas and reports false.
+   * view's content; a missing file shows an empty canvas and reports false, as
+   * does a load that never reached the view.
    */
   load: (path: string, imageDir: string) => Promise<boolean>;
   /** Copies the image at [source] into [imageDir] and puts it on the canvas shown (FR22); false when it can't. */
   importImage: (source: string, imageDir: string) => Promise<boolean>;
   /** Writes the canvas shown to a one-page PDF at [path], fitted to its content (FR11); false when it can't. */
   exportPdf: (path: string) => Promise<boolean>;
+  /**
+   * Writes the canvas shown to [path], the file it was loaded from. Any other
+   * file is refused (false), never written: a canvas file only ever holds the
+   * canvas loaded from it (#30).
+   */
   save: (path: string) => Promise<boolean>;
+  /** Writes the canvas shown to [path], a file it was not loaded from, and keeps it there from now on. */
+  saveAs: (path: string) => Promise<boolean>;
+  /** Whether the view shows the canvas saved at [path]. */
+  holds: (path: string) => Promise<boolean>;
   remove: (path: string) => Promise<boolean>;
   renderThumbnail: (path: string) => Promise<boolean>;
   /** The text file at [path]; null when there is none or it can't be read. */
@@ -422,7 +432,8 @@ export function createCanvasSession({
 
   /** Shows [target], saving the canvas shown first, and records it as the canvas the note at [at] reopens. */
   const show = async (dir: string, target: string, at: NotePage | null): Promise<void> => {
-    if (hasOpened && target === canvasId) {
+    // Only when the view does hold it: one Canvas came back to without it, told it did, would be saved over it (#30).
+    if (hasOpened && target === canvasId && (await store.holds(canvasFilePath(dir, canvasId)))) {
       return;
     }
     await saveShown();
@@ -527,7 +538,9 @@ export function createCanvasSession({
     const at = fromScratch ? null : await host.currentPage();
     const already = at === null ? null : {at, pictures: await picturesOn(at)};
     const existing = already?.pictures.find(picture => showsCanvas(picture, linkedId)) ?? null;
-    const drawn = (await store.save(canvasFile)) && (await store.renderThumbnail(thumbnail));
+    // The scratch canvas is written under its new id, and kept there; any other is saved where it was loaded from.
+    const saved = await (fromScratch ? store.saveAs(canvasFile) : store.save(canvasFile));
+    const drawn = saved && (await store.renderThumbnail(thumbnail));
     const placed =
       drawn &&
       (existing !== null && already !== null
@@ -536,6 +549,10 @@ export function createCanvasSession({
     if (!placed) {
       logger.warn(`${TAG}[LINK] save to note failed; canvas=${canvasId} unchanged`);
       if (fromScratch) {
+        // Back to the scratch canvas it still is: the view keeps its file, and the new id's files go.
+        if (saved) {
+          await store.saveAs(canvasFilePath(dir, DEFAULT_CANVAS_ID));
+        }
         await store.remove(canvasFile);
         await store.remove(thumbnail);
       }
