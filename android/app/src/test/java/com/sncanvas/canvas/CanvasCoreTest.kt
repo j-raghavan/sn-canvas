@@ -105,6 +105,33 @@ class CanvasCoreTest {
         assertEquals(true, glyph.x < ellipse.x + ellipse.width + CanvasCore.LINK_GLYPH_OFFSET_PX)
     }
 
+    // Deliberately not square, and not centred on the origin: a circle at 0,0 cannot tell width from height,
+    // so it would pass just as well if the same axis were used for both.
+    @Test
+    fun `a squashed ellipse reaches by its own width and its own height`() {
+        val ellipse =
+            Element(id = "ell", type = CanvasTools.ELLIPSE, x = 20.0, y = 50.0, width = 300.0, height = 100.0)
+                .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        val glyph = CanvasCore.linkGlyphPoint(ellipse, listOf(ellipse), zoom = 1.0)
+        val half = Math.sqrt(2.0) / 2
+        assertEquals(20.0 + 150.0 * (1 + half) + CanvasCore.LINK_GLYPH_OFFSET_PX, glyph.x, 1e-9)
+        assertEquals(50.0 + 50.0 * (1 - half) - CanvasCore.LINK_GLYPH_OFFSET_PX, glyph.y, 1e-9)
+    }
+
+    @Test
+    fun `a rotated ellipse carries its glyph round with it`() {
+        val ellipse =
+            Element(id = "ell", type = CanvasTools.ELLIPSE, x = 0.0, y = 0.0, width = 200.0, height = 200.0)
+                .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        val turned = ellipse.copy(rotation = Math.PI / 2)
+        val still = CanvasCore.linkGlyphPoint(ellipse, listOf(ellipse), zoom = 1.0)
+        val spun = CanvasCore.linkGlyphPoint(turned, listOf(turned), zoom = 1.0)
+        // A quarter turn about the centre, which is where the shape turns about too.
+        val centre = CanvasCore.elementCenter(ellipse)
+        assertEquals(centre.x - (still.y - centre.y), spun.x, 1e-9)
+        assertEquals(centre.y + (still.x - centre.x), spun.y, 1e-9)
+    }
+
     @Test
     fun `a rectangle still carries its glyph off the corner of the box around it`() {
         val rect =
