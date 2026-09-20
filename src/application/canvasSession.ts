@@ -82,6 +82,12 @@ export type CanvasSession = {
   open: (buttonId: number | null) => Promise<void>;
   /** Saves the canvas shown, then shows a new, empty one. */
   newCanvas: () => Promise<void>;
+  /**
+   * Starts a fresh sheet: the canvas shown keeps what is on it, in its own
+   * file, and an empty one takes its place. Clearing never empties the canvas
+   * a note's thumbnail points at (#44); the old one stays in the note's list.
+   */
+  clearCanvas: () => Promise<void>;
   /** Puts an image the user picks on the canvas shown (FR22), copied into the canvas folder; true once it is there. */
   insertImage: () => Promise<boolean>;
   /** Asks for a note to link the selected element to (FR7); the link once one was picked, or null when the picker was cancelled. */
@@ -348,16 +354,27 @@ export function createCanvasSession({
       logger.log(`${TAG} button=${buttonId} note=${at?.notePath ?? 'unknown'} opened canvas=${canvasId}`);
     });
 
-  const newCanvas = (): Promise<void> =>
+  /**
+   * Puts the canvas shown into its own file and shows a new, empty one in its
+   * place. What the old canvas holds is left as it was, so a thumbnail in a
+   * note still opens the drawing it shows (#44).
+   */
+  const freshSheet = (what: string): Promise<void> =>
     serially(async () => {
       const dir = await resolveCanvasDir();
       if (!dir) {
         return;
       }
+      const kept = canvasId;
       await show(dir, newCanvasId(), await host.currentPage());
       links.clearTrail();
-      logger.log(`${TAG} new canvas=${canvasId}`);
+      logger.log(`${TAG} ${what} canvas=${canvasId}, ${kept} kept`);
     });
+
+  const newCanvas = (): Promise<void> => freshSheet('new');
+
+  /** Clear starts a fresh sheet rather than emptying the canvas in place, so what a note points at survives it (#44). */
+  const clearCanvas = (): Promise<void> => freshSheet('cleared,');
 
   const canvasesHere = async (): Promise<NoteCanvas[]> => {
     const dir = await resolveCanvasDir();
@@ -432,6 +449,7 @@ export function createCanvasSession({
   return {
     open,
     newCanvas,
+    clearCanvas,
     saveToNote: thumbnails.saveToNote,
     insertImage,
     pickNoteLink: links.pickNoteLink,

@@ -592,6 +592,51 @@ describe('newCanvas', () => {
   });
 });
 
+describe('clearCanvas', () => {
+  test('keeps what was on the canvas in its own file and starts a fresh sheet (#44)', async () => {
+    const {store, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    store.shown = 'a drawing';
+    await session.clearCanvas();
+    expect(store.files.get(SCRATCH)).toBe('a drawing');
+    expect(store.shown).toBe('');
+    expect(session.currentCanvasId()).toBe('c-1');
+    expect(savedIndex(store).lastCanvasId).toBe('c-1');
+  });
+
+  test('New canvas after a clear leaves the canvas a note points at holding its drawing (#44)', async () => {
+    const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
+    host.lassoed = [lassoedThumbnail('c-9')];
+    await session.open(501);
+    store.shown = 'a drawing';
+    await session.clearCanvas();
+    await session.newCanvas();
+    expect(store.files.get(canvasFile('c-9'))).toBe('a drawing');
+  });
+
+  test('the canvas cleared away is still a tap away in this note', async () => {
+    const {store, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    await session.saveToNote();
+    store.shown = 'first drawing, more of it';
+    await session.clearCanvas();
+    const listed = await session.canvasesHere();
+    expect(listed.map(canvas => [canvas.canvasId, canvas.isShown])).toEqual([
+      ['c-2', true],
+      ['c-1', false],
+    ]);
+    await session.switchTo('c-1');
+    expect(store.shown).toBe('first drawing, more of it');
+  });
+
+  test('without a plugin directory it does nothing', async () => {
+    const {host, session} = setup();
+    host.dir = null;
+    await session.clearCanvas();
+    expect(session.currentCanvasId()).toBe('default');
+  });
+});
+
 describe('close', () => {
   test('saves the canvas, then closes the plugin view', async () => {
     const {store, host, session} = setup({[SCRATCH]: 'scratch'});
