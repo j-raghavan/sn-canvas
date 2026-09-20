@@ -455,8 +455,7 @@ describe('links', () => {
   test('Link to note stores what the picker named, on whatever is selected', async () => {
     const {session, press, shows, emitCanvasState} = await render();
     await emitCanvasState({hasSelection: true, hasContent: true});
-    await press('canvas-more');
-    await press('canvas-menu-linkToNote');
+    await press('canvas-link');
     expect(session.pickNoteLink).toHaveBeenCalledTimes(1);
     expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'linkSelected', [
       'note',
@@ -471,8 +470,7 @@ describe('links', () => {
     session.pickNoteLink.mockResolvedValue(null);
     const {press, shows, emitCanvasState} = await render(session);
     await emitCanvasState({hasSelection: true, hasContent: true});
-    await press('canvas-more');
-    await press('canvas-menu-linkToNote');
+    await press('canvas-link');
     expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'linkSelected', expect.anything());
     expect(shows('Linked to the note')).toBe(false);
   });

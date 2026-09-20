@@ -217,12 +217,40 @@ def badge_back_arrow():
     save(image, "badge-back-arrow")
 
 
+# The lightning bolt the canvas draws in a linked element's badge (CanvasRenderer.LINK_GLYPH_BOLT),
+# so the button and the mark it puts on the element are plainly the same thing.
+LINK_BOLT = [(4, -17), (-10, 3), (-1, 3), (-4, 17), (10, -3), (1, -3)]
+
+
+def bolt_outline(scale=2.7):
+    points = [(64 + x * scale, 64 + y * scale) for x, y in LINK_BOLT]
+    return [*points, points[0]]
+
+
+def action_link():
+    """The link badge's bolt: this element jumps somewhere (#34)."""
+    image, draw = new_canvas()
+    polyline(draw, bolt_outline())
+    save(image, "action-link")
+
+
+def action_unlink():
+    """The same bolt struck through: the link comes off. The stroke runs across the bolt's own
+    diagonal rather than along it, or the two read as one shape at toolbar size."""
+    image, draw = new_canvas()
+    polyline(draw, bolt_outline(scale=2.4))
+    polyline(draw, [(18, 18), (110, 110)])
+    save(image, "action-unlink")
+
+
 ICONS = [
     action_save_to_note,
     action_duplicate,
     action_group,
     action_ungroup,
     action_more,
+    action_link,
+    action_unlink,
     lambda: fill_icon("fill-none"),
     lambda: fill_icon("fill-semi", interior_alpha=80),
     lambda: fill_icon("fill-solid", interior_alpha=255),
