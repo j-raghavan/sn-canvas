@@ -217,7 +217,7 @@ class ConnectorsTest {
 
     @Test
     fun `moveEndpoint moves the start point and clears binding when targetElementId is null`() {
-        val result = CanvasCore.moveEndpoint(endpointBase, "arr", Endpoint.START, Point(3.0, 4.0), targetElementId = null)
+        val result = ShapeEdits.moveEndpoint(endpointBase, "arr", Endpoint.START, Point(3.0, 4.0), targetElementId = null)
         val el = result.elements.first()
         assertEquals(3.0, el.startX!!, 0.0001)
         assertEquals(4.0, el.startY!!, 0.0001)
@@ -226,7 +226,7 @@ class ConnectorsTest {
 
     @Test
     fun `moveEndpoint moves the end point and sets a binding when targetElementId is provided`() {
-        val result = CanvasCore.moveEndpoint(endpointBase, "arr", Endpoint.END, Point(7.0, 7.0), targetElementId = "boxA")
+        val result = ShapeEdits.moveEndpoint(endpointBase, "arr", Endpoint.END, Point(7.0, 7.0), targetElementId = "boxA")
         val el = result.elements.first()
         assertEquals(7.0, el.endX!!, 0.0001)
         assertEquals(7.0, el.endY!!, 0.0001)
@@ -235,7 +235,7 @@ class ConnectorsTest {
 
     @Test
     fun `moveEndpoint is a no-op when the id does not exist`() {
-        val result = CanvasCore.moveEndpoint(endpointBase, "nonexistent", Endpoint.START, Point(1.0, 1.0), null)
+        val result = ShapeEdits.moveEndpoint(endpointBase, "nonexistent", Endpoint.START, Point(1.0, 1.0), null)
         assertEquals(endpointBase.elements, result.elements)
     }
 

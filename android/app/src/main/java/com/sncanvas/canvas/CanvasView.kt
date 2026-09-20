@@ -89,6 +89,48 @@ class CanvasView(
         )
     private val selectGestures = SelectGestures({ controller.state }, { controller.selectedElements }, controller::fitted, measurer)
 
+    // What the canvas shows this frame, as opposed to what it holds (CanvasFrame).
+    private val frame = CanvasFrame(controller, selectGestures)
+
+    // What a finished gesture leaves behind (GestureCommit); this view decides what one starts and follows it.
+    private val commits =
+        GestureCommit(
+            controller,
+            selectGestures,
+            measurer,
+            liveInk,
+            object : GestureCommit.Host {
+                override fun newElementId(): String = this@CanvasView.newElementId()
+
+                override fun toolMode(): String = toolMode
+
+                override fun followLink(link: ElementLink) = events.onFollowLink(this@CanvasView, link)
+            },
+        )
+
+    // What a touch starts (GestureStart); this view follows it and hands it to commits when it ends.
+    private val starts =
+        GestureStart(
+            { controller.state },
+            selectGestures,
+            object : GestureStart.Host {
+                override fun toolMode(): String = toolMode
+
+                override fun minimapLayout(): MinimapLayout? = if (minimap.isShowing()) minimap.layout() else null
+
+                override fun showMinimap() = minimap.show()
+
+                override fun centerViewOn(world: Point) = this@CanvasView.centerViewOn(world)
+
+                override fun beginStroke() = liveInk.beginStroke(controller.state.elements, controller.state.transform)
+
+                override fun eraseAt(
+                    erase: CanvasGesture.Erase,
+                    world: Point,
+                ) = this@CanvasView.eraseAt(erase, world)
+            },
+        )
+
     private var toolMode = CanvasTools.SELECT
     private val isPencil: Boolean get() = toolMode == CanvasTools.DRAW
     private var gesture: CanvasGesture? = null
@@ -100,20 +142,11 @@ class CanvasView(
     private val lastTouch = PointF()
     private val dragCurrent = PointF()
 
-    // A cached frame taken when a pan begins, blitted with a translate/scale while it's dragged (NFR1/NFR3)
-    // instead of repainting every element on each move sample: fewer full-surface e-ink repaints while panning.
-    // Reused across pans, as LiveInk's stroke backdrop already is; self-heals on a size change (renderSnapshot).
-    private var panSnapshot: Bitmap? = null
-    private var panSnapshotTransform: ViewTransform? = null
+    // The frame as it looked when a pan began, blitted while it drags instead of repainting (PanPreview).
+    private val panPreview = PanPreview(renderer)
 
-    // Minimap: this view decides when it shows (during pan/zoom); MinimapRenderer draws it.
-    private val minimapRenderer = MinimapRenderer()
-    private var isMinimapVisible = false
-    private val hideMinimapRunnable =
-        Runnable {
-            isMinimapVisible = false
-            invalidate()
-        }
+    // When the minimap shows, where it sits, and what it draws (Minimap).
+    private val minimap = Minimap(this) { controller.state }
 
     private val scaleGestureDetector =
         ScaleGestureDetector(
@@ -124,7 +157,7 @@ class CanvasView(
                     controller.setViewport(
                         CanvasCore.zoomTo(controller.state, detector.scaleFactor.toDouble(), focal.x, focal.y).transform,
                     )
-                    showMinimap()
+                    minimap.show()
                     return true
                 }
             },
@@ -163,7 +196,7 @@ class CanvasView(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        removeCallbacks(hideMinimapRunnable)
+        minimap.forget()
         liveInk.release()
         registry.detach(this)
     }
@@ -337,87 +370,11 @@ class CanvasView(
         downTouch.set(contact.x, contact.y)
         lastTouch.set(contact.x, contact.y)
         dragCurrent.set(contact.x, contact.y)
-        gesture = gestureFor(contact)
-        if (gesture == CanvasGesture.Pan) beginPanSnapshot()
+        gesture = starts.at(contact, toWorld(contact.x, contact.y))
+        if (gesture == CanvasGesture.Pan) panPreview.take(controller.state, width, height)
         Log.d(
             LOG_TAG,
             "touch start pen=${contact.isPen} eraser=${contact.isEraser} tool=$toolMode gesture=${gesture?.javaClass?.simpleName}",
-        )
-    }
-
-    /**
-     * A linked element's glyph under [world], if the select tool is in hand: a
-     * tap on it follows the link. Only the select tool, so the glyph never
-     * swallows a stroke from a drawing tool.
-     */
-    private fun linkGlyphAt(world: Point): Element? {
-        if (CanvasTools.usesPen(toolMode)) return null
-        val zoom = controller.state.zoom
-        return CanvasCore.linkGlyphAt(world.x, world.y, controller.state.elements, zoom, LINK_GLYPH_HIT_PX / zoom)
-    }
-
-    /** The gesture [contact] starts: the controls drawn over the canvas answer first, then the tool in hand. */
-    private fun gestureFor(contact: Contact): CanvasGesture? {
-        val world = toWorld(contact.x, contact.y)
-        return controlGestureAt(contact, world) ?: toolGestureAt(contact, world)
-    }
-
-    /** What a touch on something drawn over the canvas starts: the minimap, or a linked element's glyph. */
-    private fun controlGestureAt(
-        contact: Contact,
-        world: Point,
-    ): CanvasGesture? {
-        val minimap = if (isMinimapVisible && navigatesByMinimap(contact)) minimapLayout() else null
-        if (minimap != null && minimap.contains(contact.x.toDouble(), contact.y.toDouble())) {
-            return startMinimapDrag(minimap, contact)
-        }
-        return linkGlyphAt(world)?.let { linked -> CanvasGesture.FollowLink(linked.id) }
-    }
-
-    /** What the tool in hand makes of a touch at [world]. */
-    private fun toolGestureAt(
-        contact: Contact,
-        world: Point,
-    ): CanvasGesture? =
-        when {
-            // The pen's eraser end erases with any tool, as does the eraser tool with the pen.
-            contact.isEraser || (contact.isPen && toolMode == CanvasTools.ERASER) -> CanvasGesture.Erase().also { eraseAt(it, world) }
-            !CanvasTools.usesPen(toolMode) -> selectGesture(world, contact)
-            // Palm rejection: every other tool works with the pen alone, as in Supernote's own notes.
-            !contact.isPen -> null
-            toolMode == CanvasTools.DRAW -> startFreehand(sampleAt(contact.x, contact.y, contact.pressure))
-            CanvasTools.placesText(toolMode) -> CanvasGesture.PlaceText
-            else -> CanvasGesture.DrawShape
-        }
-
-    /**
-     * Whether [contact] navigates when it lands on the minimap. The pen goes on
-     * drawing wherever it would have drawn — a stroke in that corner, moments
-     * after a pan, must not be swallowed by the map — so with a pen tool in hand
-     * only a finger navigates. The pen's eraser end always erases.
-     */
-    private fun navigatesByMinimap(contact: Contact): Boolean = !contact.isEraser && !(contact.isPen && CanvasTools.usesPen(toolMode))
-
-    private fun minimapLayout(): MinimapLayout? = ViewTransforms.minimapLayout(controller.state, width.toDouble(), height.toDouble())
-
-    /**
-     * A touch on the minimap navigates (FR15): landing on the "you are here"
-     * rectangle drags it from where it was grabbed, and landing anywhere else in
-     * the box takes the view there at once, then drags on from it.
-     */
-    private fun startMinimapDrag(
-        layout: MinimapLayout,
-        contact: Contact,
-    ): CanvasGesture {
-        val world = layout.worldAt(contact.x.toDouble(), contact.y.toDouble())
-        val grabbed = layout.holdsViewport(world)
-        val center = layout.visible.let { Point((it.left + it.right) / 2, (it.top + it.bottom) / 2) }
-        if (!grabbed) centerViewOn(world)
-        showMinimap()
-        return CanvasGesture.MinimapDrag(
-            layout,
-            grabX = if (grabbed) center.x - world.x else 0.0,
-            grabY = if (grabbed) center.y - world.y else 0.0,
         )
     }
 
@@ -430,19 +387,6 @@ class CanvasView(
     }
 
     /**
-     * The select tool's gesture. Where it grabs nothing the pen drags a selection
-     * rectangle out instead of panning (FR7): the device has no modifier key, so
-     * the pen selects and the finger navigates, as everywhere else in the canvas.
-     */
-    private fun selectGesture(
-        world: Point,
-        contact: Contact,
-    ): CanvasGesture {
-        val gesture = selectGestures.startAt(world, HANDLE_HIT_RADIUS_PX / controller.state.zoom)
-        return if (gesture == CanvasGesture.Pan && contact.isPen) CanvasGesture.Marquee else gesture
-    }
-
-    /**
      * Drops the gesture in progress: a cancelled stream, or a second finger starting a pinch. A resting palm starts
      * nothing, so its cancel (the system sends one between words) redraws nothing. A pencil stroke is kept as drawn.
      */
@@ -450,15 +394,9 @@ class CanvasView(
         val abandoned = gesture ?: return
         val redraw = needsRedraw()
         gesture = null
-        if (abandoned is CanvasGesture.Freehand) commitStroke(abandoned) else liveInk.wipe()
-        if (isMinimapVisible) scheduleMinimapHide()
+        if (abandoned is CanvasGesture.Freehand) commits.commitStroke(abandoned) else liveInk.wipe()
+        if (minimap.isShowing()) minimap.hideSoon()
         if (redraw) invalidate()
-    }
-
-    /** The pencil lands: the firmware inks the stroke, or the canvas snapshots itself to draw it over. */
-    private fun startFreehand(first: StrokePoint): CanvasGesture {
-        liveInk.beginStroke(controller.state.elements, controller.state.transform)
-        return CanvasGesture.Freehand(mutableListOf(first))
     }
 
     /** Marks everything under [world] for the eraser; it all goes, as one undo step, when the pen lifts (FR20). */
@@ -483,13 +421,13 @@ class CanvasView(
             CanvasGesture.Pan -> {
                 controller.setViewport(CanvasCore.panBy(state, dx, dy).transform)
                 // Past tap distance only, so a plain tap never flashes the minimap (an e-ink repaint).
-                if (distanceFromDown(x, y) > TAP_SLOP_PX) showMinimap()
+                if (distanceFromDown(x, y) > GestureCommit.TAP_SLOP_PX) minimap.show()
             }
             is CanvasGesture.MinimapDrag -> {
                 val world = active.layout.worldAt(x.toDouble(), y.toDouble())
                 centerViewOn(Point(world.x + active.grabX, world.y + active.grabY))
                 // It has to stay up for as long as it is being dragged by.
-                showMinimap()
+                minimap.show()
             }
             is CanvasGesture.Move -> gesture = active.copy(dx = active.dx + dx, dy = active.dy + dy)
             is CanvasGesture.Freehand -> active.samples += sampleAt(x, y, pressure)
@@ -509,37 +447,14 @@ class CanvasView(
         val totalDist = distanceFromDown(x, y)
         val finished = gesture
         val redraw = needsRedraw()
-        commitGesture(finished, toWorld(x, y), totalDist)
+        commits.commit(finished, toWorld(downTouch.x, downTouch.y), toWorld(x, y), totalDist)
         // Whatever else the pen did (the eraser end, with the pencil) leaves no firmware ink behind. A touch that
         // started nothing (a palm resting while writing) leaves it alone: wiping there erased strokes the canvas only
         // redraws once the pen rests, which in a light colour's pale gray looked like the writing had vanished.
         if (finished != null && finished !is CanvasGesture.Freehand) liveInk.wipe()
         gesture = null
-        if (isMinimapVisible) scheduleMinimapHide()
+        if (minimap.isShowing()) minimap.hideSoon()
         if (redraw) invalidate()
-    }
-
-    /** What [finished] leaves behind, its pointer having ended at [end] after travelling [totalDist] on screen. */
-    private fun commitGesture(
-        finished: CanvasGesture?,
-        end: Point,
-        totalDist: Double,
-    ) {
-        val isTap = totalDist <= TAP_SLOP_PX
-        when (finished) {
-            CanvasGesture.Pan -> tapSelect(end, isTap)
-            CanvasGesture.Marquee -> selectInMarquee(end)
-            is CanvasGesture.FollowLink -> followLink(finished.elementId, isTap)
-            CanvasGesture.DrawShape -> commitDrawnShape(end, totalDist)
-            CanvasGesture.PlaceText -> placeTextOnTap(isTap)
-            is CanvasGesture.Freehand -> commitStroke(finished)
-            is CanvasGesture.Erase -> controller.erase(finished.ids)
-            // The view moved as it was dragged; there is nothing to commit, and panning is not an undo step.
-            is CanvasGesture.MinimapDrag -> Unit
-            is CanvasGesture.Move, is CanvasGesture.ResizeRow -> finishDrag(finished, end, isTap)
-            is CanvasGesture.Resize, is CanvasGesture.DragEndpoint, CanvasGesture.Rotate -> commitGestureEdit(finished, end)
-            null -> Unit
-        }
     }
 
     /**
@@ -548,202 +463,29 @@ class CanvasView(
      */
     private fun needsRedraw(): Boolean = gesture != null && (gesture !is CanvasGesture.Freehand || liveInk.drawsLiveStroke)
 
-    /** Caches the current frame so [onDraw] can blit it, cheaply transformed, while the pan being started drags (NFR1/NFR3). */
-    private fun beginPanSnapshot() {
-        if (width == 0 || height == 0) return
-        panSnapshotTransform = controller.state.transform
-        panSnapshot = renderer.renderSnapshot(controller.state.elements, controller.state.transform, width, height, panSnapshot)
-    }
-
-    /**
-     * The fast pass while panning (NFR1): blits [panSnapshot] under a matrix that maps the transform it was taken at
-     * onto [transform], instead of repainting every element. False if there's no snapshot to blit, so the caller
-     * falls back to a full repaint.
-     */
-    private fun drawPanPreview(
-        canvas: Canvas,
-        transform: ViewTransform,
-    ): Boolean {
-        val base = panSnapshotTransform
-        val snapshot = panSnapshot
-        if (base == null || snapshot == null) return false
-        val scale = (transform.zoom / base.zoom).toFloat()
-        val dx = ((base.viewportX - transform.viewportX) * transform.zoom).toFloat()
-        val dy = ((base.viewportY - transform.viewportY) * transform.zoom).toFloat()
-        canvas.save()
-        canvas.translate(dx, dy)
-        canvas.scale(scale, scale)
-        canvas.drawBitmap(snapshot, 0f, 0f, null)
-        canvas.restore()
-        drawMinimap(canvas)
-        return true
-    }
-
-    /**
-     * The minimap, while it shows. A drag by it keeps the box and transform it
-     * was grabbed at, so only its viewport rectangle moves under the finger.
-     */
-    private fun drawMinimap(canvas: Canvas) {
-        if (!isMinimapVisible) return
-        val layout = (gesture as? CanvasGesture.MinimapDrag)?.layout ?: minimapLayout() ?: return
-        val state = controller.state
-        minimapRenderer.draw(canvas, state.elements, state.transform.visibleRect(width.toDouble(), height.toDouble()), layout)
-    }
-
-    /** Commits the pencil's stroke, keeping its firmware ink: that is what the user just drew. Too short for a stroke, it goes. */
-    private fun commitStroke(freehand: CanvasGesture.Freehand) {
-        val stroke = StrokeElements.fromSamples(newElementId(), freehand.samples, controller.state.zoom)
-        if (stroke == null) liveInk.wipe() else liveInk.keepInk { controller.insert(stroke) }
-    }
-
-    private fun tapSelect(
-        at: Point,
-        isTap: Boolean,
-    ) {
-        if (isTap) controller.select(CanvasCore.hitTest(at.x, at.y, controller.state.elements)?.id)
-    }
-
-    /** A tap that stayed on the glyph follows its link; a drag off it was the user changing their mind. */
-    private fun followLink(
-        elementId: String,
-        isTap: Boolean,
-    ) {
-        val link =
-            controller.state.elements
-                .find { it.id == elementId }
-                ?.link ?: return
-        if (isTap) events.onFollowLink(this, link)
-    }
-
-    /** Everything the selection rectangle covered, selected together (FR7); one that covered nothing clears the selection. */
-    private fun selectInMarquee(end: Point) {
-        val start = toWorld(downTouch.x, downTouch.y)
-        val rect =
-            WorldRect(
-                left = minOf(start.x, end.x),
-                top = minOf(start.y, end.y),
-                right = maxOf(start.x, end.x),
-                bottom = maxOf(start.y, end.y),
-            )
-        controller.selectAll(CanvasCore.elementsIn(rect, controller.state.elements).map { it.id }.toSet())
-    }
-
-    private fun placeTextOnTap(isTap: Boolean) {
-        if (isTap) controller.placeText(toolMode, toWorld(downTouch.x, downTouch.y))
-    }
-
-    /** Within tap distance, a drag on the selected element or a table's row edge is a tap: on text or a cell, it opens the editor. */
-    private fun finishDrag(
-        drag: CanvasGesture,
-        end: Point,
-        isTap: Boolean,
-    ) {
-        val move = drag as? CanvasGesture.Move
-        when {
-            isTap || drag == CanvasGesture.Move() -> editTappedText(end)
-            move != null -> controller.moveSelected(move.dx, move.dy)
-            else -> commitGestureEdit(drag, end)
-        }
-    }
-
-    /** A tap on the selected text box, note or table cell opens the keyboard editor on it (FR6/FR24). */
-    private fun editTappedText(at: Point) {
-        val element = controller.selected ?: return
-        val cell = if (element.table != null) TableElements.cellAt(element, element.toLocal(at.x, at.y), measurer) else null
-        when {
-            TextElements.isEditable(element) -> controller.beginEdit(CanvasController.EditTarget(element.id))
-            cell != null -> controller.beginEdit(CanvasController.EditTarget(element.id, cell))
-        }
-    }
-
-    private fun commitGestureEdit(
-        finished: CanvasGesture,
-        pointer: Point,
-    ) {
-        val id = controller.selected?.id ?: return
-        selectGestures.edit(finished, id, pointer)?.let { controller.commit(it.elements) }
-    }
-
-    private fun commitDrawnShape(
-        end: Point,
-        totalDist: Double,
-    ) {
-        if (totalDist <= MIN_SHAPE_DRAG_PX) return
-        val start = toWorld(downTouch.x, downTouch.y)
-        val id = newElementId()
-        controller.insert(
-            when {
-                toolMode == CanvasTools.TABLE -> TableElements.create(id, start, end)
-                CanvasTools.isConnector(toolMode) -> CanvasCore.connectorFromDrag(id, toolMode, start, end, controller.state.elements)
-                else -> CanvasCore.boxFromDrag(id, toolMode, start, end)
-            },
-        )
-    }
-
-    /** Shows the minimap and cancels any pending hide; called on every pan/zoom step. */
-    private fun showMinimap() {
-        removeCallbacks(hideMinimapRunnable)
-        isMinimapVisible = true
-    }
-
-    /** Hides the minimap [MINIMAP_LINGER_MS] after the gesture ends (e-ink: no fade, one repaint). */
-    private fun scheduleMinimapHide() {
-        removeCallbacks(hideMinimapRunnable)
-        postDelayed(hideMinimapRunnable, MINIMAP_LINGER_MS)
-    }
-
-    /** The elements to draw this frame: any in-progress edit previewed, and what the eraser is about to take faded. */
-    private fun elementsForDrawing(): List<Element> {
-        val erasing = (gesture as? CanvasGesture.Erase)?.ids.orEmpty()
-        return (previewEdit()?.elements ?: controller.state.elements).map {
-            if (it.id in erasing) it.copy(style = it.style.copy(opacity = ERASE_PREVIEW_OPACITY)) else it
-        }
-    }
-
-    /** The canvas as the gesture in progress would leave it: a move takes the whole selection, every other edit one element. */
-    private fun previewEdit(): CanvasState? {
-        val move = gesture as? CanvasGesture.Move
-        return if (move != null) {
-            CanvasCore.moveElements(controller.state, controller.selectedIds, move.dx, move.dy)
-        } else {
-            controller.selected?.id?.let { selectGestures.edit(gesture, it, toWorld(dragCurrent.x, dragCurrent.y)) }
-        }
-    }
-
-    /** [controller.editing] as the painter's own [ElementPainter.HiddenText], so it never needs [CanvasController]'s type. */
-    private fun hiddenText(): ElementPainter.HiddenText? = controller.editing?.let { ElementPainter.HiddenText(it.elementId, it.cellIndex) }
+    /** The minimap box a drag by it was grabbed at, so only its viewport rectangle moves under the finger. */
+    private fun draggingMinimap(): MinimapLayout? = (gesture as? CanvasGesture.MinimapDrag)?.layout
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val transform = controller.state.transform
         val freehand = gesture as? CanvasGesture.Freehand
-        if (freehand != null && liveInk.drawLive(canvas, liveStroke(freehand), transform)) return
-        if (gesture == CanvasGesture.Pan && drawPanPreview(canvas, transform)) return
+        if (freehand != null && liveInk.drawLive(canvas, frame.liveStroke(freehand), transform)) return
+        if (gesture == CanvasGesture.Pan && panPreview.drawUnder(canvas, transform)) {
+            minimap.draw(canvas, draggingMinimap())
+            return
+        }
         renderer.drawBackground(canvas, width.toFloat(), height.toFloat())
-        val elements = elementsForDrawing()
-        renderer.drawElements(canvas, elements, transform, StylePalette.EINK, hiddenText())
+        val elements = frame.elements(gesture, toWorld(dragCurrent.x, dragCurrent.y))
+        renderer.drawElements(canvas, elements, transform, StylePalette.EINK, frame.hiddenText())
         renderer.drawSelection(canvas, elements, controller.selectedIds, transform)
         renderer.drawLinkGlyphs(canvas, elements, transform)
         if (gesture == CanvasGesture.DrawShape) renderer.drawDragPreview(canvas, toolMode, downTouch, dragCurrent, transform.zoom)
         if (gesture == CanvasGesture.Marquee) renderer.drawMarquee(canvas, downTouch, dragCurrent)
-        drawMinimap(canvas)
+        minimap.draw(canvas, draggingMinimap())
     }
 
-    /** The stroke the pencil is drawing, in the style new elements get. */
-    private fun liveStroke(freehand: CanvasGesture.Freehand): Element? =
-        StrokeElements.fromSamples(LIVE_STROKE_ID, freehand.samples, controller.state.zoom)?.copy(style = controller.currentStyle)
-
     private companion object {
-        const val TAP_SLOP_PX = 12f
-        const val MIN_SHAPE_DRAG_PX = 8f
-        const val HANDLE_HIT_RADIUS_PX = 28f
-
-        // A link glyph's tap radius; a touch this close to it follows the link (FR7).
-        const val LINK_GLYPH_HIT_PX = 40f
-
-        // Long enough after a pan to reach the minimap and take hold of it, since that is the only way it comes up.
-        const val MINIMAP_LINGER_MS = 3000L
-
         // Generous, so fitted content clears the floating toolbar at the bottom.
         const val FIT_PADDING_PX = 96.0
 
@@ -751,10 +493,5 @@ class CanvasView(
 
         // How far a duplicate lands from its original, in screen pixels.
         const val DUPLICATE_OFFSET_PX = 16.0
-
-        // What the eraser is about to take shows at this opacity until the pen lifts.
-        const val ERASE_PREVIEW_OPACITY = 0.2
-
-        const val LIVE_STROKE_ID = "live-stroke"
     }
 }

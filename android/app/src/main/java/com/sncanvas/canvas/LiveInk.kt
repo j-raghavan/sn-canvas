@@ -23,7 +23,7 @@ import android.view.View
 internal class LiveInk(
     private val view: View,
     private val renderer: CanvasRenderer,
-) {
+) : GestureCommit.StrokeInk {
     private val firmware = FirmwareInk(view.context, APP_NAME)
     private var claimed = false
     private var pencil = false
@@ -96,7 +96,7 @@ internal class LiveInk(
      * Runs [commit], which adds the stroke the pen just drew, keeping the
      * firmware's ink of it and skipping the redraw, which comes once the pen rests.
      */
-    fun keepInk(commit: () -> Unit) {
+    override fun keepInk(commit: () -> Unit) {
         keeping = true
         try {
             commit()
@@ -110,7 +110,7 @@ internal class LiveInk(
     }
 
     /** The canvas changed, or the pen did something that isn't a stroke: its firmware ink goes, and the canvas redraws. */
-    fun wipe() {
+    override fun wipe() {
         if (wet && !keeping) clear()
     }
 

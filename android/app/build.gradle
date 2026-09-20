@@ -279,6 +279,11 @@ kover {
                     "com.sncanvas.canvas.TextPainter*",
                     "com.sncanvas.canvas.AndroidTextMeasurer*",
                     "com.sncanvas.canvas.MinimapRenderer*",
+                    // When the minimap shows and where: Android View timing (postDelayed), verified on the device.
+                    "com.sncanvas.canvas.Minimap\$*",
+                    "com.sncanvas.canvas.Minimap",
+                    // Blitting a cached frame with Android Canvas while a pan drags: device-only, verified there.
+                    "com.sncanvas.canvas.PanPreview*",
                     "com.sncanvas.canvas.ShapeDrawingKt",
                     // RN autolinking-generated (app:generateAutolinkingPackageList) — not our
                     // code, not unit-testable (just instantiates a static package list).

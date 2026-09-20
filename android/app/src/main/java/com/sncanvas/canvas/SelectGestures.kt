@@ -48,13 +48,13 @@ internal class SelectGestures(
         val current = state()
         return when (active) {
             is CanvasGesture.Move -> CanvasCore.moveElement(current, id, active.dx, active.dy)
-            is CanvasGesture.Resize -> fitted(CanvasCore.resizeElement(current, id, active.corner, pointer.x, pointer.y), id)
+            is CanvasGesture.Resize -> fitted(ShapeEdits.resizeElement(current, id, active.corner, pointer.x, pointer.y), id)
             is CanvasGesture.ResizeRow -> TableEdits.dragRowEdge(current, id, active.row, pointer, measurer)
             is CanvasGesture.DragEndpoint -> {
                 val target = CanvasCore.bindingTargetAt(pointer, current.elements)
-                CanvasCore.moveEndpoint(current, id, active.which, pointer, target?.id)
+                ShapeEdits.moveEndpoint(current, id, active.which, pointer, target?.id)
             }
-            CanvasGesture.Rotate -> CanvasCore.rotateElement(current, id, pointer)
+            CanvasGesture.Rotate -> ShapeEdits.rotateElement(current, id, pointer)
             else -> null
         }
     }

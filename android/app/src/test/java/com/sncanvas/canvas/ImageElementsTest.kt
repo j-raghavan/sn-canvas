@@ -98,7 +98,7 @@ class ImageElementsTest {
     @Test
     fun `resizing on the canvas keeps an image's proportions and leaves other elements alone`() {
         val state = CanvasState(listOf(placed, boxA), 0.0, 0.0, 1.0)
-        val resized = CanvasCore.resizeElement(state, "i", Corner.BOTTOM_RIGHT, 90.0, 20.0)
+        val resized = ShapeEdits.resizeElement(state, "i", Corner.BOTTOM_RIGHT, 90.0, 20.0)
         assertBox(10.0, 10.0, 80.0, 60.0, resized.elements[0])
         assertEquals(boxA, resized.elements[1])
     }
