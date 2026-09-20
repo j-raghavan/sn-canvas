@@ -98,7 +98,13 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       return path === held;
     },
     async remove(path) {
-      return files.delete(path);
+      // As the device reports it (CanvasModule.deleteCanvas is `delete() || !exists()`): a file that was
+      // never there is already gone. Only a delete that leaves the file behind answers false.
+      if (failing.has('remove')) {
+        return false;
+      }
+      files.delete(path);
+      return true;
     },
     async renderThumbnail(path) {
       if (failing.has('renderThumbnail')) {

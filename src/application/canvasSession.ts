@@ -25,6 +25,8 @@
 
 import {
   canvasesIn,
+  isScratchCanvasFree,
+  ownCanvasOf,
   parseCanvasIndex,
   serializeCanvasIndex,
   lastCanvasFor,
@@ -228,17 +230,22 @@ export function createCanvasSession({
     }
     // Nothing recorded at all is a build from before the index: the canvas saved last is the likeliest, and goes to
     // the first note that asks, as a recorded last canvas does, so upgrading never shows an empty canvas over saved work.
-    const nothingRecorded = saved.lastCanvasId === null && Object.keys(saved.lastByNote).length === 0;
+    // All three records have to be empty for that: a note's canvases are what say a canvas is someone's (#46), so an
+    // index holding those and nothing else is not an old build, and handing its canvases out would give one away.
+    const nothingRecorded =
+      saved.lastCanvasId === null &&
+      Object.keys(saved.lastByNote).length === 0 &&
+      Object.keys(saved.canvasesByNote).length === 0;
     if (at === null || nothingRecorded) {
       const newest = await newestCanvas(store, dir);
       if (newest !== null || at === null) {
         return newest ?? DEFAULT_CANVAS_ID;
       }
     }
-    // The scratch canvas goes to the first note to ask for it, and is free again once Save to Note gives it an
-    // id of its own. Any other note gets a canvas of its own rather than being shown the first note's work.
-    const spokenFor = Object.values((await loadIndex(dir)).lastByNote);
-    if (!spokenFor.includes(DEFAULT_CANVAS_ID)) {
+    // The scratch canvas goes to the first note to ask for it and stays that note's, even once it has moved on
+    // to another canvas, because its file still holds what was drawn on it (#46). It is free again only once
+    // Save to Note has given it an id of its own and deleted the file, which retires the id it had.
+    if (isScratchCanvasFree(await loadIndex(dir))) {
       return DEFAULT_CANVAS_ID;
     }
     logger.log(`${TAG} no canvas for this note yet: a new one`);
@@ -305,8 +312,8 @@ export function createCanvasSession({
       return thumbnails.lassoedCanvasId(dir);
     }
     // A note's own canvas outlasts a reinstall (an update is one): only a note with none starts afresh.
-    const own = at === null ? undefined : (await loadIndex(dir)).lastByNote[at.notePath];
-    if (firstSinceInstall && own === undefined) {
+    const own = ownCanvasOf(await loadIndex(dir), at?.notePath ?? null);
+    if (firstSinceInstall && own === null) {
       logger.log(`${TAG} first open since install: a new canvas`);
       return newCanvasId();
     }

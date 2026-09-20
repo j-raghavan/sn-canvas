@@ -12,7 +12,7 @@
 // well-formed entries get through (entries from builds that recorded uuids
 // are dropped).
 
-import {isCanvasId, picturePathOf} from './canvasLink';
+import {DEFAULT_CANVAS_ID, isCanvasId, picturePathOf} from './canvasLink';
 
 /** A page of a note. */
 export type NotePage = {readonly notePath: string; readonly page: number};
@@ -174,6 +174,63 @@ export function canvasesIn(index: CanvasIndex, notePath: string | null): readonl
 }
 
 /**
+ * Whether any note has been shown [canvasId]. A canvas goes on belonging to a note after it
+ * moves on to another, because its file still holds what was drawn on it. Handing it to a
+ * second note would show that note the first one's work, and lose it the moment the second
+ * note saves (#46). A canvas shown with no note to go by belongs to nobody, since nothing
+ * knows whose it is.
+ *
+ * Both records are read, though one note's canvases already cover what it reopens, because a
+ * half-written index can have the two disagree and this is read back defensively.
+ */
+export function belongsToANote(index: CanvasIndex, canvasId: string): boolean {
+  return (
+    Object.values(index.lastByNote).includes(canvasId) ||
+    Object.values(index.canvasesByNote).some(ids => ids.includes(canvasId))
+  );
+}
+
+/** Whether the scratch canvas is nobody's, so the next note to ask may be given it (#46). */
+export function isScratchCanvasFree(index: CanvasIndex): boolean {
+  return !belongsToANote(index, DEFAULT_CANVAS_ID);
+}
+
+/**
+ * The canvas [notePath] has of its own, or null when it has none. Strictly its own: unlike
+ * [lastCanvasFor] it adopts nothing an older build left lying around.
+ */
+export function ownCanvasOf(index: CanvasIndex, notePath: string | null): string | null {
+  return notePath === null ? null : (index.lastByNote[notePath] ?? null);
+}
+
+/**
+ * [index] with [canvasId] out of every note's canvases, out of what each reopens, and out of
+ * the plain last canvas. Save to Note gives the scratch canvas an id of its own and deletes
+ * the file it had, so that id stops meaning anything and has to stop belonging to anyone with
+ * it: otherwise the first note to use the scratch canvas would hold it for good and no other
+ * note would ever be given one.
+ *
+ * Pending links are left as they are. None can name the scratch canvas, because a save from
+ * it always mints a new id first, so there is nothing there to take out.
+ */
+export function withoutCanvas(index: CanvasIndex, canvasId: string): CanvasIndex {
+  const canvasesByNote: Record<string, string[]> = {};
+  Object.entries(index.canvasesByNote).forEach(([notePath, ids]) => {
+    const kept = ids.filter(id => id !== canvasId);
+    if (kept.length > 0) {
+      canvasesByNote[notePath] = kept;
+    }
+  });
+  const lastByNote = Object.fromEntries(Object.entries(index.lastByNote).filter(([, id]) => id !== canvasId));
+  return {
+    ...index,
+    canvasesByNote,
+    lastByNote,
+    lastCanvasId: index.lastCanvasId === canvasId ? null : index.lastCanvasId,
+  };
+}
+
+/**
  * The canvas [notePath] reopens, or null when that note has none of its own
  * yet. A canvas recorded before canvases belonged to notes goes to the first
  * note that asks and stays with it, so upgrading does not strand the canvas
@@ -183,12 +240,18 @@ export function lastCanvasFor(index: CanvasIndex, notePath: string | null): stri
   if (notePath === null) {
     return index.lastCanvasId;
   }
-  const own = index.lastByNote[notePath];
-  if (own !== undefined) {
+  const own = ownCanvasOf(index, notePath);
+  if (own !== null) {
     return own;
   }
-  const unclaimed = index.lastCanvasId !== null && !Object.values(index.lastByNote).includes(index.lastCanvasId);
-  return unclaimed ? index.lastCanvasId : null;
+  const last = index.lastCanvasId;
+  if (last === null) {
+    return null;
+  }
+  // The canvas last open goes to the first note to ask for it and stays with it. One this note has already
+  // been shown is its own to reopen, whatever it reopens by default; one another note has been shown is not
+  // on offer, or a canvas whose file still holds that note's drawing would be handed over (#46).
+  return canvasesIn(index, notePath).includes(last) || !belongsToANote(index, last) ? last : null;
 }
 
 /** [index] with [link] waiting for its thumbnail; only the newest [MAX_PENDING] are kept. */
