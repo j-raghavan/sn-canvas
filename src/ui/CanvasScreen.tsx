@@ -251,9 +251,9 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           <ConfirmDialog
             testID="canvas-clear-confirm"
             title="Clear the whole canvas?"
-            body="You carry on with an empty canvas. This one is kept, under Canvases in this note."
+            body="An empty canvas takes its place. This one is kept under Canvases in this note."
             cancelLabel="Cancel"
-            cancelAccessibilityLabel="Keep the canvas"
+            cancelAccessibilityLabel="Stay on this canvas"
             actionLabel="Clear canvas"
             actionAccessibilityLabel="Clear the canvas"
             onCancel={() => setConfirmingClear(false)}

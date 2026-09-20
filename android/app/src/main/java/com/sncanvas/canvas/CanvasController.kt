@@ -202,14 +202,6 @@ class CanvasController(
         commit(deleted.fold(state) { left, id -> CanvasCore.deleteElement(left, id) }.elements)
     }
 
-    /** Empties the canvas as one undoable step; a no-op when it already is empty. */
-    fun clearCanvas() {
-        if (state.elements.isEmpty()) return
-        selectedIds = emptySet()
-        editing = null
-        commit(emptyList())
-    }
-
     fun undo() {
         history.undo()?.let(::show)
     }

@@ -172,7 +172,6 @@ class CanvasViewManager(
                 "tableAddColumn" to { view -> view.controller.addTableColumn() },
                 "tableRemoveRow" to { view -> view.controller.removeTableRow() },
                 "tableRemoveColumn" to { view -> view.controller.removeTableColumn() },
-                "clearCanvas" to { view -> view.controller.clearCanvas() },
                 "unlinkSelected" to { view -> view.controller.unlinkSelected() },
                 "group" to { view -> view.groupSelected() },
                 "ungroup" to { view -> view.ungroupSelected() },

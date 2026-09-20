@@ -447,7 +447,6 @@ describe('clear canvas', () => {
     await press('canvas-eraser-clear');
     await press('canvas-clear-confirm-action');
     expect(session.clearCanvas).toHaveBeenCalledTimes(1);
-    expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'clearCanvas', []);
     expect(has('canvas-clear-confirm')).toBe(false);
   });
 });

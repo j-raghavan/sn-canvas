@@ -62,7 +62,11 @@ const ACTIONS: readonly Action[] = [
 ];
 
 /** Menu actions the screen handles rather than the canvas: a session call, or a question asked first. */
-type ScreenAction = 'newCanvas' | 'linkToNote' | 'noteCanvases';
+const SCREEN_ACTIONS = ['newCanvas', 'linkToNote', 'noteCanvases', 'clearCanvas'] as const;
+type ScreenAction = (typeof SCREEN_ACTIONS)[number];
+
+const isScreenAction = (action: CanvasCommand | ScreenAction): action is ScreenAction =>
+  (SCREEN_ACTIONS as readonly string[]).includes(action);
 
 type MenuItem = {
   /** A canvas command, or one the screen handles itself (see ScreenAction). */
@@ -122,7 +126,9 @@ export default function ActionBar({
 }: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
   // What the screen does for the items that are not canvas commands; Clear canvas is one, but asks first.
-  const screenActions: Partial<Record<MenuItem['action'], () => void>> = {
+  // Every screen action needs a handler here: leaving one out is a type error, not an action
+  // that quietly falls through to the canvas (#44).
+  const screenActions: Record<ScreenAction, () => void> = {
     newCanvas: onNewCanvas,
     linkToNote: onLinkToNote,
     noteCanvases: onNoteCanvases,
@@ -148,11 +154,10 @@ export default function ActionBar({
                 style={styles.menuItem}
                 onPress={() => {
                   setMenuOpen(false);
-                  const screenAction = screenActions[item.action];
-                  if (screenAction !== undefined) {
-                    screenAction();
+                  if (isScreenAction(item.action)) {
+                    screenActions[item.action]();
                   } else {
-                    onCommand(item.action as CanvasCommand);
+                    onCommand(item.action);
                   }
                 }}>
                 <Text style={[styles.menuText, !enabled && styles.disabled]}>{item.label}</Text>

@@ -83,9 +83,10 @@ export type CanvasSession = {
   /** Saves the canvas shown, then shows a new, empty one. */
   newCanvas: () => Promise<void>;
   /**
-   * Starts a fresh sheet: the canvas shown keeps what is on it, in its own
-   * file, and an empty one takes its place. Clearing never empties the canvas
-   * a note's thumbnail points at (#44); the old one stays in the note's list.
+   * Clears by replacing: the canvas shown keeps what is on it, in its own
+   * file, and a new, empty one takes its place. Clearing never empties the
+   * canvas a note's thumbnail points at (#44); the old one stays in the
+   * note's list, and the way back along followed links is untouched.
    */
   clearCanvas: () => Promise<void>;
   /** Puts an image the user picks on the canvas shown (FR22), copied into the canvas folder; true once it is there. */
@@ -357,24 +358,51 @@ export function createCanvasSession({
   /**
    * Puts the canvas shown into its own file and shows a new, empty one in its
    * place. What the old canvas holds is left as it was, so a thumbnail in a
-   * note still opens the drawing it shows (#44).
+   * note still opens the drawing it shows (#44). The canvas left behind, or
+   * null when there is no folder to keep it in and nothing happened.
    */
-  const freshSheet = (what: string): Promise<void> =>
+  const replaceShown = async (): Promise<string | null> => {
+    const dir = await resolveCanvasDir();
+    if (!dir) {
+      return null;
+    }
+    const kept = canvasId;
+    // The drawing has to reach its own file before an empty canvas takes its place. A view that is
+    // not holding the canvas we think it is would refuse that save (#30), and the drawing would go
+    // with no way back, which is the very thing #44 is about. Leave it where it is instead.
+    if (hasOpened && !(await store.holds(canvasFilePath(dir, kept)))) {
+      logger.warn(`${TAG} the view is not holding canvas=${kept}; it stays as it is`);
+      return null;
+    }
+    await show(dir, newCanvasId(), await host.currentPage());
+    return kept;
+  };
+
+  const newCanvas = (): Promise<void> =>
     serially(async () => {
-      const dir = await resolveCanvasDir();
-      if (!dir) {
+      const kept = await replaceShown();
+      if (kept === null) {
         return;
       }
-      const kept = canvasId;
-      await show(dir, newCanvasId(), await host.currentPage());
+      // Leaving this canvas for another one leaves the way back to it behind too.
       links.clearTrail();
-      logger.log(`${TAG} ${what} canvas=${canvasId}, ${kept} kept`);
+      logger.log(`${TAG} new canvas=${canvasId}, ${kept} kept`);
     });
 
-  const newCanvas = (): Promise<void> => freshSheet('new');
-
-  /** Clear starts a fresh sheet rather than emptying the canvas in place, so what a note points at survives it (#44). */
-  const clearCanvas = (): Promise<void> => freshSheet('cleared,');
+  /**
+   * Clear replaces the canvas rather than emptying it in place, so what a
+   * note points at survives it (#44). The trail stays: clearing says
+   * nothing about how this canvas was reached, and each step names a canvas
+   * that still holds its drawing.
+   */
+  const clearCanvas = (): Promise<void> =>
+    serially(async () => {
+      const kept = await replaceShown();
+      if (kept === null) {
+        return;
+      }
+      logger.log(`${TAG} cleared to canvas=${canvasId}, ${kept} kept`);
+    });
 
   const canvasesHere = async (): Promise<NoteCanvas[]> => {
     const dir = await resolveCanvasDir();
