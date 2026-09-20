@@ -174,6 +174,43 @@ export function canvasesIn(index: CanvasIndex, notePath: string | null): readonl
 }
 
 /**
+ * Whether any note has been shown [canvasId]. A canvas stays claimed once a note has shown
+ * it, even after that note moves on to another, because its file still holds what was drawn
+ * on it. Handing it to a second note would show that note the first one's work, and lose it
+ * the moment the second note saves (#46). A canvas shown with no note to go by is claimed by
+ * nobody, since nothing knows whose it is.
+ */
+export function isClaimed(index: CanvasIndex, canvasId: string): boolean {
+  return (
+    Object.values(index.lastByNote).includes(canvasId) ||
+    Object.values(index.canvasesByNote).some(ids => ids.includes(canvasId))
+  );
+}
+
+/**
+ * [index] with [canvasId] forgotten by every note, and by the plain last canvas. Save to
+ * Note gives the scratch canvas an id of its own and deletes the file it had, so that id
+ * stops meaning anything and has to stop being claimed with it: otherwise the first note to
+ * use the scratch canvas would hold it for good and no other note would ever be given one.
+ */
+export function withoutCanvas(index: CanvasIndex, canvasId: string): CanvasIndex {
+  const canvasesByNote: Record<string, string[]> = {};
+  Object.entries(index.canvasesByNote).forEach(([notePath, ids]) => {
+    const kept = ids.filter(id => id !== canvasId);
+    if (kept.length > 0) {
+      canvasesByNote[notePath] = kept;
+    }
+  });
+  const lastByNote = Object.fromEntries(Object.entries(index.lastByNote).filter(([, id]) => id !== canvasId));
+  return {
+    ...index,
+    canvasesByNote,
+    lastByNote,
+    lastCanvasId: index.lastCanvasId === canvasId ? null : index.lastCanvasId,
+  };
+}
+
+/**
  * The canvas [notePath] reopens, or null when that note has none of its own
  * yet. A canvas recorded before canvases belonged to notes goes to the first
  * note that asks and stays with it, so upgrading does not strand the canvas
@@ -187,7 +224,9 @@ export function lastCanvasFor(index: CanvasIndex, notePath: string | null): stri
   if (own !== undefined) {
     return own;
   }
-  const unclaimed = index.lastCanvasId !== null && !Object.values(index.lastByNote).includes(index.lastCanvasId);
+  // Claimed counts every note that has shown it, not just the one that reopens it, or a canvas a note has
+  // moved on from would be handed to the next note to ask while its file still holds the drawing (#46).
+  const unclaimed = index.lastCanvasId !== null && !isClaimed(index, index.lastCanvasId);
   return unclaimed ? index.lastCanvasId : null;
 }
 

@@ -8,6 +8,8 @@ import {
   MAX_PENDING,
   canvasesIn,
   claimPending,
+  isClaimed,
+  withoutCanvas,
   lastCanvasFor,
   elementSummary,
   notePageOf,
@@ -202,5 +204,44 @@ describe("a note's canvases (#30)", () => {
     expect(read({'/a.note': ['c-1', 'not a canvas', 7], '': ['c-2'], '/b.note': 'c-3'})).toEqual({'/a.note': ['c-1']});
     expect(read(['c-1'])).toEqual({});
     expect(read(null)).toEqual({});
+  });
+});
+
+describe('which canvases a note has claimed (#46)', () => {
+  test('a canvas stays claimed after the note moves off it, which is what keeps it from another note', () => {
+    const shown = withLastCanvas(EMPTY_INDEX, 'default', '/a.note');
+    expect(isClaimed(shown, 'default')).toBe(true);
+    // Note A presses New canvas: it reopens c-1 now, but default.json still holds what was drawn on it.
+    const moved = withLastCanvas(shown, 'c-1', '/a.note');
+    expect(moved.lastByNote['/a.note']).toBe('c-1');
+    expect(isClaimed(moved, 'default')).toBe(true);
+    expect(isClaimed(moved, 'c-1')).toBe(true);
+    expect(isClaimed(moved, 'c-9')).toBe(false);
+  });
+
+  test('nothing is claimed in an empty index, so the first note to ask gets the scratch canvas', () => {
+    expect(isClaimed(EMPTY_INDEX, 'default')).toBe(false);
+  });
+
+  test('a canvas shown with no note to go by is claimed by nobody', () => {
+    expect(isClaimed(withLastCanvas(EMPTY_INDEX, 'c-1', null), 'c-1')).toBe(false);
+  });
+
+  test('retiring an id takes it out of every note that showed it, and off the plain last canvas', () => {
+    const shown = ['default', 'c-1'].reduce((index, id) => withLastCanvas(index, id, '/a.note'), EMPTY_INDEX);
+    const alsoB = withLastCanvas(shown, 'default', '/b.note');
+    // Save to Note gives the scratch canvas an id of its own and deletes default.json, so the id means nothing now.
+    const retired = withoutCanvas(alsoB, 'default');
+    expect(isClaimed(retired, 'default')).toBe(false);
+    expect(canvasesIn(retired, '/a.note')).toEqual(['c-1']);
+    expect(canvasesIn(retired, '/b.note')).toEqual([]);
+    expect(retired.lastByNote['/b.note']).toBeUndefined();
+    expect(retired.lastByNote['/a.note']).toBe('c-1');
+    expect(retired.lastCanvasId).toBeNull();
+  });
+
+  test('retiring an id nothing holds leaves the index as it was', () => {
+    const shown = withLastCanvas(EMPTY_INDEX, 'c-1', '/a.note');
+    expect(withoutCanvas(shown, 'c-9')).toEqual(shown);
   });
 });

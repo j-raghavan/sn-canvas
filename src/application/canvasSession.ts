@@ -25,6 +25,7 @@
 
 import {
   canvasesIn,
+  isClaimed,
   parseCanvasIndex,
   serializeCanvasIndex,
   lastCanvasFor,
@@ -235,10 +236,10 @@ export function createCanvasSession({
         return newest ?? DEFAULT_CANVAS_ID;
       }
     }
-    // The scratch canvas goes to the first note to ask for it, and is free again once Save to Note gives it an
-    // id of its own. Any other note gets a canvas of its own rather than being shown the first note's work.
-    const spokenFor = Object.values((await loadIndex(dir)).lastByNote);
-    if (!spokenFor.includes(DEFAULT_CANVAS_ID)) {
+    // The scratch canvas goes to the first note to ask for it and stays that note's, even once it has moved on
+    // to another canvas, because its file still holds what was drawn on it (#46). It is free again only once
+    // Save to Note has given it an id of its own and deleted the file, which retires the id it had.
+    if (!isClaimed(await loadIndex(dir), DEFAULT_CANVAS_ID)) {
       return DEFAULT_CANVAS_ID;
     }
     logger.log(`${TAG} no canvas for this note yet: a new one`);

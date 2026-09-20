@@ -16,6 +16,7 @@ import {
   picturesOf,
   withLastCanvas,
   withPending,
+  withoutCanvas,
   type CanvasIndex,
   type NotePage,
 } from '../domain/canvasIndex';
@@ -153,9 +154,12 @@ export function createNoteThumbnails({
       return null;
     }
     if (fromScratch) {
-      // The scratch content lives on as the linked canvas, which the sidebar now reopens.
+      // The scratch content lives on as the linked canvas, which the sidebar now reopens. Its old file is
+      // gone, so the id goes out of the index with it: nothing is claiming it any more, and the next note to
+      // ask gets a clean scratch canvas (#46).
       shown.rename(linkedId);
       await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID));
+      await index.update(dir, current => withoutCanvas(current, DEFAULT_CANVAS_ID));
     }
     // The note it went into reopens it: asked of the host when no page was read (the scratch canvas's first save),
     // or the note would go on naming the scratch canvas, whose file is gone, and reopen empty (#30).
