@@ -22,6 +22,7 @@ jest.mock('react-native', () => {
     TextInput: actual.TextInput,
     Image: actual.Image,
     Pressable: actual.Pressable,
+    ScrollView: actual.ScrollView,
     StyleSheet: actual.StyleSheet,
     requireNativeComponent: actual.requireNativeComponent,
     UIManager: {
@@ -44,6 +45,8 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   insertImage: jest.fn().mockResolvedValue(true),
   pickNoteLink: jest.fn().mockResolvedValue({kind: 'note', target: '/storage/emulated/0/Note/plan.note', page: -1}),
   followLink: jest.fn().mockResolvedValue(true),
+  canvasesHere: jest.fn().mockResolvedValue([]),
+  switchTo: jest.fn().mockResolvedValue(undefined),
   backTo: jest.fn(() => null),
   goBack: jest.fn().mockResolvedValue(undefined),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
@@ -323,11 +326,11 @@ describe('session', () => {
       const {press, shows, emitCanvasState} = await render();
       await emitCanvasState({hasContent: true});
       await press('canvas-save-to-note');
-      expect(shows('Added to note')).toBe(true);
+      expect(shows('Added to note: place it on the page before anything else')).toBe(true);
       await act(async () => {
         jest.advanceTimersByTime(NOTICE_MS);
       });
-      expect(shows('Added to note')).toBe(false);
+      expect(shows('Added to note: place it on the page before anything else')).toBe(false);
     } finally {
       jest.useRealTimers();
     }
@@ -340,17 +343,7 @@ describe('session', () => {
     await emitCanvasState({hasContent: true});
     await press('canvas-save-to-note');
     expect(session.saveToNote).toHaveBeenCalledTimes(1);
-    expect(shows('Added to note')).toBe(false);
-  });
-
-  test('a refreshed thumbnail says so, rather than claiming one was added', async () => {
-    const session = createFakeSession();
-    session.saveToNote.mockResolvedValue('refreshed');
-    const {press, shows, emitCanvasState} = await render(session);
-    await emitCanvasState({hasContent: true});
-    await press('canvas-save-to-note');
-    expect(shows('Thumbnail updated')).toBe(true);
-    expect(shows('Added to note')).toBe(false);
+    expect(shows('Added to note: place it on the page before anything else')).toBe(false);
   });
 
   test('Close goes to the session', async () => {
@@ -440,7 +433,7 @@ describe('clear canvas', () => {
     await open(press);
     expect(has('canvas-clear-confirm')).toBe(true);
     expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'clearCanvas', []);
-    await press('canvas-clear-cancel');
+    await press('canvas-clear-confirm-cancel');
     expect(has('canvas-clear-confirm')).toBe(false);
     expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'clearCanvas', []);
   });
@@ -505,6 +498,39 @@ describe('links', () => {
     await follow({kind: 'canvas', target: ''});
     expect(session.followLink).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("a note's canvases (#30)", () => {
+  const MADE = new Date(2026, 8, 19, 13, 1).getTime();
+  const canvasId = `c-${MADE.toString(36)}-abcd`;
+  const CANVASES = [
+    {canvasId: 'c-shown', madeAt: null, thumbnail: '/t/c-shown.png', isShown: true},
+    {canvasId, madeAt: MADE, thumbnail: `/t/${canvasId}.png`, isShown: false},
+  ];
+
+  test('the ⋮ menu lists them, and a tap on one shows it', async () => {
+    const session = createFakeSession();
+    session.canvasesHere.mockResolvedValue(CANVASES);
+    const {press, has, labelled} = await render(session);
+    await press('canvas-more');
+    await press('canvas-menu-noteCanvases');
+    expect(labelled('Canvas made 19 Sep 2026, 13:01')).toBe(true);
+    expect(labelled('Canvas made Not saved to the note yet, shown')).toBe(true);
+    await press(`canvas-list-${canvasId}`);
+    expect(session.switchTo).toHaveBeenCalledWith(canvasId);
+    expect(has('canvas-list')).toBe(false);
+  });
+
+  test('Done closes the list without switching', async () => {
+    const session = createFakeSession();
+    const {press, has} = await render(session);
+    await press('canvas-more');
+    await press('canvas-menu-noteCanvases');
+    await press('canvas-list-close');
+    expect(has('canvas-list')).toBe(false);
+    expect(session.switchTo).not.toHaveBeenCalled();
+  });
+
 });
 
 describe('the way back along followed links', () => {

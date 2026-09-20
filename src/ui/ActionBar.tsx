@@ -61,9 +61,12 @@ const ACTIONS: readonly Action[] = [
   },
 ];
 
+/** Menu actions the screen handles rather than the canvas: a session call, or a question asked first. */
+type ScreenAction = 'newCanvas' | 'linkToNote' | 'noteCanvases';
+
 type MenuItem = {
-  /** A canvas command, or one the screen's session handles ('newCanvas', 'linkToNote'). */
-  action: CanvasCommand | 'newCanvas' | 'linkToNote';
+  /** A canvas command, or one the screen handles itself (see ScreenAction). */
+  action: CanvasCommand | ScreenAction;
   label: string;
   /** Greyed out with nothing selected. */
   needsSelection?: boolean;
@@ -87,6 +90,7 @@ const MENU: readonly MenuItem[] = [
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},
+  {action: 'noteCanvases', label: 'Canvases in this note…'},
   {action: 'newCanvas', label: 'New canvas'},
 ];
 
@@ -101,12 +105,29 @@ type Props = {
   onClearCanvas: () => void;
   /** Asks for a note to link the selected element to; the screen runs the picker. */
   onLinkToNote: () => void;
+  /** Lists the canvases made in the open note, to show another. */
+  onNoteCanvases: () => void;
   /** The ⋮ menu is opening: the screen puts the onboarding hints away, so neither is drawn over the other. */
   onMenuOpen: () => void;
 };
 
-export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onMenuOpen}: Props): React.JSX.Element {
+export default function ActionBar({
+  ui,
+  onCommand,
+  onNewCanvas,
+  onClearCanvas,
+  onLinkToNote,
+  onNoteCanvases,
+  onMenuOpen,
+}: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
+  // What the screen does for the items that are not canvas commands; Clear canvas is one, but asks first.
+  const screenActions: Partial<Record<MenuItem['action'], () => void>> = {
+    newCanvas: onNewCanvas,
+    linkToNote: onLinkToNote,
+    noteCanvases: onNoteCanvases,
+    clearCanvas: onClearCanvas,
+  };
 
   return (
     // box-none: taps beside the bar and menu still reach the canvas underneath.
@@ -127,14 +148,11 @@ export default function ActionBar({ui, onCommand, onNewCanvas, onClearCanvas, on
                 style={styles.menuItem}
                 onPress={() => {
                   setMenuOpen(false);
-                  if (item.action === 'newCanvas') {
-                    onNewCanvas();
-                  } else if (item.action === 'linkToNote') {
-                    onLinkToNote();
-                  } else if (item.action === 'clearCanvas') {
-                    onClearCanvas();
+                  const screenAction = screenActions[item.action];
+                  if (screenAction !== undefined) {
+                    screenAction();
                   } else {
-                    onCommand(item.action);
+                    onCommand(item.action as CanvasCommand);
                   }
                 }}>
                 <Text style={[styles.menuText, !enabled && styles.disabled]}>{item.label}</Text>

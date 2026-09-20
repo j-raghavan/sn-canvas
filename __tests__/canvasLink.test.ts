@@ -15,6 +15,7 @@ import {
   installMarkerPath,
   isCanvasId,
   mintCanvasId,
+  canvasMadeAt,
   parseElementLink,
   picturePathOf,
   privateCanvasDir,
@@ -35,6 +36,11 @@ test('canvases, thumbnails and the link index share one folder: in MyStyle, or t
   expect(indexPath('/plugin/Canvas')).toBe('/plugin/Canvas/links.json');
   // The first-open marker lives outside the canvas folder, so it never moves to MyStyle with the canvases.
   expect(installMarkerPath('/plugin')).toBe('/plugin/canvas-opened');
+});
+
+test('a canvas id says when it was made; the scratch canvas says nothing', () => {
+  expect(canvasMadeAt(mintCanvasId(1_700_000_000_000, () => 0.5))).toBe(1_700_000_000_000);
+  expect(canvasMadeAt('default')).toBeNull();
 });
 
 test('mintCanvasId is deterministic for a given clock and randomness', () => {

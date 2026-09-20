@@ -10,7 +10,7 @@ import type {CanvasStorePort} from '../application/canvasSession';
 import {isCanvasId} from '../domain/canvasLink';
 import type {Logger} from '../sdk/types';
 
-type PathMethod = 'saveCanvas' | 'deleteCanvas' | 'generateThumbnail' | 'exportPdf';
+type PathMethod = 'saveCanvas' | 'saveCanvasAs' | 'holdsCanvas' | 'deleteCanvas' | 'generateThumbnail' | 'exportPdf';
 
 export type NativeCanvasModule = Record<PathMethod, (path: string) => Promise<boolean>> & {
   loadCanvas: (path: string, imageDir: string) => Promise<boolean>;
@@ -52,6 +52,8 @@ export function createNativeCanvasStore(
     importImage: (source, imageDir) =>
       invoke('importImage', false, async module => (await module.importImage(source, imageDir)) === true),
     save: path => call('saveCanvas', path),
+    saveAs: path => call('saveCanvasAs', path),
+    holds: path => call('holdsCanvas', path),
     remove: path => call('deleteCanvas', path),
     renderThumbnail: path => call('generateThumbnail', path),
     exportPdf: path => call('exportPdf', path),

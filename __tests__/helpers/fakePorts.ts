@@ -20,9 +20,15 @@ export type FakeStore = CanvasStorePort & {
   imported: Array<{source: string; imageDir: string}>;
   /** The PDFs the canvas was exported to, by path. */
   exported: string[];
+  /** The saves refused: a file the view does not hold the canvas of, or a save set to fail. */
+  refused: string[];
+  /** The view comes back empty, holding no canvas: what the device showed after Canvas was hidden (#30). */
+  emptyView: () => void;
 };
 
 export const createFakeStore = (initial: Record<string, string> = {}): FakeStore => {
+  // The file the view shows the canvas of, as the native view keeps it: the only one a save may write.
+  let held: string | null = null;
   const files = new Map(Object.entries(initial));
   const failing = new Set<keyof CanvasStorePort>();
   const write = (path: string, content: string) => {
@@ -37,6 +43,11 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
     imageDir: null,
     imported: [],
     exported: [],
+    refused: [],
+    emptyView() {
+      held = null;
+      store.shown = '';
+    },
     async exportPdf(path) {
       if (failing.has('exportPdf')) {
         return false;
@@ -52,8 +63,12 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       return true;
     },
     async load(path, imageDir) {
+      if (failing.has('load')) {
+        return false;
+      }
       store.shown = files.get(path) ?? '';
       store.imageDir = imageDir;
+      held = path;
       return files.has(path);
     },
     async importImage(source, imageDir) {
@@ -64,11 +79,23 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       return true;
     },
     async save(path) {
-      if (failing.has('save')) {
+      if (failing.has('save') || path !== held) {
+        store.refused.push(path);
         return false;
       }
       write(path, store.shown);
       return true;
+    },
+    async saveAs(path) {
+      if (failing.has('saveAs')) {
+        return false;
+      }
+      write(path, store.shown);
+      held = path;
+      return true;
+    },
+    async holds(path) {
+      return path === held;
     },
     async remove(path) {
       return files.delete(path);
@@ -122,11 +149,13 @@ export type FakeHost = HostPort & {
   page: NotePage | null;
   /** The elements on that page, as getElements reports them ([notePicture] builds one). */
   elements: unknown[];
+  /**
+   * Pictures placed since the note was last saved: getElements reads the note's file, so a page read sees them
+   * only once saveNote has written them (seen on device).
+   */
+  unsaved: unknown[];
   /** The notes saved before their elements were modified. */
   noteSaves: number;
-  tagSucceeds: boolean;
-  /** The pictures tagged with a canvas, in order. */
-  tagged: Array<{canvasId: string; picture: unknown; imagePath: string}>;
   closeCount: number;
   /** How often the plugin view was brought back to the front. */
   showCount: number;
@@ -177,9 +206,8 @@ export const createFakeHost = (): FakeHost => {
     accessRequests: 0,
     page: {notePath: '/note.note', page: 0},
     elements: [],
+    unsaved: [],
     noteSaves: 0,
-    tagSucceeds: true,
-    tagged: [],
     closeCount: 0,
     showCount: 0,
     steps: [],
@@ -208,13 +236,8 @@ export const createFakeHost = (): FakeHost => {
     },
     async saveNote() {
       host.noteSaves += 1;
-      return true;
-    },
-    async tagPicture(picture, canvasId, _at, imagePath) {
-      if (!host.tagSucceeds) {
-        return false;
-      }
-      host.tagged.push({canvasId, picture, imagePath});
+      host.elements = [...host.elements, ...host.unsaved];
+      host.unsaved = [];
       return true;
     },
     async closeView() {

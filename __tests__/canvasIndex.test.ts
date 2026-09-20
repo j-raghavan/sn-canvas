@@ -6,6 +6,7 @@
 import {
   EMPTY_INDEX,
   MAX_PENDING,
+  canvasesIn,
   claimPending,
   lastCanvasFor,
   elementSummary,
@@ -174,4 +175,32 @@ test('elementSummary tells an element by its uuid, type, number, page, picture r
   expect(elementSummary(element)).toEqual({uuid: 'u', type: 200, num: 5, page: 2, rect, path: 'plugin/1.png', userData: 'x'});
   expect(JSON.stringify(elementSummary(null))).toBe('{}');
   expect(JSON.stringify(elementSummary({picture: null}))).toBe('{}');
+});
+
+describe("a note's canvases (#30)", () => {
+  test('every canvas shown in a note is kept, the most recent first, once each', () => {
+    const shown = ['c-1', 'c-2', 'c-1'].reduce((index, id) => withLastCanvas(index, id, '/a.note'), EMPTY_INDEX);
+    expect(canvasesIn(shown, '/a.note')).toEqual(['c-1', 'c-2']);
+    expect(canvasesIn(shown, '/b.note')).toEqual([]);
+    expect(canvasesIn(shown, null)).toEqual([]);
+    // With no note to go by, only the plain last canvas is recorded.
+    expect(withLastCanvas(shown, 'c-3', null).canvasesByNote).toEqual(shown.canvasesByNote);
+  });
+
+  test('an index from before they were kept finds them in what it has: the canvas reopened, then the pending links', () => {
+    const pending = [
+      {notePath: '/a.note', page: 0, canvasId: 'c-old', knownPictureNumbers: []},
+      {notePath: '/a.note', page: 0, canvasId: 'c-new', knownPictureNumbers: [1]},
+      {notePath: '/b.note', page: 0, canvasId: 'c-b', knownPictureNumbers: []},
+    ];
+    const upgraded = parseCanvasIndex(JSON.stringify({lastByNote: {'/a.note': 'c-old'}, pending}));
+    expect(upgraded.canvasesByNote).toEqual({'/a.note': ['c-old', 'c-new'], '/b.note': ['c-b']});
+  });
+
+  test('saved lists are read back whole, and anything damaged in them is dropped', () => {
+    const read = (saved: unknown) => parseCanvasIndex(JSON.stringify({canvasesByNote: saved, pending: []})).canvasesByNote;
+    expect(read({'/a.note': ['c-1', 'not a canvas', 7], '': ['c-2'], '/b.note': 'c-3'})).toEqual({'/a.note': ['c-1']});
+    expect(read(['c-1'])).toEqual({});
+    expect(read(null)).toEqual({});
+  });
 });

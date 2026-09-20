@@ -35,6 +35,12 @@ export function mintCanvasId(now: number, random: () => number): string {
   return `c-${now.toString(36)}-${suffix}`;
 }
 
+/** When the canvas [canvasId] was made, in ms since the epoch, as [mintCanvasId] wrote it; null for the scratch canvas. */
+export function canvasMadeAt(canvasId: string): number | null {
+  const stamp = /^c-([0-9a-z]+)-/.exec(canvasId)?.[1];
+  return stamp === undefined ? null : parseInt(stamp, 36);
+}
+
 /** True for a canvas id: the scratch canvas's, or one [mintCanvasId] made. */
 export function isCanvasId(value: unknown): value is string {
   return typeof value === 'string' && CANVAS_ID.test(value);

@@ -8,7 +8,6 @@
 import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
 import type {HostPort, NotePen} from '../application/canvasSession';
 import {elementSummary, notePageOf, picturesOf} from '../domain/canvasIndex';
-import {taggedPicture} from '../domain/canvasTag';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
 
 const TAG = '[SNCANVAS]';
@@ -95,18 +94,6 @@ export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<b
       }),
     // Modifying elements of the note that is open races its own writes unless it is saved first (sn-plugin-lib's own warning).
     saveNote: () => attempt('saveCurrentNote', false, async () => succeeded(await PluginNoteAPI.saveCurrentNote())),
-    // The same call sn-tables edits its placed tables with; the note finds the element by its number in the page.
-    tagPicture: (picture, canvasId, at, imagePath) =>
-      attempt('modifyElements', false, async () => {
-        const tagged = taggedPicture(picture, canvasId, at.page, imagePath);
-        const response = await PluginFileAPI.modifyElements(at.notePath, at.page, [tagged]);
-        const modified = resultOf<unknown[]>(response);
-        if (!Array.isArray(modified) || modified.length === 0) {
-          logger.warn(`${TAG} modifyElements failed: ${JSON.stringify(response)}`);
-          return false;
-        }
-        return true;
-      }),
     closeView: () => attempt('closePluginView', false, async () => (await PluginManager.closePluginView()) === true),
     showView: () => attempt('showPluginView', false, async () => (await PluginManager.showPluginView()) === true),
   };
