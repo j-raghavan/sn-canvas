@@ -2,6 +2,7 @@ package com.sncanvas.canvas
 
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.sqrt
 
 /**
  * Pure editing and geometry operations on the canvas model (CanvasModel.kt):
@@ -118,6 +119,9 @@ object CanvasCore {
     /** Screen-space gap between a shape's top-right corner and its link glyph (FR7); divided by zoom as above. */
     const val LINK_GLYPH_OFFSET_PX = 34.0
 
+    /** cos 45°, which is how far out along each axis an ellipse's curve reaches on its top-right diagonal. */
+    private val DIAGONAL = sqrt(2.0) / 2
+
     /** Where a bbox [element]'s rotate handle sits: [ROTATE_HANDLE_OFFSET_PX] screen px above its top-center, rotated with it. */
     fun rotateHandlePoint(
         element: Element,
@@ -127,19 +131,29 @@ object CanvasCore {
     /**
      * Where a linked element's glyph sits (FR7): just outside its top-right
      * corner, at a fixed size on screen, so it is as tappable zoomed out as
-     * zoomed in. A connector carries it at the end it points to.
+     * zoomed in. A connector carries it at the end it points to, and an
+     * ellipse off its own curve: the corner of the box around a circle stands
+     * well clear of it, and a glyph there reads as belonging to nothing.
      */
     fun linkGlyphPoint(
         element: Element,
         elements: List<Element>,
         zoom: Double,
-    ): Point =
-        if (element.hasEndpoints()) {
+    ): Point {
+        val gap = LINK_GLYPH_OFFSET_PX / zoom
+        // How far right and up of the shape's centre its outline reaches on that diagonal: the box's corner for a
+        // rectangle, the curve itself for an ellipse.
+        val reach = if (element.type == CanvasTools.ELLIPSE) DIAGONAL else 1.0
+        return when {
             // Where it ends now: an end bound to a shape moves with it, and the endpoint the element carries is stale.
-            resolveArrowEndpoints(element, elements).second
-        } else {
-            element.toWorld(element.x + element.width + LINK_GLYPH_OFFSET_PX / zoom, element.y - LINK_GLYPH_OFFSET_PX / zoom)
+            element.hasEndpoints() -> resolveArrowEndpoints(element, elements).second
+            else ->
+                element.toWorld(
+                    element.x + element.width / 2 * (1 + reach) + gap,
+                    element.y + element.height / 2 * (1 - reach) - gap,
+                )
         }
+    }
 
     /**
      * The topmost linked element whose glyph is under the world point, or null
