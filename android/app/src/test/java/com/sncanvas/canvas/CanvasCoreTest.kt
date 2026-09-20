@@ -92,6 +92,30 @@ class CanvasCoreTest {
     }
 
     @Test
+    fun `an ellipse carries its glyph off its own curve, not off the corner of the box around it`() {
+        val ellipse =
+            Element(id = "ell", type = CanvasTools.ELLIPSE, x = 0.0, y = 0.0, width = 200.0, height = 200.0)
+                .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        val glyph = CanvasCore.linkGlyphPoint(ellipse, listOf(ellipse), zoom = 1.0)
+        // The curve's top-right diagonal point, then the same gap out from it that a rectangle's corner gets.
+        val reach = 100.0 * Math.sqrt(2.0) / 2
+        assertEquals(100.0 + reach + CanvasCore.LINK_GLYPH_OFFSET_PX, glyph.x, 1e-9)
+        assertEquals(100.0 - reach - CanvasCore.LINK_GLYPH_OFFSET_PX, glyph.y, 1e-9)
+        // Which is well inside the box's corner, where it used to sit adrift of the shape.
+        assertEquals(true, glyph.x < ellipse.x + ellipse.width + CanvasCore.LINK_GLYPH_OFFSET_PX)
+    }
+
+    @Test
+    fun `a rectangle still carries its glyph off the corner of the box around it`() {
+        val rect =
+            Element(id = "rec", type = CanvasTools.RECTANGLE, x = 0.0, y = 0.0, width = 200.0, height = 200.0)
+                .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        val glyph = CanvasCore.linkGlyphPoint(rect, listOf(rect), zoom = 1.0)
+        assertEquals(200.0 + CanvasCore.LINK_GLYPH_OFFSET_PX, glyph.x, 1e-9)
+        assertEquals(-CanvasCore.LINK_GLYPH_OFFSET_PX, glyph.y, 1e-9)
+    }
+
+    @Test
     fun `a connector carries its glyph at the end it points to`() {
         val arrow =
             Element(id = "arr", type = "arrow", startX = 0.0, startY = 0.0, endX = 40.0, endY = 60.0)

@@ -39,7 +39,6 @@ export type CanvasCommand =
   | 'tableAddColumn'
   | 'tableRemoveRow'
   | 'tableRemoveColumn'
-  | 'clearCanvas'
   | 'group'
   | 'ungroup'
   | 'linkSelected'

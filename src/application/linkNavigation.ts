@@ -99,10 +99,14 @@ export function createLinkNavigation({
       const said = `to ${step.notePath} page=${step.page} canvas=${step.canvasId}`;
       const wasUp = view.isUp();
       // A step further back than one: its canvas is not the one shown. Switched while Canvas is up, since a
-      // hidden Canvas has no view to save from or load into. From the badge over a note, it is the one shown.
+      // hidden Canvas has no view to save from or load into. From the badge over a note, it is the one shown,
+      // and switching to it would only wait out the load's five seconds for a view that cannot come until
+      // Canvas is back up, which is the whole of the delay in getting there.
       const here = await host.currentPage();
       const left = shown.id();
-      await shown.show(dir, step.canvasId, step);
+      if (wasUp || left !== step.canvasId) {
+        await shown.show(dir, step.canvasId, step);
+      }
       if (!(await view.leaveFor(step))) {
         // Things go back as they were, and the step stays: Canvas up on the canvas it showed, or, from the badge,
         // down with the badge back over the note.

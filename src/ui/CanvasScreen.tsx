@@ -152,6 +152,11 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
     setBack(session.backTo());
   };
 
+  const clearCanvas = async () => {
+    await session.clearCanvas();
+    setBack(session.backTo());
+  };
+
   // FR12: confirm what happened, so the thumbnail isn't added twice for want of feedback, and a
   // refresh of the one already on the page doesn't look like nothing happened.
   const saveToNote = async () => {
@@ -246,15 +251,15 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           <ConfirmDialog
             testID="canvas-clear-confirm"
             title="Clear the whole canvas?"
-            body="Everything on it goes. Undo brings it back."
+            body="An empty canvas takes its place. This one is kept under Canvases in this note."
             cancelLabel="Cancel"
-            cancelAccessibilityLabel="Keep the canvas"
+            cancelAccessibilityLabel="Stay on this canvas"
             actionLabel="Clear canvas"
             actionAccessibilityLabel="Clear the canvas"
             onCancel={() => setConfirmingClear(false)}
             onAction={() => {
               setConfirmingClear(false);
-              runCommand('clearCanvas');
+              clearCanvas();
             }}
           />
         )}

@@ -42,6 +42,7 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   open: jest.fn().mockResolvedValue(undefined),
   saveToNote: jest.fn().mockResolvedValue('inserted'),
   newCanvas: jest.fn().mockResolvedValue(undefined),
+  clearCanvas: jest.fn().mockResolvedValue(undefined),
   insertImage: jest.fn().mockResolvedValue(true),
   pickNoteLink: jest.fn().mockResolvedValue({kind: 'note', target: '/storage/emulated/0/Note/plan.note', page: -1}),
   followLink: jest.fn().mockResolvedValue(true),
@@ -428,23 +429,24 @@ describe('clear canvas', () => {
       async (press: (testID: string) => Promise<void>) => press('canvas-more').then(() => press('canvas-menu-clearCanvas')),
     ],
   ])('%s asks before clearing, and cancelling sends nothing', async (_name, open) => {
-    const {press, has, emitCanvasState} = await render();
+    const {session, press, has, emitCanvasState} = await render();
     await emitCanvasState({hasContent: true});
     await open(press);
     expect(has('canvas-clear-confirm')).toBe(true);
-    expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'clearCanvas', []);
+    expect(session.clearCanvas).not.toHaveBeenCalled();
     await press('canvas-clear-confirm-cancel');
     expect(has('canvas-clear-confirm')).toBe(false);
-    expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'clearCanvas', []);
+    expect(session.clearCanvas).not.toHaveBeenCalled();
   });
 
-  test('confirming dispatches clearCanvas to the canvas and closes the question', async () => {
-    const {press, has, emitCanvasState} = await render();
+  // #44: clearing starts a fresh sheet through the session, so the canvas a note points at is never emptied.
+  test('confirming asks the session for a fresh sheet and closes the question', async () => {
+    const {session, press, has, emitCanvasState} = await render();
     await emitCanvasState({hasContent: true});
     await openEraserOptions(press);
     await press('canvas-eraser-clear');
     await press('canvas-clear-confirm-action');
-    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'clearCanvas', []);
+    expect(session.clearCanvas).toHaveBeenCalledTimes(1);
     expect(has('canvas-clear-confirm')).toBe(false);
   });
 });
@@ -453,8 +455,7 @@ describe('links', () => {
   test('Link to note stores what the picker named, on whatever is selected', async () => {
     const {session, press, shows, emitCanvasState} = await render();
     await emitCanvasState({hasSelection: true, hasContent: true});
-    await press('canvas-more');
-    await press('canvas-menu-linkToNote');
+    await press('canvas-link');
     expect(session.pickNoteLink).toHaveBeenCalledTimes(1);
     expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'linkSelected', [
       'note',
@@ -469,8 +470,7 @@ describe('links', () => {
     session.pickNoteLink.mockResolvedValue(null);
     const {press, shows, emitCanvasState} = await render(session);
     await emitCanvasState({hasSelection: true, hasContent: true});
-    await press('canvas-more');
-    await press('canvas-menu-linkToNote');
+    await press('canvas-link');
     expect(mockDispatchViewManagerCommand).not.toHaveBeenCalledWith(42, 'linkSelected', expect.anything());
     expect(shows('Linked to the note')).toBe(false);
   });

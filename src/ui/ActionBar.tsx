@@ -1,14 +1,23 @@
 // The action bar (FR18), above the toolbar as in tldraw: undo, redo, delete,
-// duplicate and a ⋮ menu, which also starts a new canvas. Each action is enabled only when the canvas says it
-// applies (the canvas-state event), so nothing looks tappable that isn't.
+// duplicate, group, ungroup, link, unlink and a ⋮ menu, which also starts a new canvas. What acts on the
+// selection is a button here; what is rarer, or needs a question asked, is in the menu. Each action is enabled
+// only when the canvas says it applies (the canvas-state event), so nothing looks tappable that isn't.
 
 import React, {useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
 import type {CanvasUiState} from '../domain/styles';
 import type {CanvasCommand} from './nativeCanvasView';
 
+/** Actions the screen handles rather than the canvas: a session call, or a question asked first. */
+const SCREEN_ACTIONS = ['newCanvas', 'linkToNote', 'noteCanvases', 'clearCanvas'] as const;
+type ScreenAction = (typeof SCREEN_ACTIONS)[number];
+
+const isScreenAction = (action: CanvasCommand | ScreenAction): action is ScreenAction =>
+  (SCREEN_ACTIONS as readonly string[]).includes(action);
+
 type Action = {
-  command: CanvasCommand;
+  /** A canvas command, or one the screen handles itself (see ScreenAction). */
+  action: CanvasCommand | ScreenAction;
   testID: string;
   label: string;
   icon: ImageSourcePropType;
@@ -17,28 +26,28 @@ type Action = {
 
 const ACTIONS: readonly Action[] = [
   {
-    command: 'undo',
+    action: 'undo',
     testID: 'canvas-undo',
     label: 'Undo',
     icon: require('../../assets/icons/action-undo.png'),
     enabled: ui => ui.canUndo,
   },
   {
-    command: 'redo',
+    action: 'redo',
     testID: 'canvas-redo',
     label: 'Redo',
     icon: require('../../assets/icons/action-redo.png'),
     enabled: ui => ui.canRedo,
   },
   {
-    command: 'deleteSelected',
+    action: 'deleteSelected',
     testID: 'canvas-delete',
     label: 'Delete',
     icon: require('../../assets/icons/action-delete.png'),
     enabled: ui => ui.hasSelection,
   },
   {
-    command: 'duplicateSelected',
+    action: 'duplicateSelected',
     testID: 'canvas-duplicate',
     label: 'Duplicate',
     icon: require('../../assets/icons/action-duplicate.png'),
@@ -46,23 +55,36 @@ const ACTIONS: readonly Action[] = [
   },
   // Grouping acts on the selection, like delete and duplicate, so it belongs beside them rather than in the ⋮ menu.
   {
-    command: 'group',
+    action: 'group',
     testID: 'canvas-group',
     label: 'Group',
     icon: require('../../assets/icons/action-group.png'),
     enabled: ui => ui.selectionCount > 1,
   },
   {
-    command: 'ungroup',
+    action: 'ungroup',
     testID: 'canvas-ungroup',
     label: 'Ungroup',
     icon: require('../../assets/icons/action-ungroup.png'),
     enabled: ui => ui.canUngroup,
   },
+  // Linking an element is what the ⋮ menu was reached for most, and it acts on the selection like the rest of
+  // these, so it sits out here too. The bolt is the badge the canvas puts on a linked element (#34).
+  {
+    action: 'linkToNote',
+    testID: 'canvas-link',
+    label: 'Link to note',
+    icon: require('../../assets/icons/action-link.png'),
+    enabled: ui => ui.hasSelection,
+  },
+  {
+    action: 'unlinkSelected',
+    testID: 'canvas-unlink',
+    label: 'Remove link',
+    icon: require('../../assets/icons/action-unlink.png'),
+    enabled: ui => ui.hasLink,
+  },
 ];
-
-/** Menu actions the screen handles rather than the canvas: a session call, or a question asked first. */
-type ScreenAction = 'newCanvas' | 'linkToNote' | 'noteCanvases';
 
 type MenuItem = {
   /** A canvas command, or one the screen handles itself (see ScreenAction). */
@@ -72,8 +94,6 @@ type MenuItem = {
   needsSelection?: boolean;
   /** Greyed out on an empty canvas. */
   needsContent?: boolean;
-  /** Greyed out unless the selected element links somewhere. */
-  needsLink?: boolean;
   /** Listed only while a table is selected (FR24). */
   tableOnly?: boolean;
 };
@@ -85,8 +105,6 @@ const MENU: readonly MenuItem[] = [
   {action: 'tableAddColumn', label: 'Add column', tableOnly: true},
   {action: 'tableRemoveRow', label: 'Remove last row', tableOnly: true},
   {action: 'tableRemoveColumn', label: 'Remove last column', tableOnly: true},
-  {action: 'linkToNote', label: 'Link to note…', needsSelection: true},
-  {action: 'unlinkSelected', label: 'Remove link', needsLink: true},
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},
@@ -122,11 +140,22 @@ export default function ActionBar({
 }: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
   // What the screen does for the items that are not canvas commands; Clear canvas is one, but asks first.
-  const screenActions: Partial<Record<MenuItem['action'], () => void>> = {
+  // Every screen action needs a handler here: leaving one out is a type error, not an action
+  // that quietly falls through to the canvas (#44).
+  const screenActions: Record<ScreenAction, () => void> = {
     newCanvas: onNewCanvas,
     linkToNote: onLinkToNote,
     noteCanvases: onNoteCanvases,
     clearCanvas: onClearCanvas,
+  };
+
+  /** Runs [action] wherever it was tapped: the screen's own, or the canvas's. */
+  const run = (action: CanvasCommand | ScreenAction): void => {
+    if (isScreenAction(action)) {
+      screenActions[action]();
+    } else {
+      onCommand(action);
+    }
   };
 
   return (
@@ -135,10 +164,7 @@ export default function ActionBar({
       {isMenuOpen && (
         <View style={styles.menu}>
           {MENU.filter(item => !item.tableOnly || ui.selectedType === 'table').map(item => {
-            const enabled =
-              (!item.needsSelection || ui.hasSelection) &&
-              (!item.needsContent || ui.hasContent) &&
-              (!item.needsLink || ui.hasLink);
+            const enabled = (!item.needsSelection || ui.hasSelection) && (!item.needsContent || ui.hasContent);
             return (
               <Pressable
                 key={item.action}
@@ -148,12 +174,7 @@ export default function ActionBar({
                 style={styles.menuItem}
                 onPress={() => {
                   setMenuOpen(false);
-                  const screenAction = screenActions[item.action];
-                  if (screenAction !== undefined) {
-                    screenAction();
-                  } else {
-                    onCommand(item.action as CanvasCommand);
-                  }
+                  run(item.action);
                 }}>
                 <Text style={[styles.menuText, !enabled && styles.disabled]}>{item.label}</Text>
               </Pressable>
@@ -162,17 +183,17 @@ export default function ActionBar({
         </View>
       )}
       <View style={styles.bar}>
-        {ACTIONS.map(action => {
-          const enabled = action.enabled(ui);
+        {ACTIONS.map(entry => {
+          const enabled = entry.enabled(ui);
           return (
             <Pressable
-              key={action.command}
-              testID={action.testID}
-              accessibilityLabel={action.label}
+              key={entry.action}
+              testID={entry.testID}
+              accessibilityLabel={entry.label}
               disabled={!enabled}
               style={styles.button}
-              onPress={() => onCommand(action.command)}>
-              <Image source={action.icon} style={[styles.icon, !enabled && styles.disabled]} />
+              onPress={() => run(entry.action)}>
+              <Image source={entry.icon} style={[styles.icon, !enabled && styles.disabled]} />
             </Pressable>
           );
         })}

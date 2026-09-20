@@ -112,24 +112,30 @@ test('Group and Ungroup sit in the bar beside delete and duplicate, greyed out u
   expect(grouped.onCommand).toHaveBeenCalledWith('ungroup');
 });
 
+// Both sit in the bar itself rather than the ⋮ menu: linking acts on the selection, as delete and group do.
 test('Link to note needs a selection, and Remove link a link on it', () => {
   const nothing = renderBar();
-  nothing.press('canvas-more');
-  expect([nothing.isDisabled('canvas-menu-linkToNote'), nothing.isDisabled('canvas-menu-unlinkSelected')]).toEqual([true, true]);
+  expect([nothing.isDisabled('canvas-link'), nothing.isDisabled('canvas-unlink')]).toEqual([true, true]);
 
   const selected = renderBar({hasSelection: true});
-  selected.press('canvas-more');
-  expect([selected.isDisabled('canvas-menu-linkToNote'), selected.isDisabled('canvas-menu-unlinkSelected')]).toEqual([false, true]);
+  expect([selected.isDisabled('canvas-link'), selected.isDisabled('canvas-unlink')]).toEqual([false, true]);
   // Picking the note is the screen's job, not a command the canvas can run.
-  selected.press('canvas-menu-linkToNote');
+  selected.press('canvas-link');
   expect(selected.onLinkToNote).toHaveBeenCalledTimes(1);
   expect(selected.onCommand).not.toHaveBeenCalled();
 
   const linked = renderBar({hasSelection: true, hasLink: true});
-  linked.press('canvas-more');
-  expect(linked.isDisabled('canvas-menu-unlinkSelected')).toBe(false);
-  linked.press('canvas-menu-unlinkSelected');
+  expect(linked.isDisabled('canvas-unlink')).toBe(false);
+  linked.press('canvas-unlink');
   expect(linked.onCommand).toHaveBeenCalledWith('unlinkSelected');
+});
+
+test('neither link action is left behind in the ⋮ menu', () => {
+  const bar = renderBar({hasSelection: true, hasLink: true});
+  bar.press('canvas-more');
+  expect(bar.isMenuOpen()).toBe(true);
+  expect(bar.isListed('canvas-menu-linkToNote')).toBe(false);
+  expect(bar.isListed('canvas-menu-unlinkSelected')).toBe(false);
 });
 
 test('Clear canvas applies only to a canvas with something on it', () => {

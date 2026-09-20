@@ -592,6 +592,68 @@ describe('newCanvas', () => {
   });
 });
 
+describe('clearCanvas', () => {
+  test('keeps what was on the canvas in its own file and starts a fresh sheet (#44)', async () => {
+    const {store, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    store.shown = 'a drawing';
+    await session.clearCanvas();
+    expect(store.files.get(SCRATCH)).toBe('a drawing');
+    expect(store.shown).toBe('');
+    expect(session.currentCanvasId()).toBe('c-1');
+    expect(savedIndex(store).lastCanvasId).toBe('c-1');
+  });
+
+  test('the thumbnail still opens the drawing after it was cleared away (#44)', async () => {
+    const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
+    host.lassoed = [lassoedThumbnail('c-9')];
+    await session.open(501);
+    store.shown = 'a drawing';
+    await session.clearCanvas();
+    // The canvas on screen really is empty, and what was on it went to its own file rather than over it.
+    expect(store.shown).toBe('');
+    expect(store.files.get(canvasFile('c-9'))).toBe('a drawing');
+    await session.newCanvas();
+    // Open Canvas on the same thumbnail, back in the note, as the report has it.
+    await session.open(501);
+    expect(session.currentCanvasId()).toBe('c-9');
+    expect(store.shown).toBe('a drawing');
+  });
+
+  test('the canvas cleared away is still a tap away in this note', async () => {
+    const {store, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    await session.saveToNote();
+    store.shown = 'first drawing, more of it';
+    await session.clearCanvas();
+    const listed = await session.canvasesHere();
+    expect(listed.map(canvas => [canvas.canvasId, canvas.isShown])).toEqual([
+      ['c-2', true],
+      ['c-1', false],
+    ]);
+    await session.switchTo('c-1');
+    expect(store.shown).toBe('first drawing, more of it');
+  });
+
+  // A view that came back without the canvas would refuse the save (#30), and the drawing would go
+  // with nothing kept, which is exactly what clearing must not do.
+  test('a view that is not holding the canvas is left alone rather than replaced', async () => {
+    const {store, logger, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    store.emptyView();
+    await session.clearCanvas();
+    expect(session.currentCanvasId()).toBe('default');
+    expect(logger.lines).toContain('warn [SNCANVAS] the view is not holding canvas=default; it stays as it is');
+  });
+
+  test('without a plugin directory it does nothing', async () => {
+    const {host, session} = setup();
+    host.dir = null;
+    await session.clearCanvas();
+    expect(session.currentCanvasId()).toBe('default');
+  });
+});
+
 describe('close', () => {
   test('saves the canvas, then closes the plugin view', async () => {
     const {store, host, session} = setup({[SCRATCH]: 'scratch'});
@@ -745,6 +807,23 @@ describe('the trail back along followed links', () => {
     expect(session.backTo()).toBeNull();
   });
 
+  // From the badge, Canvas is down: there is no view to save from or load into, and the canvas the step names
+  // is the one already shown. Switching to it anyway only waits out the load's five seconds for a view that
+  // cannot arrive, which is the whole of the delay in coming back.
+  test('a step back from the badge does not save or load the canvas it is already showing', async () => {
+    const {store, host, badge, session} = await walkedToC();
+    store.emptyView();
+    store.refused.length = 0;
+    host.steps.length = 0;
+    await session.goBack();
+    expect(store.refused).toEqual([]);
+    expect(store.shown).toBe('');
+    // The step back itself still happens: the note reopens and the trail moves on.
+    expect(host.steps).toEqual(['close', `open ${B.notePath}`]);
+    expect(badge.arrivals).toEqual([B.notePath]);
+    expect(session.backTo()).toMatchObject({notePath: A.notePath});
+  });
+
   test('a note that does not come back in time leaves Canvas down and the step in place, and says so', async () => {
     const {host, badge, logger, session} = await walkedToC();
     badge.arrives = false;
@@ -817,6 +896,15 @@ describe('the trail back along followed links', () => {
     const fresh = await walkedToC();
     await fresh.session.newCanvas();
     expect(fresh.session.backTo()).toBeNull();
+  });
+
+  // Clearing says nothing about how this canvas was reached, so the way back outlives it (#44).
+  test('clearing the canvas keeps the way back, and it still leads to a canvas with its drawing', async () => {
+    const {store, session} = await walkedToC();
+    await session.clearCanvas();
+    expect(session.backTo()).toMatchObject({notePath: B.notePath, canvasId: 'default'});
+    await session.goBack();
+    expect(store.shown).toBe('drawn in B');
   });
 });
 
