@@ -57,10 +57,10 @@ test('pluginDir is the host path, or null when it has none or the call fails', a
   expect(logger.lines).toEqual(['warn [SNCANVAS] getPluginDirPath failed: Error: host said no']);
 });
 
-test('requestFileAccess is the shared file-permission request it is given', async () => {
-  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestFileAccess()).toBe(true);
+test('requestCanvasFolderAccess is the shared file-permission request it is given', async () => {
+  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestCanvasFolderAccess()).toBe(true);
   // An export asks only to write (#17), which is a different request.
-  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestWriteAccess()).toBe(true);
+  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestExportAccess()).toBe(true);
   expect(toWrite).toHaveBeenCalled();
   expect(forCanvases).toHaveBeenCalledTimes(1);
 });

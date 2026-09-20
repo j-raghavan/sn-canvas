@@ -44,6 +44,9 @@ export function createFileAccess(logger: Logger): FileAccess {
   // One promise per permission, while it is being asked for, so two things
   // wanting the same one wait on the same dialog.
   const asking = new Map<string, Promise<boolean>>();
+  // And every dialog waits its turn, so a second caller arriving partway
+  // through another's run never puts a second dialog up beside it.
+  let queue: Promise<unknown> = Promise.resolve();
 
   // hasPermission: 0 not granted, 1 granted. requestPermission: 0 deny, 1 while using, 2 always.
   const ask = async (name: string): Promise<boolean> => {
@@ -63,7 +66,10 @@ export function createFileAccess(logger: Logger): FileAccess {
     if (already !== undefined) {
       return already;
     }
-    const answer = ask(name).finally(() => asking.delete(name));
+    // [ask] answers false rather than rejecting, whatever the firmware does, so the next dialog
+    // follows this one however this one went and a refusal never stalls the queue.
+    const answer = queue.then(() => ask(name)).finally(() => asking.delete(name));
+    queue = answer;
     asking.set(name, answer);
     return answer;
   };

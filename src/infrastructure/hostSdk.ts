@@ -33,8 +33,8 @@ export function createHostSdk(logger: Logger, access: FileAccess): HostPort {
 
   return {
     pluginDir: () => attempt('getPluginDirPath', null, async () => (await PluginManager.getPluginDirPath()) || null),
-    requestFileAccess: access.forCanvases,
-    requestWriteAccess: access.toWrite,
+    requestCanvasFolderAccess: access.forCanvases,
+    requestExportAccess: access.toWrite,
     notePen: () =>
       attempt('getPenInfo', null, async () => {
         const pen = resultOf<unknown>(await PluginCommAPI.getPenInfo());

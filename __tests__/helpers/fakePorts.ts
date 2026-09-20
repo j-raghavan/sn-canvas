@@ -225,12 +225,12 @@ export const createFakeHost = (): FakeHost => {
     async pluginDir() {
       return host.dir;
     },
-    async requestFileAccess() {
+    async requestCanvasFolderAccess() {
       host.accessRequests += 1;
       return host.fileWrite;
     },
     // Only writing is asked for here, so a refused delete does not stop it (#17).
-    async requestWriteAccess() {
+    async requestExportAccess() {
       host.writeRequests += 1;
       return host.fileWriteOnly;
     },

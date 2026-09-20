@@ -188,7 +188,7 @@ export function createCanvasSession({
     }
     const pluginDir = await host.pluginDir();
     pluginDirPath = pluginDir;
-    if (await host.requestFileAccess()) {
+    if (await host.requestCanvasFolderAccess()) {
       canvasDir = SHARED_CANVAS_DIR;
       if (pluginDir !== null) {
         await takeIn(privateCanvasDir(pluginDir), 'the plugin folder');
@@ -461,7 +461,7 @@ export function createCanvasSession({
     let exported: string | null = null;
     await serially(async () => {
       // Writing a PDF writes a file and nothing else, so it asks only to write (#17).
-      if (!(await host.requestWriteAccess())) {
+      if (!(await host.requestExportAccess())) {
         logger.warn(`${TAG}[PDF] no file write access; nothing exported`);
         return;
       }

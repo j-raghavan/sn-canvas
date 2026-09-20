@@ -6,7 +6,7 @@ import {BUTTON_ID_OPEN_LINKED, BUTTON_ID_SIDEBAR} from './src/domain/entryPoints
 // Installs the single PluginManager.registerButtonListener that fans button
 // presses out to the screen (see src/infrastructure/pluginRouter.ts).
 import {installPluginRouter} from './src/infrastructure/pluginRouter';
-import {requestFileAccess} from './src/wiring';
+import {requestCanvasFolderAccess} from './src/wiring';
 
 const BUTTON_TYPE_SIDEBAR = 1;
 const BUTTON_TYPE_LASSO = 2;
@@ -30,7 +30,7 @@ AppRegistry.registerComponent(appName, () => App);
 
 PluginManager.init();
 installPluginRouter();
-requestFileAccess();
+requestCanvasFolderAccess();
 
 const icon = Image.resolveAssetSource(require('./assets/icon.png')).uri;
 
