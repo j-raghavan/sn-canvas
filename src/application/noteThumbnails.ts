@@ -154,17 +154,24 @@ export function createNoteThumbnails({
       return null;
     }
     if (fromScratch) {
-      // The scratch content lives on as the linked canvas, which the sidebar now reopens. Its old file is
-      // gone, so the id goes out of the index with it: nothing is claiming it any more, and the next note to
-      // ask gets a clean scratch canvas (#46).
+      // The scratch content lives on as the linked canvas, which the sidebar now reopens, and its old file goes.
       shown.rename(linkedId);
-      await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID));
-      await index.update(dir, current => withoutCanvas(current, DEFAULT_CANVAS_ID));
+    }
+    // Its id is given up only once its file really has gone. A file still standing there still holds the
+    // drawing, and handing the id to the next note that asks is the very loss this is about (#46).
+    const scratchGone = fromScratch && (await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID)));
+    if (fromScratch && !scratchGone) {
+      logger.warn(`${TAG}[LINK] ${DEFAULT_CANVAS_ID} is still on disk, so it stays this note's`);
     }
     // The note it went into reopens it: asked of the host when no page was read (the scratch canvas's first save),
     // or the note would go on naming the scratch canvas, whose file is gone, and reopen empty (#30).
     const into = already?.at ?? (await host.currentPage());
-    await index.update(dir, current => withLastCanvas(current, linkedId, into?.notePath ?? null));
+    // One write, because the two halves are one rule: the scratch canvas's id is retired, since its file has
+    // just gone and nothing may go on belonging to it (#46), and the note is recorded against the new id. Written
+    // separately there is a moment where the index holds neither, which reads as a build from before the index.
+    await index.update(dir, current =>
+      withLastCanvas(scratchGone ? withoutCanvas(current, DEFAULT_CANVAS_ID) : current, linkedId, into?.notePath ?? null),
+    );
     logger.log(`${TAG}[LINK] inserted thumbnail for canvas=${linkedId}`);
     return {dir, linkedId, known: already};
   };

@@ -8,7 +8,7 @@ import {
   MAX_PENDING,
   canvasesIn,
   claimPending,
-  isClaimed,
+  belongsToANote,
   withoutCanvas,
   lastCanvasFor,
   elementSummary,
@@ -210,21 +210,31 @@ describe("a note's canvases (#30)", () => {
 describe('which canvases a note has claimed (#46)', () => {
   test('a canvas stays claimed after the note moves off it, which is what keeps it from another note', () => {
     const shown = withLastCanvas(EMPTY_INDEX, 'default', '/a.note');
-    expect(isClaimed(shown, 'default')).toBe(true);
+    expect(belongsToANote(shown, 'default')).toBe(true);
     // Note A presses New canvas: it reopens c-1 now, but default.json still holds what was drawn on it.
     const moved = withLastCanvas(shown, 'c-1', '/a.note');
     expect(moved.lastByNote['/a.note']).toBe('c-1');
-    expect(isClaimed(moved, 'default')).toBe(true);
-    expect(isClaimed(moved, 'c-1')).toBe(true);
-    expect(isClaimed(moved, 'c-9')).toBe(false);
+    expect(belongsToANote(moved, 'default')).toBe(true);
+    expect(belongsToANote(moved, 'c-1')).toBe(true);
+    expect(belongsToANote(moved, 'c-9')).toBe(false);
+  });
+
+  // Both records are read because a damaged saved file can have them disagree: a list of canvases that
+  // reads back empty must not make the canvas the note reopens look like nobody's.
+  test('a note whose saved list of canvases was damaged still holds the canvas it reopens', () => {
+    const damaged = parseCanvasIndex(
+      JSON.stringify({lastByNote: {'/a.note': 'default'}, canvasesByNote: {'/a.note': [7]}, pending: []}),
+    );
+    expect(damaged.canvasesByNote).toEqual({'/a.note': []});
+    expect(belongsToANote(damaged, 'default')).toBe(true);
   });
 
   test('nothing is claimed in an empty index, so the first note to ask gets the scratch canvas', () => {
-    expect(isClaimed(EMPTY_INDEX, 'default')).toBe(false);
+    expect(belongsToANote(EMPTY_INDEX, 'default')).toBe(false);
   });
 
   test('a canvas shown with no note to go by is claimed by nobody', () => {
-    expect(isClaimed(withLastCanvas(EMPTY_INDEX, 'c-1', null), 'c-1')).toBe(false);
+    expect(belongsToANote(withLastCanvas(EMPTY_INDEX, 'c-1', null), 'c-1')).toBe(false);
   });
 
   test('retiring an id takes it out of every note that showed it, and off the plain last canvas', () => {
@@ -232,12 +242,24 @@ describe('which canvases a note has claimed (#46)', () => {
     const alsoB = withLastCanvas(shown, 'default', '/b.note');
     // Save to Note gives the scratch canvas an id of its own and deletes default.json, so the id means nothing now.
     const retired = withoutCanvas(alsoB, 'default');
-    expect(isClaimed(retired, 'default')).toBe(false);
+    expect(belongsToANote(retired, 'default')).toBe(false);
     expect(canvasesIn(retired, '/a.note')).toEqual(['c-1']);
     expect(canvasesIn(retired, '/b.note')).toEqual([]);
     expect(retired.lastByNote['/b.note']).toBeUndefined();
     expect(retired.lastByNote['/a.note']).toBe('c-1');
     expect(retired.lastCanvasId).toBeNull();
+  });
+
+  // The canvas last open is adopted only by a note with some claim to it. An upgraded index can hold a note's
+  // canvases without holding what it reopens, and reading only the latter would give that canvas away (#46).
+  test('an upgraded index does not hand the canvas last open to a note with no claim on it', () => {
+    const pending = [{notePath: '/a.note', page: 0, canvasId: 'c-old', knownPictureNumbers: []}];
+    const upgraded = parseCanvasIndex(JSON.stringify({lastCanvasId: 'c-old', pending}));
+    expect(upgraded.lastByNote).toEqual({});
+    expect(upgraded.canvasesByNote).toEqual({'/a.note': ['c-old']});
+    expect(lastCanvasFor(upgraded, '/b.note')).toBeNull();
+    // The note whose canvas it is still reopens it.
+    expect(lastCanvasFor(upgraded, '/a.note')).toBe('c-old');
   });
 
   test('retiring an id nothing holds leaves the index as it was', () => {

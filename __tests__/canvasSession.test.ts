@@ -171,8 +171,9 @@ describe('each note has its own canvas', () => {
     expect(savedIndex(store).lastByNote).toEqual({[A.notePath]: 'default', [B.notePath]: 'c-1'});
   });
 
-  // #46: the note moved off the scratch canvas, but default.json still holds what was drawn on it.
-  test('a note that left the scratch canvas behind keeps it, so no other note is shown its drawing', async () => {
+  // #46, all the way to the step that destroyed the drawing: the note moved off the scratch canvas, but
+  // default.json still holds what was drawn on it, and the next note used to be handed it and save over it.
+  test('a note that left the scratch canvas behind keeps it, and the note after it cannot destroy the drawing', async () => {
     const {store, host, session} = setup({[SCRATCH]: 'scratch'});
     host.page = A;
     await session.open(500);
@@ -184,10 +185,82 @@ describe('each note has its own canvas', () => {
     await session.open(500);
     expect(session.currentCanvasId()).not.toBe('default');
     expect(store.shown).toBe('');
-    // And A's drawing is still A's, still where it was, still listed for it.
+    // The step that used to take A's drawing for B and delete the file it was in.
+    expect(await session.saveToNote()).toBe('inserted');
     expect(store.files.get(SCRATCH)).toBe("note A's drawing");
+
+    // And A can still get to it, not merely see it listed.
     host.page = A;
     expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toContain('default');
+    await session.switchTo('default');
+    expect(store.shown).toBe("note A's drawing");
+  });
+
+  // An index holding only a note's canvases is not a build from before the index, and its canvases are
+  // someone's. Reading it as old would hand the newest one to whichever note asked next (#46).
+  test('an index that names only the canvases a note has shown does not give them away', async () => {
+    const {store, host, session} = setup({
+      [canvasFile('c-kept')]: 'work in a note',
+      [INDEX]: JSON.stringify({canvasesByNote: {[A.notePath]: ['c-kept']}, lastByNote: {}, lastCanvasId: null, pending: []}),
+    });
+    host.page = B;
+    await session.open(500);
+    expect(session.currentCanvasId()).not.toBe('c-kept');
+    expect(store.shown).not.toBe('work in a note');
+  });
+
+  // Giving up the id rests on the file having gone. If it is still there it still holds the drawing, and
+  // handing it to the next note is exactly the loss this is about (#46).
+  test('a scratch canvas whose file would not delete stays the note it was saved from', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = A;
+    await session.open(500);
+    store.failing.add('remove');
+    await session.saveToNote();
+    expect(store.files.get(SCRATCH)).toBe('scratch');
+    expect(logger.lines).toContain("warn [SNCANVAS][LINK] default is still on disk, so it stays this note's");
+
+    host.page = B;
+    await session.open(500);
+    expect(session.currentCanvasId()).not.toBe('default');
+    expect(store.shown).not.toBe('scratch');
+  });
+
+  // The id is given up only when the save landed. A save that did not leaves the drawing back in
+  // default.json, so giving the id away would hand the next note that drawing (#46).
+  test('a save to note that never landed leaves the scratch canvas with the note that drew on it', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = A;
+    await session.open(500);
+    host.insertSucceeds = false;
+    await session.saveToNote();
+    expect(session.currentCanvasId()).toBe('default');
+    expect(store.files.get(SCRATCH)).toBe('scratch');
+
+    host.page = B;
+    await session.open(500);
+    expect(session.currentCanvasId()).not.toBe('default');
+    expect(store.shown).toBe('');
+  });
+
+  // Only a save from the scratch canvas retires it. One note saving a canvas of its own says nothing
+  // about whose the scratch canvas is.
+  test('saving a canvas of its own into a note leaves the scratch canvas where it belongs', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'drawn in A'});
+    host.page = A;
+    await session.open(500);
+    expect(session.currentCanvasId()).toBe('default');
+
+    host.page = B;
+    await session.open(500);
+    expect(session.currentCanvasId()).toBe('c-1');
+    await session.saveToNote();
+
+    // A third note is still not offered the scratch canvas, which is still A's.
+    host.page = {notePath: '/c.note', page: 0};
+    await session.open(500);
+    expect(session.currentCanvasId()).not.toBe('default');
+    expect(store.files.get(SCRATCH)).toBe('drawn in A');
   });
 
   test('the scratch canvas is free again once Save to Note gives it an id of its own', async () => {
