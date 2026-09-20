@@ -1,9 +1,9 @@
 // HostPort over sn-plugin-lib. It normalizes the SDK's loosely typed
 // {success, result} envelopes into plain values and never rejects.
 //
-// File access is the one shared request from wiring.ts (see
-// infrastructure/filePermissions.ts), injected so index.js and the session ask
-// through the same one.
+// File access comes from wiring.ts (see infrastructure/filePermissions.ts) as
+// a request per purpose, injected so index.js and the session ask through the
+// same one and a dialog is never put up twice.
 
 import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
 import type {HostPort, NotePen} from '../application/canvasSession';
@@ -34,7 +34,7 @@ export function createHostSdk(logger: Logger, access: FileAccess): HostPort {
   return {
     pluginDir: () => attempt('getPluginDirPath', null, async () => (await PluginManager.getPluginDirPath()) || null),
     requestCanvasFolderAccess: access.forCanvases,
-    requestExportAccess: access.toWrite,
+    requestExportAccess: access.forExports,
     notePen: () =>
       attempt('getPenInfo', null, async () => {
         const pen = resultOf<unknown>(await PluginCommAPI.getPenInfo());

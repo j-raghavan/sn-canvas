@@ -28,7 +28,6 @@ const logger: Logger = {
  * awaits the same request before it opens a canvas.
  */
 export const fileAccess = createFileAccess(logger);
-export const requestCanvasFolderAccess = fileAccess.forCanvases;
 
 // One badge for the plugin: every session shows and hides the same one, and the screen hears its taps.
 const backBadge = createNativeBackBadge(logger);

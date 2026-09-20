@@ -9,10 +9,12 @@
 // touches the canvas folder before the answer is in.
 // Ref: docs.supernote.com/en/plugin-base/permission
 //
-// Asked for as soon as the plugin loads (index.js: at install, and each time
-// the plugin starts), as sn-shapes and sn-mindmap do, and awaited by the
-// session before it opens the first canvas. Both share one request (see
-// wiring.ts), so the user sees each dialog once.
+// What keeping canvases needs is asked for as soon as the plugin loads
+// (index.js: at install, and each time the plugin starts), as sn-shapes and
+// sn-mindmap do, and awaited by the session before it opens the first canvas.
+// Exporting a PDF asks only to write, since that is all it does (#17).
+// Everything goes through the one object from wiring.ts, so whatever the
+// purpose, the user sees each dialog once.
 
 import {PluginManager} from 'sn-plugin-lib';
 import {TAG} from '../diagnostics/log';
@@ -37,7 +39,7 @@ export type FileAccess = {
    * delete for it showed a dialog about deleting files to someone who only
    * wanted a PDF, and refused the export when they said no (#17).
    */
-  toWrite: () => Promise<boolean>;
+  forExports: () => Promise<boolean>;
 };
 
 export function createFileAccess(logger: Logger): FileAccess {
@@ -81,6 +83,6 @@ export function createFileAccess(logger: Logger): FileAccess {
       const canDelete = await grant(FILE_DELETE);
       return canWrite && canDelete;
     },
-    toWrite: () => grant(FILE_WRITE),
+    forExports: () => grant(FILE_WRITE),
   };
 }

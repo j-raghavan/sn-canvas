@@ -42,8 +42,8 @@ import {createRecordingLogger} from './helpers/fakePorts';
 
 const failure = () => Promise.reject(new Error('host said no'));
 const forCanvases = jest.fn().mockResolvedValue(true);
-const toWrite = jest.fn().mockResolvedValue(true);
-const requestAccess = {forCanvases, toWrite};
+const forExports = jest.fn().mockResolvedValue(true);
+const requestAccess = {forCanvases, forExports};
 
 test('pluginDir is the host path, or null when it has none or the call fails', async () => {
   const logger = createRecordingLogger();
@@ -61,7 +61,7 @@ test('requestCanvasFolderAccess is the shared file-permission request it is give
   expect(await createHostSdk(createRecordingLogger(), requestAccess).requestCanvasFolderAccess()).toBe(true);
   // An export asks only to write (#17), which is a different request.
   expect(await createHostSdk(createRecordingLogger(), requestAccess).requestExportAccess()).toBe(true);
-  expect(toWrite).toHaveBeenCalled();
+  expect(forExports).toHaveBeenCalled();
   expect(forCanvases).toHaveBeenCalledTimes(1);
 });
 

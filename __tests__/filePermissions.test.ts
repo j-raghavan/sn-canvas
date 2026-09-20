@@ -1,7 +1,8 @@
 /**
- * Canvas's file permissions: read, write and delete, each asked for only when
- * not granted yet, one dialog at a time, and one request shared by everyone
- * who asks while it is in flight (index.js at load, the session at open).
+ * Canvas's file permissions, asked for by purpose: keeping canvases needs read,
+ * write and delete, an export only write (#17). Each is asked for only when not
+ * granted yet, dialogs go up one at a time, and everyone wanting a permission
+ * already being asked for waits on that dialog rather than opening another.
  */
 const mockHasPermission = jest.fn();
 const mockRequestPermission = jest.fn();
@@ -15,6 +16,35 @@ jest.mock('sn-plugin-lib', () => ({
 
 import {FILE_DELETE, FILE_READ, FILE_WRITE, createFileAccess} from '../src/infrastructure/filePermissions';
 import {createRecordingLogger} from './helpers/fakePorts';
+
+/**
+ * A firmware that remembers what it was asked, and holds the write dialog open until the test
+ * answers it. [isUp] settles when that dialog is really on screen, so nothing waits on a clock:
+ * a slow hasPermission would make a timing-based test hang rather than fail.
+ */
+const firmwareHoldingTheWriteDialog = () => {
+  const granted = new Set<string>();
+  const asked: string[] = [];
+  let answerWrite = (_grant: number) => {};
+  let dialogIsUp = () => {};
+  const isUp = new Promise<void>(resolve => (dialogIsUp = resolve));
+  mockHasPermission.mockImplementation(async (name: string) => (granted.has(name) ? 1 : 0));
+  mockRequestPermission.mockImplementation((name: string) => {
+    asked.push(name);
+    if (name !== FILE_WRITE) {
+      granted.add(name);
+      return Promise.resolve(1);
+    }
+    return new Promise<number>(resolve => {
+      answerWrite = grant => {
+        granted.add(name);
+        resolve(grant);
+      };
+      dialogIsUp();
+    });
+  });
+  return {asked, isUp, answer: (grant: number) => answerWrite(grant)};
+};
 
 beforeEach(() => {
   mockHasPermission.mockReset();
@@ -57,7 +87,7 @@ test('is false when write or delete is refused, a request that fails counting as
 test('the request for an export asks to write, and asks nothing about reading or deleting', async () => {
   mockHasPermission.mockResolvedValue(0);
   mockRequestPermission.mockResolvedValue(2);
-  expect(await createFileAccess(createRecordingLogger()).toWrite()).toBe(true);
+  expect(await createFileAccess(createRecordingLogger()).forExports()).toBe(true);
   expect(mockRequestPermission.mock.calls.map(([name]) => name)).toEqual([FILE_WRITE]);
 });
 
@@ -65,7 +95,7 @@ test('an export goes ahead with write alone, whatever was said about deleting', 
   mockHasPermission.mockResolvedValue(0);
   mockRequestPermission.mockImplementation(async (name: string) => (name === FILE_WRITE ? 1 : 0));
   const access = createFileAccess(createRecordingLogger());
-  expect(await access.toWrite()).toBe(true);
+  expect(await access.forExports()).toBe(true);
   // The canvas folder still needs all three, so it is still refused.
   expect(await access.forCanvases()).toBe(false);
 });
@@ -73,56 +103,48 @@ test('an export goes ahead with write alone, whatever was said about deleting', 
 // Two things wanting the same permission while the dialog is up wait on that one dialog. Once it
 // has been answered the firmware remembers, and hasPermission answers for it without asking again.
 test('two exports while the write dialog is up wait on the one dialog', async () => {
-  mockHasPermission.mockResolvedValue(0);
-  let answer = (_granted: number) => {};
-  mockRequestPermission.mockImplementation(
-    (name: string) => (name === FILE_WRITE ? new Promise(resolve => (answer = resolve)) : Promise.resolve(1)),
-  );
+  const firmware = firmwareHoldingTheWriteDialog();
   const access = createFileAccess(createRecordingLogger());
-  const first = access.toWrite();
-  const second = access.toWrite();
-  // hasPermission settles first, so the dialog is only up after a turn of the loop.
-  await new Promise(resolve => setTimeout(resolve, 0));
-  answer(1);
+  const first = access.forExports();
+  await firmware.isUp;
+  const second = access.forExports();
+  firmware.answer(1);
   expect(await Promise.all([first, second])).toEqual([true, true]);
-  expect(mockRequestPermission.mock.calls.filter(([name]) => name === FILE_WRITE)).toHaveLength(1);
+  expect(firmware.asked.filter(name => name === FILE_WRITE)).toHaveLength(1);
+});
+
+// An export puts the write dialog up, and the canvas folder is asked for while it is still there.
+// It has to share that dialog rather than open a second one for the same permission.
+test('a canvas folder asked for while an export holds the write dialog shares it', async () => {
+  const firmware = firmwareHoldingTheWriteDialog();
+  const access = createFileAccess(createRecordingLogger());
+  const exporting = access.forExports();
+  await firmware.isUp;
+  const canvases = access.forCanvases();
+  firmware.answer(1);
+  expect(await exporting).toBe(true);
+  expect(await canvases).toBe(true);
+  expect(firmware.asked.filter(name => name === FILE_WRITE)).toHaveLength(1);
 });
 
 // The two callers do not start together: an export puts the write dialog up, and the canvas folder
 // is asked for while it is still there. Its first dialog has to wait rather than appear beside it.
 test('a second caller arriving partway through does not put a dialog up beside the one already open', async () => {
-  // As the firmware behaves: once a dialog is answered, hasPermission answers for it from then on.
-  const granted = new Set<string>();
-  const answered: string[] = [];
-  let answerWrite = (_grant: number) => {};
-  mockHasPermission.mockImplementation(async (name: string) => (granted.has(name) ? 1 : 0));
-  mockRequestPermission.mockImplementation((name: string) => {
-    answered.push(name);
-    if (name !== FILE_WRITE) {
-      granted.add(name);
-      return Promise.resolve(1);
-    }
-    return new Promise(resolve => {
-      answerWrite = grant => {
-        granted.add(name);
-        resolve(grant);
-      };
-    });
-  });
+  const firmware = firmwareHoldingTheWriteDialog();
   const access = createFileAccess(createRecordingLogger());
 
-  const exporting = access.toWrite();
-  await new Promise(resolve => setTimeout(resolve, 0));
-  expect(answered).toEqual([FILE_WRITE]);
+  const exporting = access.forExports();
+  await firmware.isUp;
+  expect(firmware.asked).toEqual([FILE_WRITE]);
 
   const canvases = access.forCanvases();
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await Promise.resolve();
   // Still only the write dialog: read waits for it rather than opening alongside.
-  expect(answered).toEqual([FILE_WRITE]);
+  expect(firmware.asked).toEqual([FILE_WRITE]);
 
-  answerWrite(1);
+  firmware.answer(1);
   await Promise.all([exporting, canvases]);
-  expect(answered).toEqual([FILE_WRITE, FILE_READ, FILE_DELETE]);
+  expect(firmware.asked).toEqual([FILE_WRITE, FILE_READ, FILE_DELETE]);
 });
 
 test('calls while a request is in flight share it, so each dialog shows once; a call after it asks again', async () => {
