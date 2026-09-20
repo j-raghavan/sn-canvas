@@ -15,9 +15,9 @@
 // wiring.ts), so the user sees each dialog once.
 
 import {PluginManager} from 'sn-plugin-lib';
+import {TAG} from '../diagnostics/log';
 import type {Logger} from '../sdk/types';
 
-const TAG = '[SNCANVAS]';
 
 export const FILE_READ = 'plugin.permission.FILE:READ';
 export const FILE_WRITE = 'plugin.permission.FILE:WRITE';

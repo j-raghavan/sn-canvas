@@ -8,7 +8,9 @@
 import {NativeModules} from 'react-native';
 import type {CanvasStorePort} from '../application/canvasSession';
 import {isCanvasId} from '../domain/canvasLink';
+import {TAG} from '../diagnostics/log';
 import type {Logger} from '../sdk/types';
+import {neverThrows} from './neverThrows';
 
 type PathMethod = 'saveCanvas' | 'saveCanvasAs' | 'holdsCanvas' | 'deleteCanvas' | 'generateThumbnail' | 'exportPdf';
 
@@ -23,23 +25,18 @@ export type NativeCanvasModule = Record<PathMethod, (path: string) => Promise<bo
   setNotePen: (type: number, width: number, color: number) => Promise<boolean>;
 };
 
-const TAG = '[SNCANVAS]';
 
 export function createNativeCanvasStore(
   logger: Logger,
   native: NativeCanvasModule | undefined = (NativeModules as {CanvasModule?: NativeCanvasModule}).CanvasModule,
 ): CanvasStorePort {
-  const invoke = async <T>(method: string, fallback: T, run: (module: NativeCanvasModule) => Promise<T>): Promise<T> => {
+  const attempt = neverThrows(logger);
+  const invoke = <T>(method: string, fallback: T, run: (module: NativeCanvasModule) => Promise<T>): Promise<T> => {
     if (!native) {
       logger.error(`${TAG} ${method}: NativeModules.CanvasModule is missing (is CanvasPackage in MainApplication.kt?)`);
-      return fallback;
+      return Promise.resolve(fallback);
     }
-    try {
-      return await run(native);
-    } catch (error) {
-      logger.warn(`${TAG} ${method} failed: ${String(error)}`);
-      return fallback;
-    }
+    return attempt(method, fallback, () => run(native));
   };
 
   const call = (method: PathMethod, path: string): Promise<boolean> =>

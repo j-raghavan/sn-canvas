@@ -74,7 +74,7 @@ class CanvasCoreTest {
         val link = ElementLink(ElementLink.KIND_NOTE, "/n.note")
         val linked = baseState.elements[0].copy(link = link)
         val elements = listOf(linked, baseState.elements[1])
-        val glyph = CanvasCore.linkGlyphPoint(linked, zoom = 1.0)
+        val glyph = CanvasCore.linkGlyphPoint(linked, elements, zoom = 1.0)
         assertEquals("a", CanvasCore.linkGlyphAt(glyph.x, glyph.y, elements, 1.0, 4.0)?.id)
         // Away from the glyph, and on an element that links nowhere.
         assertNull(CanvasCore.linkGlyphAt(glyph.x + 50, glyph.y, elements, 1.0, 4.0))
@@ -84,8 +84,8 @@ class CanvasCoreTest {
     @Test
     fun `a link glyph keeps its distance from the shape on screen, however far the canvas is zoomed`() {
         val linked = baseState.elements[0].copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
-        val near = CanvasCore.linkGlyphPoint(linked, zoom = 1.0)
-        val zoomedOut = CanvasCore.linkGlyphPoint(linked, zoom = 0.25)
+        val near = CanvasCore.linkGlyphPoint(linked, listOf(linked), zoom = 1.0)
+        val zoomedOut = CanvasCore.linkGlyphPoint(linked, listOf(linked), zoom = 0.25)
         // Four times as far in world units at a quarter of the zoom is the same gap in pixels.
         val corner = linked.x + linked.width
         assertEquals(4 * (near.x - corner), zoomedOut.x - corner, 1e-9)
@@ -96,7 +96,20 @@ class CanvasCoreTest {
         val arrow =
             Element(id = "arr", type = "arrow", startX = 0.0, startY = 0.0, endX = 40.0, endY = 60.0)
                 .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
-        assertEquals(Point(40.0, 60.0), CanvasCore.linkGlyphPoint(arrow, zoom = 1.0))
+        assertEquals(Point(40.0, 60.0), CanvasCore.linkGlyphPoint(arrow, listOf(arrow), zoom = 1.0))
+    }
+
+    @Test
+    fun `a connector bound to a shape carries its glyph where it ends now, not where it once did`() {
+        val arrow =
+            Element(id = "arr", type = "arrow", startX = 0.0, startY = 0.0, endX = 1.0, endY = 1.0, endElementId = "b")
+                .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        val elements = baseState.elements + arrow
+        // Where the arrow actually ends: on the bound shape's edge, as everything else draws it.
+        val (_, end) = CanvasCore.resolveArrowEndpoints(arrow, elements)
+        assertEquals(end, CanvasCore.linkGlyphPoint(arrow, elements, zoom = 1.0))
+        // And the glyph is found there, not at the endpoint the element still carries.
+        assertEquals("arr", CanvasCore.linkGlyphAt(end.x, end.y, elements, 1.0, 4.0)?.id)
     }
 
     @Test

@@ -131,10 +131,12 @@ object CanvasCore {
      */
     fun linkGlyphPoint(
         element: Element,
+        elements: List<Element>,
         zoom: Double,
     ): Point =
         if (element.hasEndpoints()) {
-            Point(element.endX ?: 0.0, element.endY ?: 0.0)
+            // Where it ends now: an end bound to a shape moves with it, and the endpoint the element carries is stale.
+            resolveArrowEndpoints(element, elements).second
         } else {
             element.toWorld(element.x + element.width + LINK_GLYPH_OFFSET_PX / zoom, element.y - LINK_GLYPH_OFFSET_PX / zoom)
         }
@@ -155,7 +157,7 @@ object CanvasCore {
             if (element.link == null) {
                 false
             } else {
-                val glyph = linkGlyphPoint(element, zoom)
+                val glyph = linkGlyphPoint(element, elements, zoom)
                 distance(worldX, worldY, glyph.x, glyph.y) <= toleranceWorld
             }
         }

@@ -188,7 +188,7 @@ internal class CanvasRenderer(
         transform: ViewTransform,
     ) {
         for (element in elements.filter { it.link != null }) {
-            val at = CanvasCore.linkGlyphPoint(element, transform.zoom)
+            val at = CanvasCore.linkGlyphPoint(element, elements, transform.zoom)
             val x = transform.screenX(at.x).toFloat()
             val y = transform.screenY(at.y).toFloat()
             canvas.drawCircle(x, y, LINK_GLYPH_RADIUS_PX, handlePaint)

@@ -14,6 +14,9 @@
 // Errors and actionable warnings should keep using console.warn /
 // console.error directly.
 
+/** What every line Canvas logs starts with, so its lines stand out in a logcat full of the firmware's own. */
+export const TAG = '[SNCANVAS]';
+
 export const debugLog = (...args: unknown[]): void => {
   if (typeof __DEV__ !== 'undefined' && __DEV__ === false) {
     return;
