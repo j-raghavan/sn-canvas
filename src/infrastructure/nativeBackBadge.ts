@@ -6,7 +6,9 @@
 
 import {NativeEventEmitter, NativeModules, type NativeModule} from 'react-native';
 import type {BackBadgePort, BackBadgeTaps} from '../application/canvasSession';
+import {TAG} from '../diagnostics/log';
 import type {Logger} from '../sdk/types';
+import {neverThrows} from './neverThrows';
 
 export type NativeBackBadgeModule = NativeModule & {
   show: (label: string, notePath: string) => void;
@@ -22,21 +24,14 @@ export function createNativeBackBadge(
   native: NativeBackBadgeModule | undefined = (NativeModules as {BackBadge?: NativeBackBadgeModule} | undefined)?.BackBadge,
 ): BackBadgePort & BackBadgeTaps {
   if (!native) {
-    logger.warn('[SNCANVAS] NativeModules.BackBadge is missing; no way back from a followed link but the sidebar');
+    logger.warn(`${TAG} NativeModules.BackBadge is missing; no way back from a followed link but the sidebar`);
     return {show: () => undefined, hide: () => undefined, arriveOver: async () => false, onTapped: () => () => undefined};
   }
   const emitter = new NativeEventEmitter(native);
   return {
     show: (label, notePath) => native.show(label, notePath),
     hide: () => native.hide(),
-    arriveOver: async notePath => {
-      try {
-        return (await native.arriveOver(notePath)) === true;
-      } catch (error) {
-        logger.warn(`[SNCANVAS] arriveOver failed: ${String(error)}`);
-        return false;
-      }
-    },
+    arriveOver: notePath => neverThrows(logger)('arriveOver', false, async () => (await native.arriveOver(notePath)) === true),
     onTapped: listener => {
       const subscription = emitter.addListener(BACK_BADGE_TAPPED, listener);
       return () => subscription.remove();

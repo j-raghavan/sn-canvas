@@ -8,9 +8,10 @@
 import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
 import type {HostPort, NotePen} from '../application/canvasSession';
 import {elementSummary, notePageOf, picturesOf} from '../domain/canvasIndex';
+import {TAG} from '../diagnostics/log';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
+import {neverThrows} from './neverThrows';
 
-const TAG = '[SNCANVAS]';
 
 // RattaFileSelector.selectFile's selectType for picking a single file.
 const SINGLE_FILE = 1;
@@ -22,14 +23,7 @@ const isNotePen = (pen: unknown): pen is NotePen =>
   (['type', 'width', 'color'] as const).every(code => Number.isFinite((pen as Record<string, unknown>)[code]));
 
 export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<boolean>): HostPort {
-  const attempt = async <T>(call: string, fallback: T, run: () => Promise<T>): Promise<T> => {
-    try {
-      return await run();
-    } catch (error) {
-      logger.warn(`${TAG} ${call} failed: ${String(error)}`);
-      return fallback;
-    }
-  };
+  const attempt = neverThrows(logger);
 
   const listOf = (response: unknown): unknown[] => {
     const items = resultOf<unknown[]>(response);
