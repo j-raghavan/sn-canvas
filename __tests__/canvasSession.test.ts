@@ -807,6 +807,23 @@ describe('the trail back along followed links', () => {
     expect(session.backTo()).toBeNull();
   });
 
+  // From the badge, Canvas is down: there is no view to save from or load into, and the canvas the step names
+  // is the one already shown. Switching to it anyway only waits out the load's five seconds for a view that
+  // cannot arrive, which is the whole of the delay in coming back.
+  test('a step back from the badge does not save or load the canvas it is already showing', async () => {
+    const {store, host, badge, session} = await walkedToC();
+    store.emptyView();
+    store.refused.length = 0;
+    host.steps.length = 0;
+    await session.goBack();
+    expect(store.refused).toEqual([]);
+    expect(store.shown).toBe('');
+    // The step back itself still happens: the note reopens and the trail moves on.
+    expect(host.steps).toEqual(['close', `open ${B.notePath}`]);
+    expect(badge.arrivals).toEqual([B.notePath]);
+    expect(session.backTo()).toMatchObject({notePath: A.notePath});
+  });
+
   test('a note that does not come back in time leaves Canvas down and the step in place, and says so', async () => {
     const {host, badge, logger, session} = await walkedToC();
     badge.arrives = false;
