@@ -41,7 +41,9 @@ import {createHostSdk} from '../src/infrastructure/hostSdk';
 import {createRecordingLogger} from './helpers/fakePorts';
 
 const failure = () => Promise.reject(new Error('host said no'));
-const requestAccess = jest.fn().mockResolvedValue(true);
+const forCanvases = jest.fn().mockResolvedValue(true);
+const toWrite = jest.fn().mockResolvedValue(true);
+const requestAccess = {forCanvases, toWrite};
 
 test('pluginDir is the host path, or null when it has none or the call fails', async () => {
   const logger = createRecordingLogger();
@@ -57,7 +59,10 @@ test('pluginDir is the host path, or null when it has none or the call fails', a
 
 test('requestFileAccess is the shared file-permission request it is given', async () => {
   expect(await createHostSdk(createRecordingLogger(), requestAccess).requestFileAccess()).toBe(true);
-  expect(requestAccess).toHaveBeenCalledTimes(1);
+  // An export asks only to write (#17), which is a different request.
+  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestWriteAccess()).toBe(true);
+  expect(toWrite).toHaveBeenCalled();
+  expect(forCanvases).toHaveBeenCalledTimes(1);
 });
 
 test('lassoedElements unwraps the element list, and is empty for anything else', async () => {

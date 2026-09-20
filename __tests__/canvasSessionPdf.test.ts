@@ -31,10 +31,23 @@ test('the canvas shown is exported to a PDF in EXPORT, named for when it was exp
 
 test('without file write access nothing is exported', async () => {
   const {store, host, logger, session} = setup();
-  host.fileWrite = false;
+  host.fileWriteOnly = false;
   expect(await session.exportPdf()).toBeNull();
   expect(store.exported).toEqual([]);
   expect(logger.lines).toContain('warn [SNCANVAS][PDF] no file write access; nothing exported');
+});
+
+// #17: an export writes a file and nothing else, so it asks to write and nothing else. Asking to
+// delete for it showed a dialog about deleting files, and refused the export when they said no.
+test('an export asks only to write, and goes ahead when deleting was refused', async () => {
+  const {store, host, session} = setup();
+  // Whoever said no to deleting, and so has no canvas folder to keep canvases in.
+  host.fileWrite = false;
+  host.fileWriteOnly = true;
+  expect(await session.exportPdf()).toBe(PDF);
+  expect(store.exported).toEqual([PDF]);
+  expect(host.writeRequests).toBe(1);
+  expect(host.accessRequests).toBe(0);
 });
 
 test('an export the canvas cannot write is reported, and no path comes back', async () => {

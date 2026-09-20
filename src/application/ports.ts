@@ -58,8 +58,10 @@ export type CanvasStorePort = {
 /** What the session needs from the Supernote host. */
 export type HostPort = {
   pluginDir: () => Promise<string | null>;
-  /** Asks for the file permissions Canvas uses, if not granted already; true when it may write and delete in shared storage. */
+  /** Asks for the file permissions keeping canvases needs, if not granted already; true when it may write and delete in shared storage. */
   requestFileAccess: () => Promise<boolean>;
+  /** Asks only to write, which is all putting a PDF in EXPORT needs (#17); true when it may write there. */
+  requestWriteAccess: () => Promise<boolean>;
   /** The pen the note writes with; null when the host can't say. */
   notePen: () => Promise<NotePen | null>;
   /** An image the user picks with the device's picker (FR22), by path; null when they cancel. */

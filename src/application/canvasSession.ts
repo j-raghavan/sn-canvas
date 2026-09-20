@@ -460,7 +460,8 @@ export function createCanvasSession({
   const exportPdf = async (): Promise<string | null> => {
     let exported: string | null = null;
     await serially(async () => {
-      if (!(await host.requestFileAccess())) {
+      // Writing a PDF writes a file and nothing else, so it asks only to write (#17).
+      if (!(await host.requestWriteAccess())) {
         logger.warn(`${TAG}[PDF] no file write access; nothing exported`);
         return;
       }
