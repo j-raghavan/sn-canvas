@@ -87,29 +87,28 @@ class CanvasStyleTest {
 }
 
 /** Finds style-catalog.json above the test's working directory (Gradle's module dir, or an IDE's), and parses it. */
-private fun styleCatalogFixture(): CanvasJson.JsonValue.Obj {
+private fun styleCatalogFixture(): JsonValue.Obj {
     var dir: File? = File(".").absoluteFile
     while (dir != null) {
         val candidate = File(dir, "style-catalog.json")
-        if (candidate.isFile) return CanvasJson.JsonParser(candidate.readText()).parseDocument() as CanvasJson.JsonValue.Obj
+        if (candidate.isFile) return JsonParser(candidate.readText()).parseDocument() as JsonValue.Obj
         dir = dir.parentFile
     }
     error("style-catalog.json not found above ${File(".").absoluteFile}")
 }
 
-// Thin accessors over CanvasJson.JsonValue, for the fixture's own shape only; CanvasJson.kt owns the actual grammar.
-private fun CanvasJson.JsonValue.obj(): CanvasJson.JsonValue.Obj = this as CanvasJson.JsonValue.Obj
+// Thin accessors over JsonValue, for the fixture's own shape only; Json.kt owns the actual grammar.
+private fun JsonValue.obj(): JsonValue.Obj = this as JsonValue.Obj
 
-private fun CanvasJson.JsonValue.str(): String = (this as CanvasJson.JsonValue.Str).value
+private fun JsonValue.str(): String = (this as JsonValue.Str).value
 
-private fun CanvasJson.JsonValue.Obj.array(key: String): List<CanvasJson.JsonValue> =
-    (entries.getValue(key) as CanvasJson.JsonValue.Arr).items
+private fun JsonValue.Obj.array(key: String): List<JsonValue> = (entries.getValue(key) as JsonValue.Arr).items
 
-private fun CanvasJson.JsonValue.Obj.obj(key: String): CanvasJson.JsonValue.Obj = entries.getValue(key) as CanvasJson.JsonValue.Obj
+private fun JsonValue.Obj.obj(key: String): JsonValue.Obj = entries.getValue(key) as JsonValue.Obj
 
-private fun CanvasJson.JsonValue.Obj.string(key: String): String = (entries.getValue(key) as CanvasJson.JsonValue.Str).value
+private fun JsonValue.Obj.string(key: String): String = (entries.getValue(key) as JsonValue.Str).value
 
-private fun CanvasJson.JsonValue.Obj.number(key: String): Double = (entries.getValue(key) as CanvasJson.JsonValue.Num).value
+private fun JsonValue.Obj.number(key: String): Double = (entries.getValue(key) as JsonValue.Num).value
 
 private fun Int.toHexColor(): String = "#" + toString(16).padStart(HEX_COLOR_DIGITS, '0')
 

@@ -86,20 +86,20 @@ class SelectGesturesTest {
         assertEquals(listOf(5.0, 6.0), listOf(moved.x, moved.y))
         val state = controller.state
         assertEquals(
-            controller.fitted(CanvasCore.resizeElement(state, "box", Corner.BOTTOM_RIGHT, 150.0, 150.0), "box"),
+            controller.fitted(ShapeEdits.resizeElement(state, "box", Corner.BOTTOM_RIGHT, 150.0, 150.0), "box"),
             edited(CanvasGesture.Resize(Corner.BOTTOM_RIGHT), "box", Point(150.0, 150.0)),
         )
         assertEquals(
-            CanvasCore.rotateElement(state, "box", Point(150.0, 50.0)),
+            ShapeEdits.rotateElement(state, "box", Point(150.0, 50.0)),
             edited(CanvasGesture.Rotate, "box", Point(150.0, 50.0)),
         )
         assertEquals(
-            CanvasCore.moveEndpoint(state, "line", Endpoint.END, Point(420.0, 30.0), null),
+            ShapeEdits.moveEndpoint(state, "line", Endpoint.END, Point(420.0, 30.0), null),
             edited(CanvasGesture.DragEndpoint(Endpoint.END), "line", Point(420.0, 30.0)),
         )
         // Dropped on the box, the line's end binds to it.
         assertEquals(
-            CanvasCore.moveEndpoint(state, "line", Endpoint.END, Point(50.0, 50.0), "box"),
+            ShapeEdits.moveEndpoint(state, "line", Endpoint.END, Point(50.0, 50.0), "box"),
             edited(CanvasGesture.DragEndpoint(Endpoint.END), "line", Point(50.0, 50.0)),
         )
         assertNull(edited(CanvasGesture.Pan, "box", Point(0.0, 0.0)))

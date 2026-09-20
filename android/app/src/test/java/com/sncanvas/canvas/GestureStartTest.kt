@@ -93,7 +93,8 @@ class GestureStartTest {
             Element(id = "box", type = "rectangle", width = 40.0, height = 40.0)
                 .copy(link = ElementLink(ElementLink.KIND_NOTE, "/n.note"))
         controller.insert(linked)
-        val glyph = CanvasCore.linkGlyphPoint(linked, 1.0)
+        // Where the glyph sits for a 40x40 box at the origin, at zoom 1: off its top-right corner.
+        val glyph = Point(40.0 + CanvasCore.LINK_GLYPH_OFFSET_PX, -CanvasCore.LINK_GLYPH_OFFSET_PX)
         assertEquals(CanvasGesture.FollowLink("box"), startAt(finger, glyph))
         // Away from the glyph it is an ordinary touch, and a drawing tool never gives its stroke up to one.
         assertEquals(CanvasGesture.Pan, startAt(finger, Point(500.0, 500.0)))
