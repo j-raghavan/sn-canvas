@@ -26,7 +26,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 - **Rectangle, ellipse, line and arrow.** Arrows attach to shapes and follow them when a shape moves.
 - **Eraser.** Tap or drag over items to delete them as one undoable step. The pen's eraser end works with any tool. Tap the eraser again, once it is the tool, for **Clear canvas**: the whole canvas at once, after a confirmation, and Undo brings it back.
 - **Text boxes and sticky notes**, typed with the on-screen keyboard.
-- **Tables.** Drag out a grid of up to 12 rows × 8 columns and tap a cell to type. Add rows and columns later, each new row as tall as the rest, and remove the row or column you are in: tap a cell, and **Remove this row** or **Remove this column** takes that one out, not just the last. Corner brackets mark the cell they will act on.
+- **Tables.** Drag out a grid of up to 12 rows × 8 columns and tap a cell to type. Add rows and columns later, each new row as tall as the one above it, and remove the row or column you are in: tap a cell, and **Remove this row** or **Remove this column** takes that one out, not just the last. Corner brackets mark the cell they will act on.
 - **Images.** Insert a PNG, JPG or WebP from your files, then move, resize (keeping proportions) and rotate it. The image is copied into the canvas, so the canvas never depends on the original file.
 
 ### Editing
