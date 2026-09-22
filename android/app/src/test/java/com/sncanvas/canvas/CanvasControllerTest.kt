@@ -284,6 +284,27 @@ class CanvasControllerTest {
         assertEquals(sent + 1, recorder.uiStates.size)
     }
 
+    // show() promises a step leaves nothing selected, and nothing held it to that: with the selection
+    // left in place, an element an undo has just taken away stays selected and the action bar goes on
+    // offering to act on it.
+    @Test
+    fun `an undo or a redo leaves nothing selected`() {
+        controller.load(listOf(box))
+        controller.select("box")
+        controller.setStyle("color", "red")
+        assertEquals(setOf("box"), controller.selectedIds)
+
+        controller.undo()
+        assertEquals(emptySet<String>(), controller.selectedIds)
+        assertFalse(ui.hasSelection)
+        assertEquals(0, ui.selectionCount)
+
+        controller.select("box")
+        controller.redo()
+        assertEquals(emptySet<String>(), controller.selectedIds)
+        assertFalse(ui.hasSelection)
+    }
+
     @Test
     fun `undo and redo with nothing to step to do nothing`() {
         controller.undo()
