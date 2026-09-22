@@ -273,6 +273,14 @@ class CanvasControllerTest {
                 .single()
                 .table
         assertEquals(listOf(3, 3), listOf(grown?.rows, grown?.cols))
+        // Removing waits until a cell says which row or column is meant (#53), so with none tapped
+        // the table is left as it is.
+        controller.removeTableRow()
+        controller.removeTableColumn()
+        assertEquals(listOf(3, 3), listOf(grown?.rows, grown?.cols))
+
+        controller.beginEdit(CanvasController.EditTarget("tb", 0))
+        controller.finishEdit("")
         controller.removeTableRow()
         controller.removeTableColumn()
         assertEquals(
@@ -289,7 +297,7 @@ class CanvasControllerTest {
         val grid = TableData(3, 2, listOf("a1", "a2", "b1", "b2", "c1", "c2"), listOf(48.0, 48.0, 48.0))
         controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 144.0)).copy(table = grid)))
         controller.select("tb")
-        // Nothing tapped yet, so nothing says which row: the last one goes, as it always did.
+        // Nothing tapped yet, so nothing says which row and nothing is taken out.
         assertNull(controller.currentCell)
 
         // Tap the cell "b1", index 2, which is row 1 and column 0.

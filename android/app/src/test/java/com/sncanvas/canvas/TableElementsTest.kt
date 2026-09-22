@@ -110,37 +110,37 @@ class TableElementsTest {
         assertEquals(listOf(48.0, 90.0, 48.0), withoutFirstColumn?.rowMinHeights)
     }
 
+    // A destructive edit given a row the table has not got leaves it alone rather than taking out a
+    // different one, which is the convention this file states for input it cannot honour.
     @Test
-    fun `a row or column asked for past the end takes out the last one instead`() {
+    fun `a row or column the table has not got is left alone`() {
         val grid = TableData(2, 2, listOf("a1", "a2", "b1", "b2"), listOf(48.0, 48.0))
         val two = stateOf(table2x2.copy(table = grid))
         assertEquals(
-            listOf("a1", "a2"),
+            grid,
             TableEdits
                 .removeRow(two, "tb", 9, fakeMeasurer)
                 .elements
                 .single()
-                .table
-                ?.cells,
+                .table,
         )
         assertEquals(
-            listOf("a1", "b1"),
+            grid,
             TableEdits
-                .removeColumn(two, "tb", 9, fakeMeasurer)
+                .removeColumn(two, "tb", -1, fakeMeasurer)
                 .elements
                 .single()
-                .table
-                ?.cells,
+                .table,
         )
     }
 
     @Test
-    fun `removing a row or a column drops the last one, and always leaves one`() {
-        val withoutRow = TableEdits.removeRow(stateOf(tallFirstCell), "tb", null, fakeMeasurer)
-        val fewer = TableEdits.removeColumn(withoutRow, "tb", null, fakeMeasurer)
+    fun `removing rows and columns always leaves one of each`() {
+        val withoutRow = TableEdits.removeRow(stateOf(tallFirstCell), "tb", 1, fakeMeasurer)
+        val fewer = TableEdits.removeColumn(withoutRow, "tb", 1, fakeMeasurer)
         assertEquals(TableData(1, 1, listOf("x".repeat(64))), fewer.elements.single().table)
         assertEquals(160.0, fewer.elements.single().width, 1e-9)
-        val single = TableEdits.removeColumn(TableEdits.removeRow(fewer, "tb", null, fakeMeasurer), "tb", null, fakeMeasurer)
+        val single = TableEdits.removeColumn(TableEdits.removeRow(fewer, "tb", 0, fakeMeasurer), "tb", 0, fakeMeasurer)
         assertEquals(TableData(1, 1, listOf("x".repeat(64))), single.elements.single().table)
     }
 

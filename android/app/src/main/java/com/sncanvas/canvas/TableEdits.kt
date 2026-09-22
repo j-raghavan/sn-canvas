@@ -37,16 +37,16 @@ object TableEdits {
             }
         }
 
-    /** Table [id] without row [row], which is the row the current cell is in (#53); the last row when it has none. */
+    /** Table [id] without row [row], the row the current cell is in (#53). A row it has not got is left alone. */
     fun removeRow(
         state: CanvasState,
         id: String,
-        row: Int?,
+        row: Int,
         measurer: TextMeasurer,
     ): CanvasState =
         update(state, id, measurer) { t ->
-            val at = (row ?: t.rows - 1).coerceIn(0, t.rows - 1)
-            if (t.rows <= 1) {
+            val at = row
+            if (t.rows <= 1 || at !in 0 until t.rows) {
                 t
             } else {
                 t.copy(
@@ -66,16 +66,16 @@ object TableEdits {
             if (t.cols >= TableElements.MAX_COLS) t else t.copy(cols = t.cols + 1, cells = t.cells.chunked(t.cols).flatMap { it + "" })
         }
 
-    /** Table [id] without column [col], which is the column the current cell is in (#53); the last when it has none. */
+    /** Table [id] without column [col], the column the current cell is in (#53). A column it has not got is left alone. */
     fun removeColumn(
         state: CanvasState,
         id: String,
-        col: Int?,
+        col: Int,
         measurer: TextMeasurer,
     ): CanvasState =
         update(state, id, measurer) { t ->
-            val at = (col ?: t.cols - 1).coerceIn(0, t.cols - 1)
-            if (t.cols <= 1) {
+            val at = col
+            if (t.cols <= 1 || at !in 0 until t.cols) {
                 t
             } else {
                 t.copy(cols = t.cols - 1, cells = t.cells.chunked(t.cols).flatMap { row -> row.filterIndexed { i, _ -> i != at } })

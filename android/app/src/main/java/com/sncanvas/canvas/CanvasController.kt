@@ -302,11 +302,17 @@ class CanvasController(
 
     private val currentColumn: Int? get() = tappedIn?.let { (table, index) -> index % table.cols }
 
-    fun removeTableRow() = editSelected { TableEdits.removeRow(state, it, currentRow, measurer) }
+    fun removeTableRow() {
+        val row = currentRow ?: return
+        editSelected { TableEdits.removeRow(state, it, row, measurer) }
+    }
 
     fun addTableColumn() = editSelected { TableEdits.addColumn(state, it, measurer) }
 
-    fun removeTableColumn() = editSelected { TableEdits.removeColumn(state, it, currentColumn, measurer) }
+    fun removeTableColumn() {
+        val column = currentColumn ?: return
+        editSelected { TableEdits.removeColumn(state, it, column, measurer) }
+    }
 
     /** Sends the UI state again even if it hasn't changed, for a view that has just attached. */
     fun republish() {
