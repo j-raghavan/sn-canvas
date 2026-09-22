@@ -25,6 +25,13 @@ class CanvasController(
         fun onEditText(target: EditTarget)
     }
 
+    /** A table cell that was tapped: which table, and where in it (#53). */
+    data class TableCell(
+        val elementId: String,
+        val row: Int,
+        val column: Int,
+    )
+
     /** What the text editor is editing: a text box or sticky note, or one cell of a table. */
     data class EditTarget(
         val elementId: String,
@@ -41,9 +48,11 @@ class CanvasController(
     var editing: EditTarget? = null
         private set
 
-    // The table cell last tapped, with the table it belongs to, so it is forgotten as soon as
-    // anything else is selected rather than pointing into a table nobody is looking at.
-    private var tappedCell: Pair<String, Int>? = null
+    // The table cell last tapped, kept as the row and column it was in rather than its place in a
+    // flat list, because a column added or taken out since would turn that place into a different
+    // row (#53). Forgotten whenever the selection moves, the elements are replaced, or the row or
+    // column it named goes, so it can only ever name a cell tapped while this table was selected.
+    private var tappedCell: TableCell? = null
 
     /** The style new elements get (FR19); the pencil's live stroke draws in it too. */
     var currentStyle = ShapeStyle.DEFAULT
@@ -60,15 +69,15 @@ class CanvasController(
      * on (#53). Null unless that same table is still the one selected and the cell is still in it,
      * so a table that has shrunk since never leaves it pointing past the end.
      */
-    val currentCell: Int? get() = tappedIn?.second
+    val currentCell: TableCell? get() = tappedIn
 
-    // The selected table and the cell tapped in it, when that is still the table selected and the
-    // cell is still in it. One place for both guards, so the row and the column cannot disagree.
-    private val tappedIn: Pair<TableData, Int>?
+    // The cell tapped, when the table it was tapped in is still the one selected and still has that
+    // row and column. One place for the guards, so the row and the column cannot disagree.
+    private val tappedIn: TableCell?
         get() {
-            val (id, index) = tappedCell ?: return null
-            val table = selected?.takeIf { it.id == id }?.table ?: return null
-            return if (index < table.rows * table.cols) table to index else null
+            val cell = tappedCell ?: return null
+            val table = selected?.takeIf { it.id == cell.elementId }?.table ?: return null
+            return cell.takeIf { it.row < table.rows && it.column < table.cols }
         }
 
     /** Every selected element, in the order they are drawn. */
@@ -89,12 +98,14 @@ class CanvasController(
 
     /** Selects one element, or nothing; a grouped one brings its group with it. */
     fun select(id: String?) {
+        tappedCell = null
         selectedIds = withGroups(setOfNotNull(id))
         changed()
     }
 
     /** Selects every element in [ids]: what a selection dragged out over them takes (FR7), groups whole. */
     fun selectAll(ids: Set<String>) {
+        tappedCell = null
         selectedIds = withGroups(ids)
         changed()
     }
@@ -189,7 +200,15 @@ class CanvasController(
 
     fun beginEdit(target: EditTarget) {
         editing = target
-        if (target.cellIndex != null) tappedCell = target.elementId to target.cellIndex
+        // Resolved against the columns the table has now: the index means nothing once they change.
+        val cols =
+            state.elements
+                .find { it.id == target.elementId }
+                ?.table
+                ?.cols
+        if (target.cellIndex != null && cols != null) {
+            tappedCell = TableCell(target.elementId, target.cellIndex / cols, target.cellIndex % cols)
+        }
         selectedIds = setOf(target.elementId)
         changed()
         listener.onEditText(target)
@@ -297,21 +316,19 @@ class CanvasController(
 
     fun addTableRow() = editSelected { TableEdits.addRow(state, it, measurer) }
 
-    /** The row the tapped cell is in, and the column, or null when no cell says which (#53). */
-    private val currentRow: Int? get() = tappedIn?.let { (table, index) -> index / table.cols }
-
-    private val currentColumn: Int? get() = tappedIn?.let { (table, index) -> index % table.cols }
-
     fun removeTableRow() {
-        val row = currentRow ?: return
+        val row = currentCell?.row ?: return
         editSelected { TableEdits.removeRow(state, it, row, measurer) }
+        // The cell the user pointed at has gone with its row; whatever slid into its place is not it.
+        tappedCell = null
     }
 
     fun addTableColumn() = editSelected { TableEdits.addColumn(state, it, measurer) }
 
     fun removeTableColumn() {
-        val column = currentColumn ?: return
+        val column = currentCell?.column ?: return
         editSelected { TableEdits.removeColumn(state, it, column, measurer) }
+        tappedCell = null
     }
 
     /** Sends the UI state again even if it hasn't changed, for a view that has just attached. */
@@ -329,6 +346,7 @@ class CanvasController(
     /** Shows [elements] as they are (a load, or an undo/redo step), clearing the selection. */
     private fun show(elements: List<Element>) {
         state = state.copy(elements = elements)
+        tappedCell = null
         selectedIds = emptySet()
         changed()
     }

@@ -204,4 +204,27 @@ class GestureCommitTest {
         assertEquals("t", controller.editing?.elementId)
         assertEquals(0, controller.editing?.cellIndex)
     }
+
+    // #53: which row and column the tap landed in is what Remove this row and Remove this column act on.
+    @Test
+    fun `a tap on a cell says which row and column it is in, and a tap off the table says nothing`() {
+        // Two rows of two, each cell 160 wide and 48 tall.
+        controller.insert(TableElements.create("t", origin, Point(320.0, 96.0)))
+        controller.select("t")
+        controller.finishEdit("")
+
+        // The far cell: the second column of the second row.
+        commits.commit(CanvasGesture.Move(), origin, Point(200.0, 70.0), 0.0)
+        assertEquals(3, controller.editing?.cellIndex)
+        controller.finishEdit("")
+        assertEquals(1, controller.currentCell?.row)
+        assertEquals(1, controller.currentCell?.column)
+
+        // Past the end of the table, where there is no cell to name.
+        controller.select("t")
+        assertNull(controller.currentCell?.row)
+        commits.commit(CanvasGesture.Move(), origin, Point(900.0, 900.0), 0.0)
+        assertNull(controller.editing)
+        assertNull(controller.currentCell?.row)
+    }
 }
