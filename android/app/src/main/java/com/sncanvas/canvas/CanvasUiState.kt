@@ -23,7 +23,8 @@ data class CanvasUiState(
     /** Whether the one selected element links somewhere, so the link can be taken off it. */
     val hasLink: Boolean = false,
     /** Whether a cell of the selected table was tapped, so Remove row and Remove column know which (#53). */
-    val hasTableCell: Boolean = false,
+    val canRemoveTableRow: Boolean = false,
+    val canRemoveTableColumn: Boolean = false,
 ) {
     fun toPayload(): Map<String, Any> =
         mapOf(
@@ -34,7 +35,8 @@ data class CanvasUiState(
             "selectionCount" to selectionCount,
             "canUngroup" to canUngroup,
             "hasLink" to hasLink,
-            "hasTableCell" to hasTableCell,
+            "canRemoveTableRow" to canRemoveTableRow,
+            "canRemoveTableColumn" to canRemoveTableColumn,
             "selectedType" to selectedType.orEmpty(),
             "style" to
                 mapOf(

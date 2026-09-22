@@ -96,8 +96,10 @@ type MenuItem = {
   needsContent?: boolean;
   /** Listed only while a table is selected (FR24). */
   tableOnly?: boolean;
-  /** Greyed out until a cell has been tapped, which is what says which row or column to take out (#53). */
-  needsTableCell?: boolean;
+  /** Greyed out until a cell has been tapped and the table has a row it can spare (#53). */
+  needsRemovableRow?: boolean;
+  /** Greyed out until a cell has been tapped and the table has a column it can spare (#53). */
+  needsRemovableColumn?: boolean;
 };
 
 const MENU: readonly MenuItem[] = [
@@ -105,8 +107,8 @@ const MENU: readonly MenuItem[] = [
   {action: 'sendToBack', label: 'Send to back', needsSelection: true},
   {action: 'tableAddRow', label: 'Add row', tableOnly: true},
   {action: 'tableAddColumn', label: 'Add column', tableOnly: true},
-  {action: 'tableRemoveRow', label: 'Remove this row', tableOnly: true, needsTableCell: true},
-  {action: 'tableRemoveColumn', label: 'Remove this column', tableOnly: true, needsTableCell: true},
+  {action: 'tableRemoveRow', label: 'Remove this row', tableOnly: true, needsRemovableRow: true},
+  {action: 'tableRemoveColumn', label: 'Remove this column', tableOnly: true, needsRemovableColumn: true},
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},
@@ -169,7 +171,8 @@ export default function ActionBar({
             const enabled =
               (!item.needsSelection || ui.hasSelection) &&
               (!item.needsContent || ui.hasContent) &&
-              (!item.needsTableCell || ui.hasTableCell);
+              (!item.needsRemovableRow || ui.canRemoveTableRow) &&
+              (!item.needsRemovableColumn || ui.canRemoveTableColumn);
             return (
               <Pressable
                 key={item.action}

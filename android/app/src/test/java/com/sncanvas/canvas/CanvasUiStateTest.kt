@@ -19,7 +19,8 @@ class CanvasUiStateTest {
                 "selectionCount" to 1,
                 "canUngroup" to false,
                 "hasLink" to false,
-                "hasTableCell" to true,
+                "canRemoveTableRow" to true,
+                "canRemoveTableColumn" to true,
                 "selectedType" to "table",
                 "style" to styleIds,
             ),
@@ -31,7 +32,8 @@ class CanvasUiStateTest {
                 selectedType = "table",
                 hasContent = true,
                 selectionCount = 1,
-                hasTableCell = true,
+                canRemoveTableRow = true,
+                canRemoveTableColumn = true,
             ).toPayload(),
         )
     }

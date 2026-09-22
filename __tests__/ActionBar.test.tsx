@@ -104,7 +104,12 @@ test('removing a row or column waits until a cell says which one', () => {
   // Adding never needed one, and still does not.
   expect(noCell.isDisabled('canvas-menu-tableAddRow')).toBe(false);
 
-  const withCell = renderBar({hasSelection: true, selectedType: 'table', hasTableCell: true});
+  const withCell = renderBar({
+    hasSelection: true,
+    selectedType: 'table',
+    canRemoveTableRow: true,
+    canRemoveTableColumn: true,
+  });
   withCell.press('canvas-more');
   expect([withCell.isDisabled('canvas-menu-tableRemoveRow'), withCell.isDisabled('canvas-menu-tableRemoveColumn')]).toEqual([
     false,
@@ -112,6 +117,14 @@ test('removing a row or column waits until a cell says which one', () => {
   ]);
   withCell.press('canvas-menu-tableRemoveRow');
   expect(withCell.onCommand).toHaveBeenCalledWith('tableRemoveRow');
+
+  // The two are gated apart: a table down to one row can still lose a column.
+  const lastRow = renderBar({hasSelection: true, selectedType: 'table', canRemoveTableColumn: true});
+  lastRow.press('canvas-more');
+  expect([lastRow.isDisabled('canvas-menu-tableRemoveRow'), lastRow.isDisabled('canvas-menu-tableRemoveColumn')]).toEqual([
+    true,
+    false,
+  ]);
 });
 
 test('Group and Ungroup sit in the bar beside delete and duplicate, greyed out until they apply', () => {

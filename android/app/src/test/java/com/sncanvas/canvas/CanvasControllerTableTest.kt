@@ -2,6 +2,7 @@ package com.sncanvas.canvas
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -104,13 +105,46 @@ class CanvasControllerTableTest {
     @Test
     fun `the tapped cell is forgotten once the table has shrunk past it`() {
         val grid = TableData(2, 2, listOf("a1", "a2", "b1", "b2"), listOf(48.0, 48.0))
-        controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 96.0)).copy(table = grid)))
-        // The last cell, which the row it is in is about to take with it.
+        val table = TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 96.0)).copy(table = grid)
+        controller.load(listOf(table))
+        // The last cell of the table: the far corner, so either side shrinking is enough to lose it.
         controller.beginEdit(CanvasController.EditTarget("tb", 3))
         controller.finishEdit("b2")
         assertEquals(1, controller.currentCell?.row)
-        controller.removeTableRow()
-        assertNull(controller.currentCell?.row)
+        assertEquals(1, controller.currentCell?.column)
+
+        // Shrunk by a commit rather than by Remove this row, which lets the cell go itself: any finished
+        // gesture can leave a table smaller, so the cell is checked against the table as it is now.
+        // A column short, with its row still there, so the column alone has to be enough.
+        controller.commit(listOf(table.copy(table = TableData(2, 1, listOf("a1", "b1"), listOf(48.0, 48.0)))))
+        assertNull(controller.currentCell)
+
+        // And a row short, with its column still there.
+        controller.commit(listOf(table.copy(table = TableData(1, 2, listOf("a1", "a2"), listOf(48.0)))))
+        assertNull(controller.currentCell)
+    }
+
+    // Selecting something lets the cell go on the way in, but a command that takes the selection for
+    // itself does not, so which table the cell was in has to be checked and not assumed.
+    @Test
+    fun `the tapped cell is forgotten when an inserted image takes the selection`() {
+        controller.load(listOf(table))
+        controller.beginEdit(CanvasController.EditTarget("tb", 1))
+        assertTrue(ui.canRemoveTableRow)
+        controller.insertImage(ImageData("img-1.png", 100, 50), WorldRect(0.0, 0.0, 1000.0, 800.0))
+        assertNull(controller.currentCell)
+        assertFalse(ui.canRemoveTableRow)
+    }
+
+    // Nothing is selected at all once the table has gone, so there is no table to check the cell against.
+    @Test
+    fun `the tapped cell is forgotten when the table it was in is deleted`() {
+        controller.load(listOf(table))
+        controller.beginEdit(CanvasController.EditTarget("tb", 1))
+        assertTrue(ui.canRemoveTableRow)
+        controller.deleteSelected()
+        assertNull(controller.currentCell)
+        assertFalse(ui.canRemoveTableRow)
     }
 
     // The one wire the feature ships on: without this the menu items stay greyed out on the device
@@ -119,11 +153,11 @@ class CanvasControllerTableTest {
     fun `the action bar is told when a cell has been tapped, and when it is not`() {
         controller.load(listOf(table))
         controller.select("tb")
-        assertFalse(ui.hasTableCell)
+        assertFalse(ui.canRemoveTableRow)
         controller.beginEdit(CanvasController.EditTarget("tb", 1))
-        assertTrue(ui.hasTableCell)
+        assertTrue(ui.canRemoveTableRow)
         controller.select(null)
-        assertFalse(ui.hasTableCell)
+        assertFalse(ui.canRemoveTableRow)
     }
 
     @Test
@@ -217,5 +251,76 @@ class CanvasControllerTableTest {
         assertEquals(0, controller.currentCell?.row)
         controller.select("box")
         assertNull(controller.currentCell?.row)
+    }
+
+    // The menu items are enabled off the UI state, and a removal published before it let the cell go,
+    // so Remove this row stayed black on a cell that had just gone and then did nothing when tapped (#53).
+    @Test
+    fun `the action bar is told the cell has gone as soon as its row or column is removed`() {
+        controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 144.0))))
+        // The first cell of three rows, so a row is left after it that the stale cell would still fit in.
+        controller.beginEdit(CanvasController.EditTarget("tb", 0))
+        assertTrue(ui.canRemoveTableRow)
+        controller.removeTableRow()
+        assertFalse(ui.canRemoveTableRow)
+
+        controller.beginEdit(CanvasController.EditTarget("tb", 0))
+        assertTrue(ui.canRemoveTableRow)
+        controller.removeTableColumn()
+        assertFalse(ui.canRemoveTableRow)
+    }
+
+    // A table down to its last row cannot lose another, so the item is greyed out rather than taking a
+    // press and doing nothing. Rows and columns are counted apart, so the column can still go (#53).
+    @Test
+    fun `a table down to its last row still offers to remove a column, but not a row`() {
+        val oneRow =
+            TableElements
+                .create("tb", Point(0.0, 0.0), Point(320.0, 48.0))
+                .copy(table = TableData(1, 2, listOf("a1", "a2"), listOf(48.0)))
+        controller.load(listOf(oneRow))
+        controller.beginEdit(CanvasController.EditTarget("tb", 0))
+        assertFalse(ui.canRemoveTableRow)
+        assertTrue(ui.canRemoveTableColumn)
+
+        // Pressed anyway it changes nothing, and leaves no step to undo for a change that never happened.
+        controller.removeTableRow()
+        assertEquals(
+            1,
+            controller.state.elements
+                .single()
+                .table
+                ?.rows,
+        )
+        assertFalse(ui.canUndo)
+        // The cell is still marked, so the column it is in can still go.
+        assertTrue(ui.canRemoveTableColumn)
+
+        controller.removeTableColumn()
+        assertEquals(
+            1,
+            controller.state.elements
+                .single()
+                .table
+                ?.cols,
+        )
+        assertTrue(ui.canUndo)
+        assertFalse(ui.canRemoveTableColumn)
+    }
+
+    // Duplicating a table leaves the copy selected, and the copy is a table of the same size, so
+    // without checking which table the cell was tapped in the marker and the commands would move
+    // onto the copy on their own and take a row out of it that nobody pointed at (#53).
+    @Test
+    fun `the tapped cell does not follow a duplicate of its table`() {
+        controller.load(listOf(table))
+        controller.beginEdit(CanvasController.EditTarget("tb", 1))
+        assertTrue(ui.canRemoveTableRow)
+        controller.duplicateSelected(8.0)
+        // The copy is the selection now, and it is a table the same shape as the one the cell was in.
+        assertNotEquals("tb", controller.selected?.id)
+        assertEquals(2, controller.selected?.table?.rows)
+        assertNull(controller.currentCell)
+        assertFalse(ui.canRemoveTableRow)
     }
 }
