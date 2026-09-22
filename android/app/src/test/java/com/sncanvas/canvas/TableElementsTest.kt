@@ -44,6 +44,17 @@ class TableElementsTest {
         assertEquals(WorldRect(1.0, 2.0, 4.0, 6.0), TableElements.cellRect(rect, 0, fakeMeasurer))
     }
 
+    // The view draws and hit-tests against a live frame, so the index it holds can be an edit out of
+    // date. A cell the table has not got falls back to the whole element, the way a non-table does,
+    // rather than throwing on the row lookup part way through the draw (#53).
+    @Test
+    fun `a cell the table has not got gives the whole element back, and does not throw`() {
+        val whole = WorldRect(0.0, 0.0, 320.0, tallFirstCell.height)
+        assertEquals(whole, TableElements.cellRect(tallFirstCell, 4, fakeMeasurer))
+        assertEquals(whole, TableElements.cellRect(tallFirstCell, 99, fakeMeasurer))
+        assertEquals(whole, TableElements.cellRect(tallFirstCell, -1, fakeMeasurer))
+    }
+
     @Test
     fun `cellAt finds the cell under a point, and nothing outside the table`() {
         assertEquals(3, TableElements.cellAt(tallFirstCell, Point(170.0, 110.0), fakeMeasurer))

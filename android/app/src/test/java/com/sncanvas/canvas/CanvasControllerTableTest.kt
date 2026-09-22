@@ -62,7 +62,14 @@ class CanvasControllerTableTest {
         // the table is left as it is.
         controller.removeTableRow()
         controller.removeTableColumn()
-        assertEquals(listOf(3, 3), listOf(grown?.rows, grown?.cols))
+        // Read again, not through `grown`, which was captured before the removals and cannot change.
+        assertEquals(
+            listOf(3, 3),
+            controller.state.elements
+                .single()
+                .table
+                .let { listOf(it?.rows, it?.cols) },
+        )
 
         controller.beginEdit(CanvasController.EditTarget("tb", 0))
         controller.finishEdit("")

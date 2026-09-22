@@ -74,7 +74,12 @@ object TableElements {
         index: Int,
         measurer: TextMeasurer,
     ): WorldRect {
-        val table = element.table ?: return WorldRect(element.x, element.y, element.x + element.width, element.y + element.height)
+        // A non-table, and a cell the table has not got, both give the whole element back. Callers draw
+        // and hit-test against a live frame, so the index they hold can be an edit out of date, and the
+        // row lookup at the end would throw rather than miss.
+        val table =
+            element.table?.takeIf { it.holds(index / it.cols, index % it.cols) }
+                ?: return WorldRect(element.x, element.y, element.x + element.width, element.y + element.height)
         val heights = rowHeights(element, measurer)
         val row = index / table.cols
         val columnWidth = element.width / table.cols

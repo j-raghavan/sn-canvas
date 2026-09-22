@@ -202,7 +202,8 @@ internal class CanvasRenderer(
     ) {
         val element = elements.find { it.id == cell.elementId } ?: return
         // The elements drawn are the live frame's, not the controller's, so check the cell against the
-        // grid in hand rather than trusting the controller's: cellRect would throw on a row past the end.
+        // grid in hand: for one it has not got, draw nothing rather than the brackets that cellRect's
+        // fall back to the whole element would put right round the table.
         val table = element.table?.takeIf { it.holds(cell.row, cell.column) } ?: return
         val rect = TableElements.cellRect(element, table.indexOf(cell.row, cell.column), measurer)
         val bounds =
