@@ -92,7 +92,7 @@ class TableRowHeightsTest {
         assertEquals(
             listOf(100.0, 60.0),
             TableEdits
-                .removeRow(added, "tb", fakeMeasurer)
+                .removeRow(added, "tb", null, fakeMeasurer)
                 .table()
                 .table
                 ?.rowMinHeights,

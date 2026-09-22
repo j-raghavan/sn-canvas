@@ -283,6 +283,50 @@ class CanvasControllerTest {
         )
     }
 
+    // #53: the row taken out is the one the tapped cell is in, not always the last.
+    @Test
+    fun `removing a row or column takes out the one the tapped cell is in`() {
+        val grid = TableData(3, 2, listOf("a1", "a2", "b1", "b2", "c1", "c2"), listOf(48.0, 48.0, 48.0))
+        controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 144.0)).copy(table = grid)))
+        controller.select("tb")
+        // Nothing tapped yet, so nothing says which row: the last one goes, as it always did.
+        assertNull(controller.currentCell)
+
+        // Tap the cell "b1", index 2, which is row 1 and column 0.
+        controller.beginEdit(CanvasController.EditTarget("tb", 2))
+        controller.finishEdit("b1")
+        assertEquals(2, controller.currentCell)
+        controller.removeTableRow()
+        assertEquals(
+            listOf("a1", "a2", "c1", "c2"),
+            controller.state.elements
+                .single()
+                .table
+                ?.cells,
+        )
+    }
+
+    @Test
+    fun `the tapped cell is forgotten once the table has shrunk past it`() {
+        val grid = TableData(2, 2, listOf("a1", "a2", "b1", "b2"), listOf(48.0, 48.0))
+        controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 96.0)).copy(table = grid)))
+        // The last cell, which the row it is in is about to take with it.
+        controller.beginEdit(CanvasController.EditTarget("tb", 3))
+        controller.finishEdit("b2")
+        assertEquals(3, controller.currentCell)
+        controller.removeTableRow()
+        assertNull(controller.currentCell)
+    }
+
+    @Test
+    fun `the tapped cell is forgotten when something else is selected`() {
+        controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 96.0)), box))
+        controller.beginEdit(CanvasController.EditTarget("tb", 1))
+        assertEquals(1, controller.currentCell)
+        controller.select("box")
+        assertNull(controller.currentCell)
+    }
+
     @Test
     fun `viewport changes redraw without an undo step or a new UI state`() {
         controller.load(emptyList())

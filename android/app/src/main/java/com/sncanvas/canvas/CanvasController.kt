@@ -41,6 +41,10 @@ class CanvasController(
     var editing: EditTarget? = null
         private set
 
+    // The table cell last tapped, with the table it belongs to, so it is forgotten as soon as
+    // anything else is selected rather than pointing into a table nobody is looking at.
+    private var tappedCell: Pair<String, Int>? = null
+
     /** The style new elements get (FR19); the pencil's live stroke draws in it too. */
     var currentStyle = ShapeStyle.DEFAULT
         private set
@@ -50,6 +54,22 @@ class CanvasController(
 
     /** The one selected element; null with nothing selected and with several, which resize, rotate and text editing don't apply to. */
     val selected: Element? get() = selectedIds.singleOrNull()?.let { id -> state.elements.find { it.id == id } }
+
+    /**
+     * The cell of the selected table that was last tapped, which Remove row and Remove column act
+     * on (#53). Null unless that same table is still the one selected and the cell is still in it,
+     * so a table that has shrunk since never leaves it pointing past the end.
+     */
+    val currentCell: Int? get() = tappedIn?.second
+
+    // The selected table and the cell tapped in it, when that is still the table selected and the
+    // cell is still in it. One place for both guards, so the row and the column cannot disagree.
+    private val tappedIn: Pair<TableData, Int>?
+        get() {
+            val (id, index) = tappedCell ?: return null
+            val table = selected?.takeIf { it.id == id }?.table ?: return null
+            return if (index < table.rows * table.cols) table to index else null
+        }
 
     /** Every selected element, in the order they are drawn. */
     val selectedElements: List<Element> get() = state.elements.filter { it.id in selectedIds }
@@ -169,6 +189,7 @@ class CanvasController(
 
     fun beginEdit(target: EditTarget) {
         editing = target
+        if (target.cellIndex != null) tappedCell = target.elementId to target.cellIndex
         selectedIds = setOf(target.elementId)
         changed()
         listener.onEditText(target)
@@ -276,11 +297,16 @@ class CanvasController(
 
     fun addTableRow() = editSelected { TableEdits.addRow(state, it, measurer) }
 
-    fun removeTableRow() = editSelected { TableEdits.removeRow(state, it, measurer) }
+    /** The row the tapped cell is in, and the column, or null when no cell says which (#53). */
+    private val currentRow: Int? get() = tappedIn?.let { (table, index) -> index / table.cols }
+
+    private val currentColumn: Int? get() = tappedIn?.let { (table, index) -> index % table.cols }
+
+    fun removeTableRow() = editSelected { TableEdits.removeRow(state, it, currentRow, measurer) }
 
     fun addTableColumn() = editSelected { TableEdits.addColumn(state, it, measurer) }
 
-    fun removeTableColumn() = editSelected { TableEdits.removeColumn(state, it, measurer) }
+    fun removeTableColumn() = editSelected { TableEdits.removeColumn(state, it, currentColumn, measurer) }
 
     /** Sends the UI state again even if it hasn't changed, for a view that has just attached. */
     fun republish() {
@@ -322,6 +348,7 @@ class CanvasController(
                 selectionCount = selectedNow,
                 canUngroup = selectedElements.any { it.groupId != null },
                 hasLink = element?.link != null,
+                hasTableCell = currentCell != null,
             )
         if (uiState == lastUiState) return
         lastUiState = uiState

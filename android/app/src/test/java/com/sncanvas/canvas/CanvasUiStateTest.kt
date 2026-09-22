@@ -19,6 +19,7 @@ class CanvasUiStateTest {
                 "selectionCount" to 1,
                 "canUngroup" to false,
                 "hasLink" to false,
+                "hasTableCell" to true,
                 "selectedType" to "table",
                 "style" to styleIds,
             ),
@@ -30,6 +31,7 @@ class CanvasUiStateTest {
                 selectedType = "table",
                 hasContent = true,
                 selectionCount = 1,
+                hasTableCell = true,
             ).toPayload(),
         )
     }
