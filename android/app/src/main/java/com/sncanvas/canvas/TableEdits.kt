@@ -30,9 +30,9 @@ object TableEdits {
                     cells = t.cells + List(t.cols) { "" },
                     // As tall as the row it follows, not as short as a row may be: rows get taller by being
                     // dragged and by the table being resized, and one added at the minimum sits short of the
-                    // rest and stops the table looking like one table (#53).
-                    rowMinHeights =
-                        t.rowMinHeights + (t.rowMinHeights.lastOrNull() ?: TableElements.MIN_ROW_HEIGHT),
+                    // rest and stops the table looking like one table (#53). There is always a row to follow:
+                    // a table has at least one, and one height per row.
+                    rowMinHeights = t.rowMinHeights + t.rowMinHeights[t.rows - 1],
                 )
             }
         }

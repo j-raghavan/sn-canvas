@@ -99,6 +99,15 @@ class TableElementsTest {
                 .table
         assertEquals(listOf("a1", "a2", "c1", "c2"), withoutMiddle?.cells)
         assertEquals(listOf(48.0, 48.0), withoutMiddle?.rowMinHeights)
+        // The first row goes as readily as one in the middle.
+        val withoutFirst =
+            TableEdits
+                .removeRow(three, "tb", 0, fakeMeasurer)
+                .elements
+                .single()
+                .table
+        assertEquals(listOf("b1", "b2", "c1", "c2"), withoutFirst?.cells)
+        assertEquals(listOf(90.0, 48.0), withoutFirst?.rowMinHeights)
         // The cell "b1" is index 2, which is column 0.
         val withoutFirstColumn =
             TableEdits
@@ -116,22 +125,27 @@ class TableElementsTest {
     fun `a row or column the table has not got is left alone`() {
         val grid = TableData(2, 2, listOf("a1", "a2", "b1", "b2"), listOf(48.0, 48.0))
         val two = stateOf(table2x2.copy(table = grid))
-        assertEquals(
-            grid,
-            TableEdits
-                .removeRow(two, "tb", 9, fakeMeasurer)
-                .elements
-                .single()
-                .table,
-        )
-        assertEquals(
-            grid,
-            TableEdits
-                .removeColumn(two, "tb", -1, fakeMeasurer)
-                .elements
-                .single()
-                .table,
-        )
+        // Both ways out of range, for rows and for columns: past the end, and before the start.
+        for (row in listOf(9, -1)) {
+            assertEquals(
+                grid,
+                TableEdits
+                    .removeRow(two, "tb", row, fakeMeasurer)
+                    .elements
+                    .single()
+                    .table,
+            )
+        }
+        for (col in listOf(-1, 9)) {
+            assertEquals(
+                grid,
+                TableEdits
+                    .removeColumn(two, "tb", col, fakeMeasurer)
+                    .elements
+                    .single()
+                    .table,
+            )
+        }
     }
 
     @Test

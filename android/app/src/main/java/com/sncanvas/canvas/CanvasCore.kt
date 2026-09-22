@@ -140,19 +140,18 @@ object CanvasCore {
         elements: List<Element>,
         zoom: Double,
     ): Point {
-        val gap = LINK_GLYPH_OFFSET_PX / zoom
-        // How far right and up of the shape's centre its outline reaches on that diagonal: the box's corner for a
-        // rectangle, the curve itself for an ellipse.
-        val reach = if (element.type == CanvasTools.ELLIPSE) DIAGONAL else 1.0
-        return when {
-            // Where it ends now: an end bound to a shape moves with it, and the endpoint the element carries is stale.
-            element.hasEndpoints() -> resolveArrowEndpoints(element, elements).second
-            else ->
-                element.toWorld(
-                    element.x + element.width / 2 * (1 + reach) + gap,
-                    element.y + element.height / 2 * (1 - reach) - gap,
-                )
+        // Where it ends now: an end bound to a shape moves with it, and the endpoint the element carries is stale.
+        if (element.hasEndpoints()) {
+            return resolveArrowEndpoints(element, elements).second
         }
+        // How far right and up of the shape's centre its outline reaches on that diagonal: the box's corner for a
+        // rectangle, the curve itself for an ellipse. Only a shape with a box has one, hence after the endpoints.
+        val reach = if (element.type == CanvasTools.ELLIPSE) DIAGONAL else 1.0
+        val gap = LINK_GLYPH_OFFSET_PX / zoom
+        return element.toWorld(
+            element.x + element.width / 2 * (1 + reach) + gap,
+            element.y + element.height / 2 * (1 - reach) - gap,
+        )
     }
 
     /**
