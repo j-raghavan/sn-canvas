@@ -198,6 +198,27 @@ class CanvasControllerTableTest {
         )
     }
 
+    // The column twin of the test below: removing left the cell pointing at whatever slid left into
+    // its place, so a second press took out a column the user had never put a cursor in (#53).
+    @Test
+    fun `the tapped cell is forgotten once its column has been removed`() {
+        val grid = TableData(2, 3, listOf("a1", "a2", "a3", "b1", "b2", "b3"), listOf(48.0, 48.0))
+        controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(480.0, 96.0)).copy(table = grid)))
+        controller.beginEdit(CanvasController.EditTarget("tb", 0))
+        controller.finishEdit("a1")
+        controller.removeTableColumn()
+        assertNull(controller.currentCell?.column)
+        // A second press takes nothing, rather than the column that moved left into the gap.
+        controller.removeTableColumn()
+        assertEquals(
+            listOf("a2", "a3", "b2", "b3"),
+            controller.state.elements
+                .single()
+                .table
+                ?.cells,
+        )
+    }
+
     // Removing left the cell pointing at whatever slid into its place, so pressing again took out a
     // row the user had never put a cursor in (#53).
     @Test
@@ -320,6 +341,47 @@ class CanvasControllerTableTest {
         // The copy is the selection now, and it is a table the same shape as the one the cell was in.
         assertNotEquals("tb", controller.selected?.id)
         assertEquals(2, controller.selected?.table?.rows)
+        assertNull(controller.currentCell)
+        assertFalse(ui.canRemoveTableRow)
+    }
+
+    // A selection dragged out over the table alone still leaves it as the one selected, so the cell is
+    // let go of because selectAll says to and not because the table stopped being selected (#53).
+    @Test
+    fun `the tapped cell is forgotten when a selection is dragged out over the table alone`() {
+        controller.load(listOf(table))
+        controller.beginEdit(CanvasController.EditTarget("tb", 3))
+        assertEquals(1, controller.currentCell?.row)
+        controller.selectAll(setOf("tb"))
+        assertNull(controller.currentCell)
+        assertFalse(ui.canRemoveTableRow)
+    }
+
+    // Undo replaces every element and selects nothing, so the cell goes with it. The table is the same
+    // shape either side of the undo, so this is the selection being emptied doing the work and not the
+    // row and column guard, which would let a cell of that shape through (#53).
+    @Test
+    fun `the tapped cell is forgotten by an undo that leaves the table the same shape`() {
+        val grid = TableData(3, 2, listOf("a1", "a2", "b1", "b2", "c1", "c2"), listOf(48.0, 48.0, 48.0))
+        controller.load(listOf(TableElements.create("tb", Point(0.0, 0.0), Point(320.0, 144.0)).copy(table = grid)))
+        controller.beginEdit(CanvasController.EditTarget("tb", 2))
+        controller.finishEdit("typed")
+        assertEquals(1, controller.currentCell?.row)
+        controller.undo()
+        // Still a 3 by 2 table, so (1, 0) is a cell it has; the cell is forgotten all the same.
+        assertEquals(
+            listOf(3, 2),
+            listOf(
+                controller.state.elements
+                    .single()
+                    .table
+                    ?.rows,
+                controller.state.elements
+                    .single()
+                    .table
+                    ?.cols,
+            ),
+        )
         assertNull(controller.currentCell)
         assertFalse(ui.canRemoveTableRow)
     }

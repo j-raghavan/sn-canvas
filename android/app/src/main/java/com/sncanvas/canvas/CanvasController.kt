@@ -357,6 +357,9 @@ class CanvasController(
     /** Shows [elements] as they are (a load, or an undo/redo step), clearing the selection. */
     private fun show(elements: List<Element>) {
         state = state.copy(elements = elements)
+        // Emptying the selection below is already enough to forget the cell, since a cell only counts
+        // while its table is the one selected. Kept so the field's invariant holds here on its own
+        // terms rather than by way of the line after it; no test can tell the two apart (#53).
         tappedCell = null
         selectedIds = emptySet()
         changed()
