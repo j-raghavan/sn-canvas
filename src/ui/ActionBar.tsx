@@ -109,6 +109,8 @@ const MENU: readonly MenuItem[] = [
   {action: 'tableAddColumn', label: 'Add column', tableOnly: true},
   {action: 'tableRemoveRow', label: 'Remove this row', tableOnly: true, needsRemovableRow: true},
   {action: 'tableRemoveColumn', label: 'Remove this column', tableOnly: true, needsRemovableColumn: true},
+  // Also on the zoom control, deliberately. They were here first and are where people who found them
+  // will look; the control exists because most people did not find them at all (#12).
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},

@@ -23,6 +23,8 @@ const renderControl = (overrides: Partial<CanvasUiState> = {}) => {
       renderer.root.findByProps({testID}).props.onPress();
     });
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
+  const isHere = (testID: string) => renderer.root.findByProps({testID}).props.accessibilityState.selected;
+  const isExpanded = () => renderer.root.findByProps({testID: 'canvas-zoom'}).props.accessibilityState.expanded;
   const shown = () => renderer.root.findByProps({testID: 'canvas-zoom'}).props.accessibilityLabel;
   // What is actually drawn in the pill, not the label beside it: the label alone would pass with the
   // readout hardcoded.
@@ -37,7 +39,7 @@ const renderControl = (overrides: Partial<CanvasUiState> = {}) => {
     const images = renderer.root.findByProps({testID: 'canvas-zoom'}).findAllByType(Image);
     return images.length === 0 ? null : images[0].props.source;
   };
-  return {onCommand, onOpen, press, isListed, shown, readout, chevron};
+  return {onCommand, onOpen, press, isListed, shown, readout, chevron, isHere, isExpanded};
 };
 
 const PRESETS = ['canvas-zoom-fit', 'canvas-zoom-100', 'canvas-zoom-50', 'canvas-zoom-25'];
@@ -108,4 +110,31 @@ test('opening the panel puts the hints away, and closing it does not do so again
 
   control.press('canvas-zoom');
   expect(control.onOpen).toHaveBeenCalledTimes(2);
+});
+
+// The panel and the pill are two halves of one control, so they should not disagree about where you
+// are. The style panel marks the option in use the same way (#12).
+test('the panel marks the zoom you are already on, and Fit never is', () => {
+  const at100 = renderControl({zoomPercent: 100});
+  at100.press('canvas-zoom');
+  expect(PRESETS.map(at100.isHere)).toEqual([false, true, false, false]);
+
+  const at25 = renderControl({zoomPercent: 25});
+  at25.press('canvas-zoom');
+  expect(PRESETS.map(at25.isHere)).toEqual([false, false, false, true]);
+
+  // A zoom no preset goes to marks none of them.
+  const between = renderControl({zoomPercent: 137});
+  between.press('canvas-zoom');
+  expect(PRESETS.map(between.isHere)).toEqual([false, false, false, false]);
+});
+
+test('the pill says whether the panel is open, the way the style toggle does', () => {
+  const control = renderControl({zoomPercent: 250});
+  expect(control.isExpanded()).toBe(false);
+  expect(control.shown()).toBe('Zoom, 250%');
+
+  control.press('canvas-zoom');
+  expect(control.isExpanded()).toBe(true);
+  expect(control.shown()).toBe('Hide zoom levels, 250%');
 });

@@ -354,6 +354,13 @@ class CanvasView(
                 else -> emptyList()
             }
         inputs.forEach(::handleInput)
+        // The touch stream is over, so whatever it moved has settled. onScaleEnd covers a pinch that
+        // finishes as one, but the detector stops being fed the moment the pen comes down, so a pinch
+        // interrupted that way never ends and the zoom control would keep the percent it started at.
+        // publish() sends nothing when the zoom has not moved, so this costs a comparison (#12).
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            controller.viewportSettled()
+        }
         return true
     }
 

@@ -5,7 +5,7 @@
 // single property, which the canvas applies to the selection and to what is
 // drawn next.
 
-import React, {useState} from 'react';
+import React from 'react';
 import {
   Image,
   Pressable,
@@ -31,6 +31,7 @@ import {
   type FillId,
   type StyleProperty,
 } from '../domain/styles';
+import {useDisclosure} from './useDisclosure';
 
 const FILL_OPTIONS: Record<FillId, {label: string; icon: ImageSourcePropType}> = {
   none: {label: 'No fill', icon: require('../../assets/icons/fill-none.png')},
@@ -69,16 +70,7 @@ type Props = {
 };
 
 export default function StylePanel({style, selectedType = null, swatch, onChange, onOpen}: Props): React.JSX.Element {
-  const [isOpen, setOpen] = useState(false);
-
-  const toggle = () => {
-    // Outside the updater, which has to stay pure: React may run it more than once, and this reaches
-    // into the screen. Closing is not an opening, so the hints are not put away twice.
-    if (!isOpen) {
-      onOpen();
-    }
-    setOpen(!isOpen);
-  };
+  const {isOpen, toggle} = useDisclosure(onOpen);
   const opacityIndex = opacityStepIndex(style.opacity);
   const isImage = selectedType === IMAGE;
   const dashes = isImage ? IMAGE_DASHES : DASHES;

@@ -4,10 +4,11 @@
 // canvas itself, in the corner the toolbar and action bar leave free, and shows
 // the current zoom whether or not it is open.
 
-import React, {useState} from 'react';
+import React from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
 import type {CanvasUiState} from '../domain/styles';
 import type {CanvasCommand} from './nativeCanvasView';
+import {useDisclosure} from './useDisclosure';
 
 const CHEVRON_DOWN = require('../../assets/icons/chevron-down.png');
 const CHEVRON_UP = require('../../assets/icons/chevron-up.png');
@@ -20,14 +21,15 @@ const HEIGHT = 36;
 
 export const ZOOM_GEOMETRY = {left: LEFT, bottom: BOTTOM, width: WIDTH, height: HEIGHT, centerX: LEFT + WIDTH / 2};
 
-type Preset = {command: CanvasCommand; label: string; testID: string};
+/** [percent] is the zoom the row goes to, for marking the one you are already on; Fit has none. */
+type Preset = {command: CanvasCommand; label: string; testID: string; percent?: number};
 
 /** Widest first, as they read going up the panel from the button that opens it. */
 const PRESETS: readonly Preset[] = [
   {command: 'zoomToFit', label: 'Fit', testID: 'canvas-zoom-fit'},
-  {command: 'zoomTo100', label: '100%', testID: 'canvas-zoom-100'},
-  {command: 'zoomTo50', label: '50%', testID: 'canvas-zoom-50'},
-  {command: 'zoomTo25', label: '25%', testID: 'canvas-zoom-25'},
+  {command: 'zoomTo100', label: '100%', testID: 'canvas-zoom-100', percent: 100},
+  {command: 'zoomTo50', label: '50%', testID: 'canvas-zoom-50', percent: 50},
+  {command: 'zoomTo25', label: '25%', testID: 'canvas-zoom-25', percent: 25},
 ];
 
 type Props = {
@@ -38,19 +40,10 @@ type Props = {
 };
 
 export default function ZoomControl({ui, onCommand, onOpen}: Props): React.JSX.Element {
-  const [isOpen, setOpen] = useState(false);
-
-  const toggle = () => {
-    // Outside the updater, which has to stay pure: React may run it more than once, and this reaches
-    // into the screen. Closing is not an opening, so the hints are not put away twice.
-    if (!isOpen) {
-      onOpen();
-    }
-    setOpen(!isOpen);
-  };
+  const {isOpen, toggle, close} = useDisclosure(onOpen);
 
   const run = (command: CanvasCommand) => {
-    setOpen(false);
+    close();
     onCommand(command);
   };
 
@@ -59,21 +52,28 @@ export default function ZoomControl({ui, onCommand, onOpen}: Props): React.JSX.E
     <View style={styles.wrapper} pointerEvents="box-none">
       {isOpen && (
         <View style={styles.panel}>
-          {PRESETS.map(preset => (
-            <Pressable
-              key={preset.command}
-              testID={preset.testID}
-              accessibilityLabel={`Zoom to ${preset.label}`}
-              style={styles.preset}
-              onPress={() => run(preset.command)}>
-              <Text style={styles.presetText}>{preset.label}</Text>
-            </Pressable>
-          ))}
+          {PRESETS.map(preset => {
+            // The zoom you are already at, so the panel and the pill agree about where you are. Fit
+            // has no percent of its own, so it is never the one you are on.
+            const here = preset.percent === ui.zoomPercent;
+            return (
+              <Pressable
+                key={preset.command}
+                testID={preset.testID}
+                accessibilityLabel={`Zoom to ${preset.label}`}
+                accessibilityState={{selected: here}}
+                style={[styles.preset, here && styles.presetHere]}
+                onPress={() => run(preset.command)}>
+                <Text style={styles.presetText}>{preset.label}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
       <Pressable
         testID="canvas-zoom"
-        accessibilityLabel={`Zoom, ${ui.zoomPercent}%`}
+        accessibilityLabel={isOpen ? `Hide zoom levels, ${ui.zoomPercent}%` : `Zoom, ${ui.zoomPercent}%`}
+        accessibilityState={{expanded: isOpen}}
         style={styles.button}
         onPress={toggle}>
         <Text style={styles.buttonText}>{ui.zoomPercent}%</Text>
@@ -127,6 +127,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     alignItems: 'center',
+  },
+  // The row you are already on, marked the way the style panel marks a chosen option.
+  presetHere: {
+    backgroundColor: '#eeeeee',
   },
   presetText: {
     fontSize: 15,
