@@ -130,6 +130,14 @@ export function createLinkNavigation({
         logger.warn(`${TAG}[LINK] nothing to go back to`);
         return;
       }
+      // The canvas a step goes back to can be deleted while you are away from it. Showing it would
+      // load nothing and record that nothing as the note's own canvas, which is the loss the follow
+      // path already refuses (#2, #46). The step is let go of instead, so Back moves on to the next.
+      if (!(await canvasExists(dir, step.canvasId))) {
+        trail = trail.slice(0, -1);
+        logger.warn(`${TAG}[LINK] canvas=${step.canvasId} is no longer here; that step back is gone`);
+        return;
+      }
       if (step.kind === 'canvas') {
         // The note never changed, so there is nothing to leave or come back to: bring the canvas the
         // link was followed from back up in place of the one it led to (#2).

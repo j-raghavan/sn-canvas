@@ -948,6 +948,23 @@ describe('links to notes', () => {
       expect(store.shown).toBe('the first drawing');
     });
 
+    // The same hazard as following a dead link, from the other end: the canvas a step goes back to can
+    // be deleted while you are away from it, and showing it would record that nothing as the note's.
+    test('a step back to a canvas that has gone is dropped, not loaded over the note', async () => {
+      const {store, session, logger} = await twoCanvases();
+      await session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+      expect(session.currentCanvasId()).toBe('c-other');
+
+      store.files.delete(canvasFile('c-one'));
+      await session.goBack();
+
+      // Still on the canvas it was already showing, with its drawing, and the dead step let go of.
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      expect(session.backTo()).toBeNull();
+      expect(logger.lines).toContain('warn [SNCANVAS][LINK] canvas=c-one is no longer here; that step back is gone');
+    });
+
     // Showing it would load nothing, and make that nothing the note's own canvas, losing its place.
     test('a link to a canvas that is no longer saved is refused, and nothing is switched', async () => {
       const {store, session, logger} = await twoCanvases();
@@ -998,6 +1015,20 @@ describe('links to notes', () => {
     await session.open(500);
     expect(badge.shown).toBeNull();
     expect(session.backTo()).toBeNull();
+  });
+
+  // The same guard covers a note step: its canvas can be deleted while the note is open over it.
+  test('a step back whose canvas has gone is dropped rather than opening the note over nothing', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(500);
+    await session.followLink(link);
+    store.files.delete(SCRATCH);
+
+    await session.goBack();
+    // Nothing was opened or closed for it, and the step is let go of.
+    expect(host.openedNotes).toEqual([{path: '/n.note', page: -1}]);
+    expect(session.backTo()).toBeNull();
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] canvas=default is no longer here; that step back is gone');
   });
 
   test('with no step to take, going back does nothing but say so', async () => {
