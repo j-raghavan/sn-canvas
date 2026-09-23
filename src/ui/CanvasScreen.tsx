@@ -239,6 +239,7 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           selectedType={ui.selectedType}
           swatch={color => swatchColor(color, einkGrays)}
           onChange={(property, value) => runCommand('setStyle', [property, value])}
+          onOpen={() => setShowHints(false)}
         />
         <Toolbar
           toolMode={toolMode}

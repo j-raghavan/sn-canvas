@@ -64,10 +64,22 @@ type Props = {
   /** The colour a swatch shows; the screen supplies the canvas's e-ink gray. */
   swatch: (color: ColorId) => string;
   onChange: (property: StyleProperty, value: string) => void;
+  /** The panel is opening: the hints go, the way the ⋮ menu and the zoom control put them away. */
+  onOpen: () => void;
 };
 
-export default function StylePanel({style, selectedType = null, swatch, onChange}: Props): React.JSX.Element {
+export default function StylePanel({style, selectedType = null, swatch, onChange, onOpen}: Props): React.JSX.Element {
   const [isOpen, setOpen] = useState(false);
+
+  const toggle = () => {
+    setOpen(open => {
+      // Closing is not an opening, so the hints are not put away twice.
+      if (!open) {
+        onOpen();
+      }
+      return !open;
+    });
+  };
   const opacityIndex = opacityStepIndex(style.opacity);
   const isImage = selectedType === IMAGE;
   const dashes = isImage ? IMAGE_DASHES : DASHES;
@@ -79,7 +91,7 @@ export default function StylePanel({style, selectedType = null, swatch, onChange
         accessibilityLabel={isOpen ? 'Hide styles' : 'Show styles'}
         accessibilityState={{expanded: isOpen}}
         style={styles.toggle}
-        onPress={() => setOpen(open => !open)}>
+        onPress={toggle}>
         <View style={[styles.swatch, {backgroundColor: swatch(style.color)}]} />
         <Image source={isOpen ? CHEVRON_UP : CHEVRON_DOWN} style={styles.chevron} />
       </Pressable>

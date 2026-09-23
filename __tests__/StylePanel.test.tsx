@@ -10,9 +10,12 @@ import StylePanel from '../src/ui/StylePanel';
 
 const renderPanel = (style: CanvasStyle = DEFAULT_STYLE, open = true) => {
   const onChange = jest.fn();
+  const onOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = ReactTestRenderer.create(<StylePanel style={style} swatch={color => `swatch:${color}`} onChange={onChange} />);
+    renderer = ReactTestRenderer.create(
+      <StylePanel style={style} swatch={color => `swatch:${color}`} onChange={onChange} onOpen={onOpen} />,
+    );
   });
   const tap = (testID: string) =>
     act(() => {
@@ -26,7 +29,7 @@ const renderPanel = (style: CanvasStyle = DEFAULT_STYLE, open = true) => {
   const isSelected = (testID: string) => host(testID).props.accessibilityState.selected;
   const look = (testID: string) => StyleSheet.flatten(host(testID).props.style);
   const isPanelShown = () => renderer.root.findAllByProps({testID: 'style-color-red'}).length > 0;
-  return {renderer, onChange, tap, host, isSelected, look, isPanelShown};
+  return {renderer, onChange, onOpen, tap, host, isSelected, look, isPanelShown};
 };
 
 test('the panel starts closed behind a toggle that shows the colour in use, and the toggle opens and closes it', () => {
@@ -90,7 +93,13 @@ test('a selected image offers no outline besides the four dashes, and no fill', 
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
     renderer = ReactTestRenderer.create(
-      <StylePanel style={{...DEFAULT_STYLE, dash: 'none'}} selectedType="image" swatch={color => color} onChange={onChange} />,
+      <StylePanel
+        style={{...DEFAULT_STYLE, dash: 'none'}}
+        selectedType="image"
+        swatch={color => color}
+        onChange={onChange}
+        onOpen={jest.fn()}
+      />,
     );
   });
   act(() => {
@@ -110,4 +119,16 @@ test('anything but an image offers the four dashes and the fills', () => {
   const {host} = renderPanel();
   expect(() => host('style-dash-none')).toThrow();
   expect(host('style-fill-none')).toBeDefined();
+});
+
+// The panel opens over the canvas where the hints sit, so it puts them away, the way the ⋮ menu and
+// the zoom control do (#12).
+test('opening the panel puts the hints away, and closing it does not do so again', () => {
+  const panel = renderPanel(DEFAULT_STYLE, false);
+  panel.tap('style-toggle');
+  expect(panel.onOpen).toHaveBeenCalledTimes(1);
+  panel.tap('style-toggle');
+  expect(panel.onOpen).toHaveBeenCalledTimes(1);
+  panel.tap('style-toggle');
+  expect(panel.onOpen).toHaveBeenCalledTimes(2);
 });
