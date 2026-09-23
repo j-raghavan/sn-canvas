@@ -913,6 +913,62 @@ describe('links to notes', () => {
     expect(logger.lines).toContain('log [SNCANVAS][LINK] followed link to /n.note page=-1');
   });
 
+  describe('links to another canvas of the same note (#2)', () => {
+    /** Two canvases saved in this note, with c-one shown and c-other the one a link leads to. */
+    const twoCanvases = async () => {
+      const kit = setup({[canvasFile('c-one')]: 'the first drawing', [canvasFile('c-other')]: 'the other drawing'});
+      await kit.session.open(500);
+      await kit.session.switchTo('c-one');
+      return kit;
+    };
+
+    test('following one brings the other canvas up, without leaving the note, and offers the way back', async () => {
+      const {store, host, badge, logger, session} = await twoCanvases();
+      const shownBefore = session.currentCanvasId();
+
+      expect(await session.followLink({kind: 'canvas', target: 'c-other', page: -1})).toBe(true);
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      // Nothing left the plugin, so no note opened and no badge went over one.
+      expect(host.steps).toEqual([]);
+      expect(badge.shown).toBeNull();
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, canvasId: shownBefore, to: '/note.note', withinNote: true});
+      expect(logger.lines).toContain('log [SNCANVAS][LINK] switched to canvas=c-other');
+    });
+
+    test('going back brings the canvas it was followed from up again, still without leaving', async () => {
+      const {store, host, session} = await twoCanvases();
+      const shownBefore = session.currentCanvasId();
+      await session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe(shownBefore);
+      expect(host.steps).toEqual([]);
+      expect(session.backTo()).toBeNull();
+      expect(store.shown).toBe('the first drawing');
+    });
+
+    // Showing it would load nothing, and make that nothing the note's own canvas, losing its place.
+    test('a link to a canvas that is no longer saved is refused, and nothing is switched', async () => {
+      const {store, session, logger} = await twoCanvases();
+      const shownBefore = session.currentCanvasId();
+      store.files.delete(canvasFile('c-other'));
+
+      expect(await session.followLink({kind: 'canvas', target: 'c-other', page: -1})).toBe(false);
+      expect(session.currentCanvasId()).toBe(shownBefore);
+      expect(session.backTo()).toBeNull();
+      expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not switch to canvas=c-other');
+    });
+
+    test('a link to the canvas already shown goes nowhere, and leaves no step to come back along', async () => {
+      const {session} = await twoCanvases();
+      const here = session.currentCanvasId();
+      expect(await session.followLink({kind: 'canvas', target: here, page: -1})).toBe(false);
+      expect(session.currentCanvasId()).toBe(here);
+      expect(session.backTo()).toBeNull();
+    });
+  });
+
   test('a note that will not open brings Canvas straight back, with no badge and no step, and says so', async () => {
     const {host, badge, logger, session} = setup({[SCRATCH]: 'scratch'});
     await session.open(500);

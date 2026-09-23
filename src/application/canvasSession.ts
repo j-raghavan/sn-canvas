@@ -262,6 +262,7 @@ export function createCanvasSession({
     canvasDir: resolveCanvasDir,
     shown: {id: () => canvasId, show: (dir, target, at) => show(dir, target, at)},
     saveShown,
+    canvasExists: async (dir, id) => (await store.savedCanvasIds(dir)).includes(id),
     serially,
     report,
   });

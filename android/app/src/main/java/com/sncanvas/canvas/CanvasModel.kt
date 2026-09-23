@@ -170,11 +170,14 @@ data class ElementLink(
         /** A note the canvas links to; [target] is its file path. */
         const val KIND_NOTE = "note"
 
+        /** Another canvas in the same note (#2); [target] is its canvas id, and [page] means nothing. */
+        const val KIND_CANVAS = "canvas"
+
         /** Open the target where it was last left, rather than at a page of our choosing. */
         const val LAST_PAGE = -1
 
         /** The link [kind]s this build follows. */
-        fun isKnown(kind: String?): Boolean = kind == KIND_NOTE
+        fun isKnown(kind: String?): Boolean = kind == KIND_NOTE || kind == KIND_CANVAS
     }
 }
 

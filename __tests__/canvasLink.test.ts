@@ -103,8 +103,10 @@ test('parseElementLink takes a link this build can follow, and nothing else', ()
   // No page, or one that is not a whole number: the note opens where it was last left.
   expect(parseElementLink({kind: 'note', target: '/n.note'})).toEqual({kind: 'note', target: '/n.note', page: -1});
   expect(parseElementLink({kind: 'note', target: '/n.note', page: 1.5})).toEqual({kind: 'note', target: '/n.note', page: -1});
+  // Another canvas of the same note, which a page means nothing for (#2).
+  expect(parseElementLink({kind: 'canvas', target: 'c-1'})).toEqual({kind: 'canvas', target: 'c-1', page: -1});
   // A kind this build does not follow, no target, or nothing at all.
-  expect(parseElementLink({kind: 'canvas', target: 'c-1'})).toBeNull();
+  expect(parseElementLink({kind: 'page', target: '/n.note'})).toBeNull();
   expect(parseElementLink({kind: 'note', target: ''})).toBeNull();
   expect(parseElementLink({kind: 'note'})).toBeNull();
   expect(parseElementLink(null)).toBeNull();

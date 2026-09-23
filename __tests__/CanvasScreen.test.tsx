@@ -546,6 +546,34 @@ describe("a note's canvases (#30)", () => {
     expect(has('canvas-list')).toBe(false);
   });
 
+  // #2: the same list, picked from to link the selection rather than to switch to one.
+  test('Link to canvas lists the others and puts the link on the selection', async () => {
+    const session = createFakeSession();
+    session.canvasesHere.mockResolvedValue(CANVASES);
+    const {press, has, labelled} = await render(session);
+    await press('canvas-more');
+    await press('canvas-menu-linkToCanvas');
+    // The canvas shown is not offered: an element linking to the canvas it sits on goes nowhere.
+    expect(labelled('Canvas made 19 Sep 2026, 13:01')).toBe(true);
+    expect(labelled('Canvas made Not saved to the note yet, shown')).toBe(false);
+
+    await press(`canvas-list-${canvasId}`);
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'linkSelected', ['canvas', canvasId, '-1']);
+    // Linking is not switching: the canvas shown does not change.
+    expect(session.switchTo).not.toHaveBeenCalled();
+    expect(has('canvas-list')).toBe(false);
+  });
+
+  test('a note with no other canvas says so rather than showing an empty list', async () => {
+    const session = createFakeSession();
+    session.canvasesHere.mockResolvedValue([CANVASES[0]]);
+    const {press, has, shows} = await render(session);
+    await press('canvas-more');
+    await press('canvas-menu-linkToCanvas');
+    expect(has('canvas-list')).toBe(false);
+    expect(shows('This note has no other canvas to link to')).toBe(true);
+  });
+
   test('Done closes the list without switching', async () => {
     const session = createFakeSession();
     const {press, has} = await render(session);

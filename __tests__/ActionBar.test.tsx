@@ -12,6 +12,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onNewCanvas = jest.fn();
   const onClearCanvas = jest.fn();
   const onLinkToNote = jest.fn();
+  const onLinkToCanvas = jest.fn();
   const onNoteCanvases = jest.fn();
   const onMenuOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
@@ -23,6 +24,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
         onNewCanvas={onNewCanvas}
         onClearCanvas={onClearCanvas}
         onLinkToNote={onLinkToNote}
+        onLinkToCanvas={onLinkToCanvas}
         onNoteCanvases={onNoteCanvases}
         onMenuOpen={onMenuOpen}
       />,
@@ -35,7 +37,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onNoteCanvases, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onLinkToCanvas, onNoteCanvases, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];

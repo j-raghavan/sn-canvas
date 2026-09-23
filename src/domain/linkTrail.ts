@@ -5,7 +5,20 @@
 
 import type {NotePage} from './canvasIndex';
 
-export type TrailStep = NotePage & {readonly canvasId: string; readonly to: string};
+export type TrailStep = NotePage & {
+  readonly canvasId: string;
+  readonly to: string;
+  /**
+   * A link to another canvas of the same note (#2): the note never changed, so going back switches
+   * the canvas and nothing leaves the plugin. Absent for a link that opened a note.
+   */
+  readonly withinNote?: boolean;
+};
+
+/** What the header's Back offers to return to, for a step of either kind (#2). */
+export function backLabelOf(step: TrailStep): string {
+  return step.withinNote === true ? 'canvas' : noteNameOf(step.notePath);
+}
 
 /** Steps kept, the newest: a trail longer than anyone walks back is only memory held. */
 export const MAX_TRAIL = 20;

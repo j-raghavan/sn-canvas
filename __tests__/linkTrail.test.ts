@@ -1,4 +1,4 @@
-import {MAX_TRAIL, noteNameOf, trailKeptAt, withStep, type TrailStep} from '../src/domain/linkTrail';
+import {MAX_TRAIL, backLabelOf, noteNameOf, trailKeptAt, withStep, type TrailStep} from '../src/domain/linkTrail';
 
 const step = (n: number): TrailStep => ({notePath: `/n${n}.note`, page: 0, canvasId: `c-${n}`, to: `/n${n + 1}.note`});
 
@@ -19,4 +19,13 @@ test('the trail is kept only in the note the last link led to', () => {
 test("a note's name is its file name without the folder or .note", () => {
   expect(noteNameOf('/storage/emulated/0/Note/💡 Ideas/ChronoGuard.note')).toBe('ChronoGuard');
   expect(noteNameOf('plain')).toBe('plain');
+});
+
+// #2: a step back into another canvas of the same note has no note name to offer, since a canvas has
+// only an id and the date it was made.
+test('the Back control names the note for a note step, and says canvas for a canvas one', () => {
+  expect(backLabelOf({notePath: '/Note/Work/plan.note', page: 2, canvasId: 'c-1', to: '/n.note'})).toBe('plan');
+  expect(backLabelOf({notePath: '/Note/Work/plan.note', page: 2, canvasId: 'c-1', to: '/Note/Work/plan.note', withinNote: true})).toBe(
+    'canvas',
+  );
 });

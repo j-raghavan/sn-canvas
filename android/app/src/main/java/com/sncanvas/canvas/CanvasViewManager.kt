@@ -121,7 +121,8 @@ class CanvasViewManager(
             "setText" -> if (strings.isNotEmpty()) root.controller.finishEdit(strings[0])
             // A link's target can hold anything a path holds, so it crosses as a string, with its page beside it.
             "linkSelected" ->
-                if (strings.size >= 3) {
+                // The controller refuses a kind it cannot follow; a blank target ElementLink itself does.
+                if (strings.size >= 3 && strings[1].isNotBlank()) {
                     root.controller.linkSelected(ElementLink(strings[0], strings[1], strings[2].toIntOrNull() ?: ElementLink.LAST_PAGE))
                 }
             else -> SIMPLE_COMMANDS[command]?.invoke(root)

@@ -492,6 +492,23 @@ class CanvasControllerTest {
         assertEquals(controller.selectedIds, groups.getValue(controller.selectedElements.first().groupId).map { it.id }.toSet())
     }
 
+    // A link of a kind this build cannot follow would be dropped as the canvas loaded, so storing one
+    // makes a link that vanishes on reopening. Refused here, where the command arrives (#2).
+    @Test
+    fun `a link of a kind this build cannot follow is not put on anything`() {
+        controller.load(listOf(box))
+        controller.select("box")
+        controller.linkSelected(ElementLink("portal", "/somewhere.note"))
+        assertNull(controller.selected?.link)
+        assertFalse(ui.canUndo)
+
+        // The two it can follow are stored.
+        controller.linkSelected(ElementLink(ElementLink.KIND_NOTE, "/n.note"))
+        assertEquals(ElementLink.KIND_NOTE, controller.selected?.link?.kind)
+        controller.linkSelected(ElementLink(ElementLink.KIND_CANVAS, "c-other"))
+        assertEquals(ElementLink.KIND_CANVAS, controller.selected?.link?.kind)
+    }
+
     @Test
     fun `linkSelected puts a link on the one selected element, and unlinkSelected takes it off`() {
         val link = ElementLink(ElementLink.KIND_NOTE, "/n.note")

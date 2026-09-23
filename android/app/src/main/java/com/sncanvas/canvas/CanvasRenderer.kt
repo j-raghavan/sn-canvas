@@ -240,14 +240,50 @@ internal class CanvasRenderer(
             val x = transform.screenX(at.x).toFloat()
             val y = transform.screenY(at.y).toFloat()
             canvas.drawCircle(x, y, LINK_GLYPH_RADIUS_PX, handlePaint)
-            // A lightning bolt in the badge's own white: this element jumps somewhere.
-            linkGlyphPath.reset()
-            LINK_GLYPH_BOLT.forEachIndexed { index, (dx, dy) ->
-                if (index == 0) linkGlyphPath.moveTo(x + dx, y + dy) else linkGlyphPath.lineTo(x + dx, y + dy)
+            if (element.link?.kind == ElementLink.KIND_CANVAS) {
+                drawCanvasGlyph(canvas, x, y)
+            } else {
+                drawNoteGlyph(canvas, x, y)
             }
-            linkGlyphPath.close()
-            canvas.drawPath(linkGlyphPath, linkGlyphPaint)
         }
+    }
+
+    /** A lightning bolt in the badge's own white: this element leaves the note for another one. */
+    private fun drawNoteGlyph(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+    ) {
+        linkGlyphPath.reset()
+        LINK_GLYPH_BOLT.forEachIndexed { index, (dx, dy) ->
+            if (index == 0) linkGlyphPath.moveTo(x + dx, y + dy) else linkGlyphPath.lineTo(x + dx, y + dy)
+        }
+        linkGlyphPath.close()
+        canvas.drawPath(linkGlyphPath, linkGlyphPaint)
+    }
+
+    /**
+     * Two sheets, the back one showing past the front: this element stays in the note and brings up
+     * another canvas of it (#2). Told apart from the bolt at a glance, which is the point: one leaves
+     * the note and one does not.
+     */
+    private fun drawCanvasGlyph(
+        canvas: Canvas,
+        x: Float,
+        y: Float,
+    ) {
+        val half = CANVAS_GLYPH_HALF_PX
+        val shift = CANVAS_GLYPH_SHIFT_PX
+        // The sheet behind, up and to the right, drawn first so the front one covers its near corner.
+        canvas.drawRect(x - half + shift, y - half - shift, x + half + shift, y + half - shift, linkGlyphPaint)
+        canvas.drawRect(x - half - shift, y - half + shift, x + half - shift, y + half + shift, handlePaint)
+        canvas.drawRect(
+            x - half - shift + CANVAS_GLYPH_EDGE_PX,
+            y - half + shift + CANVAS_GLYPH_EDGE_PX,
+            x + half - shift - CANVAS_GLYPH_EDGE_PX,
+            y + half + shift - CANVAS_GLYPH_EDGE_PX,
+            linkGlyphPaint,
+        )
     }
 
     /** The selection rectangle being dragged out, from [from] to [to] in view coordinates (FR7). */
@@ -428,6 +464,12 @@ internal class CanvasRenderer(
         const val LINK_GLYPH_RADIUS_PX = 28f
         val LINK_GLYPH_BOLT =
             listOf(4f to -17f, -10f to 3f, -1f to 3f, -4f to 17f, 10f to -3f, 1f to -3f)
+
+        // The canvas link's two sheets (#2): half a sheet's side, how far the back one is offset, and
+        // the white border that keeps the front one readable against the badge.
+        const val CANVAS_GLYPH_HALF_PX = 9f
+        const val CANVAS_GLYPH_SHIFT_PX = 4f
+        const val CANVAS_GLYPH_EDGE_PX = 2.5f
 
         // How far each corner bracket reaches along the current cell's edges (#53).
         const val CELL_BRACKET_PX = 20f

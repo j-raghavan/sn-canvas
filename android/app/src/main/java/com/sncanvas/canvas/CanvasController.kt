@@ -131,7 +131,14 @@ class CanvasController(
     }
 
     /** Links the one selected element to [link] (FR7), as one undoable step; a no-op unless exactly one is selected. */
-    fun linkSelected(link: ElementLink) = editSelected { id -> CanvasActions.relink(state, id, link) }
+    fun linkSelected(link: ElementLink) {
+        // A kind this build cannot follow is refused rather than stored: loading drops it again
+        // ([CanvasJson]), so it would be a link that quietly vanished on reopening the canvas.
+        if (!ElementLink.isKnown(link.kind)) {
+            return
+        }
+        editSelected { id -> CanvasActions.relink(state, id, link) }
+    }
 
     /** Takes the link off the one selected element; a no-op when it has none. */
     fun unlinkSelected() {
