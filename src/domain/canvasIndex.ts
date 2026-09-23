@@ -254,9 +254,62 @@ export function lastCanvasFor(index: CanvasIndex, notePath: string | null): stri
   return canvasesIn(index, notePath).includes(last) || !belongsToANote(index, last) ? last : null;
 }
 
-/** [index] with [link] waiting for its thumbnail; only the newest [MAX_PENDING] are kept. */
+/** The links waiting on page [at], oldest first. */
+export function pendingOn(index: CanvasIndex, at: NotePage): readonly PendingLink[] {
+  return index.pending.filter(link => link.notePath === at.notePath && link.page === at.page);
+}
+
+/**
+ * Whether a link knowing [knownPictureNumbers] would match every picture on [at], which is what a
+ * link that knows none does: [claimPending] asks only that the picture was not one it knew.
+ *
+ * Harmless on a page nothing is waiting on, and the ordinary first save onto a blank page. On a
+ * page that already has links it is not: being newest, it would answer every lasso there and the
+ * links that can actually tell their thumbnails apart would never be reached. The page read comes
+ * back with no pictures on this firmware even when the page has them, so that is the likely case
+ * (#47).
+ */
+export function wouldClaimEverythingOn(index: CanvasIndex, at: NotePage, knownPictureNumbers: readonly number[]): boolean {
+  return knownPictureNumbers.length === 0 && pendingOn(index, at).length > 0;
+}
+
+/**
+ * The links on a page that a picture could still be waiting to be claimed by, given [pictures],
+ * every picture on that page now. Newest first, because the newest link knew the most thumbnails
+ * and so has the fewest pictures it could be about; each takes one, and one left with none is
+ * waiting for a thumbnail the page no longer has (#47).
+ */
+const stillWaiting = (onPage: readonly PendingLink[], pictures: readonly number[]): readonly PendingLink[] => {
+  const free = new Set(pictures);
+  const waiting = new Set<PendingLink>();
+  [...onPage].reverse().forEach(link => {
+    const couldBeIts = [...free].find(num => !link.knownPictureNumbers.includes(num));
+    if (couldBeIts !== undefined) {
+      free.delete(couldBeIts);
+      waiting.add(link);
+    }
+  });
+  return onPage.filter(link => waiting.has(link));
+};
+
+/**
+ * [index] with [link] waiting for its thumbnail; only the newest [MAX_PENDING] are kept.
+ *
+ * Links the page can no longer account for go at the same time. [link]'s known numbers are every
+ * picture on that page as it is now, so they say which of the links already there still have a
+ * thumbnail to be claimed by; the rest never will be, and until this they stayed for good and
+ * filled the index until the cap started dropping the ones that were still good (#47).
+ *
+ * An empty read prunes nothing: no pictures is also what this firmware returns for a page that has
+ * them, and throwing away live links on the strength of that would lose the canvas behind a
+ * thumbnail. It only ever costs a save, since the next one with a real read prunes them.
+ */
 export function withPending(index: CanvasIndex, link: PendingLink): CanvasIndex {
-  return {...index, pending: [...index.pending, link].slice(-MAX_PENDING)};
+  const onPage = pendingOn(index, link);
+  const kept =
+    link.knownPictureNumbers.length === 0 ? onPage : stillWaiting(onPage, link.knownPictureNumbers);
+  const spent = new Set(onPage.filter(other => !kept.includes(other)));
+  return {...index, pending: [...index.pending.filter(other => !spent.has(other)), link].slice(-MAX_PENDING)};
 }
 
 /**

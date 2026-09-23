@@ -423,6 +423,64 @@ describe('links back to a canvas', () => {
     expect(store.shown).toBe('drawing');
   });
 
+  // Every save left a link and nothing ever took one away, so links.json filled to its cap and
+  // started dropping the oldest, which are the ones most likely still to have a thumbnail (#47).
+  test('a link whose thumbnail is no longer on the page goes on the next save', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [notePicture(5)];
+    await session.saveToNote();
+    // The thumbnail is deleted before it is ever lassoed, so the page is back to picture 5 alone.
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    await session.close();
+    expect(
+      savedIndex(store).pending.map((link: {canvasId: string; knownPictureNumbers: number[]}) => [
+        link.canvasId,
+        link.knownPictureNumbers,
+      ]),
+    ).toEqual([['c-2', [5]]]);
+  });
+
+  // A link that knew no pictures matches every lasso on its page, and being newest it answers them
+  // all, so the links that can tell their thumbnails apart are never reached. The page read comes
+  // back with no pictures on this firmware even when the page has them (#47).
+  test('a page read that finds nothing leaves no link where others are already waiting', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [notePicture(5)];
+    await session.saveToNote();
+    host.unsaved = [notePicture(6)];
+
+    // The read comes back empty although the page holds both pictures.
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    host.elements = [];
+    host.unsaved = [];
+    await session.saveToNote();
+    await session.close();
+
+    expect(
+      savedIndex(store).pending.map((link: {canvasId: string}) => link.canvasId),
+    ).toEqual(['c-1']);
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] page=0 read no pictures though links are waiting on it; no pending link for ' +
+        'canvas=c-2, so Open Canvas on its thumbnail will show the newest canvas',
+    );
+  });
+
+  // On a page nothing is waiting on, a read that finds nothing is the ordinary first save onto a
+  // blank page, and the link is the only one there, so it can only ever answer for its own thumbnail.
+  test('a page read that finds nothing still leaves the first link on a blank page', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [];
+    await session.saveToNote();
+    await session.close();
+    expect(savedIndex(store).pending.map((link: {canvasId: string}) => link.canvasId)).toEqual(['c-1']);
+  });
+
   test('two canvases saved to one page each keep a thumbnail that opens its own canvas (#30)', async () => {
     const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
     await session.open(500);

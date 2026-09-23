@@ -17,6 +17,7 @@ import {
   withLastCanvas,
   withPending,
   withoutCanvas,
+  wouldClaimEverythingOn,
   type CanvasIndex,
   type NotePage,
 } from '../domain/canvasIndex';
@@ -189,6 +190,17 @@ export function createNoteThumbnails({
     }
     const {at, pictures} = link.known;
     const knownPictureNumbers = pictureNumbersOf(pictures);
+    // A link that knew no pictures answers every lasso on its page, so on a page other links are
+    // waiting on it would take their thumbnails' lassos and give back the wrong canvas. Leaving none
+    // is no worse: Open Canvas falls back to the newest canvas, and the links already there still
+    // work (#47).
+    if (wouldClaimEverythingOn(await index.load(link.dir), at, knownPictureNumbers)) {
+      logger.warn(
+        `${TAG}[LINK] page=${at.page} read no pictures though links are waiting on it; no pending link for ` +
+          `canvas=${link.linkedId}, so Open Canvas on its thumbnail will show the newest canvas`,
+      );
+      return;
+    }
     await index.update(link.dir, current => withPending(current, {...at, canvasId: link.linkedId, knownPictureNumbers}));
     logger.log(`${TAG}[LINK] pending link for canvas=${link.linkedId} page=${at.page} knownPictures=${knownPictureNumbers.length}`);
   };
