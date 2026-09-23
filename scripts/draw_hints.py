@@ -38,9 +38,9 @@ HINTS = {
     # so this caption has to clear the bar and only its arrow crosses it.
     "eraser": (["Tap again to", "clear the canvas"], "down-left", 30, 82),
     "help": (["Show or hide", "these hints"], "down-left", 30, 52),
-    # Points at the zoom pill in the bottom left, so its caption sits up and to the
-    # right of it and only the arrow reaches down (#12).
-    "zoom": (["Zoom, and the", "way back to 100%"], "down-left", 30, 52),
+    # Points at the zoom pill in the bottom left. A long arrow, so the caption clears
+    # the toolbar hint beside it rather than reading as one block with it (#12).
+    "zoom": (["Zoom, and the", "way back to 100%"], "down-left", 26, 110),
 }
 
 
