@@ -234,6 +234,20 @@ def action_link():
     save(image, "action-link")
 
 
+def action_link_canvas():
+    """The canvas link's two sheets, with an arrow into the front one: this element brings up another
+    canvas of the same note (#2). The arrow is what keeps it from reading as action-duplicate, which
+    is two plain sheets."""
+    image, draw = new_canvas()
+    # The sheet behind, up and to the right; only the corner that shows past the front one.
+    polyline(draw, [(56, 30), (104, 30), (104, 78)])
+    draw.rounded_rectangle(scaled((24, 50, 88, 108)), radius=8 * SCALE, outline="black", width=STROKE * SCALE)
+    # An arrow into it, so the icon says "go to that canvas" rather than "make another".
+    polyline(draw, [(40, 79), (70, 79)])
+    polyline(draw, [(60, 69), (70, 79), (60, 89)])
+    save(image, "action-link-canvas")
+
+
 def action_unlink():
     """The same bolt struck through: the link comes off. The stroke runs across the bolt's own
     diagonal rather than along it, or the two read as one shape at toolbar size."""
@@ -250,6 +264,7 @@ ICONS = [
     action_ungroup,
     action_more,
     action_link,
+    action_link_canvas,
     action_unlink,
     lambda: fill_icon("fill-none"),
     lambda: fill_icon("fill-semi", interior_alpha=80),

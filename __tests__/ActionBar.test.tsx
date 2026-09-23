@@ -12,6 +12,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onNewCanvas = jest.fn();
   const onClearCanvas = jest.fn();
   const onLinkToNote = jest.fn();
+  const onLinkToCanvas = jest.fn();
   const onNoteCanvases = jest.fn();
   const onMenuOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
@@ -23,6 +24,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
         onNewCanvas={onNewCanvas}
         onClearCanvas={onClearCanvas}
         onLinkToNote={onLinkToNote}
+        onLinkToCanvas={onLinkToCanvas}
         onNoteCanvases={onNoteCanvases}
         onMenuOpen={onMenuOpen}
       />,
@@ -35,7 +37,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onNoteCanvases, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onLinkToCanvas, onNoteCanvases, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
@@ -203,4 +205,19 @@ test('Canvases in this note goes to the screen, which lists them, and is there w
   press('canvas-menu-noteCanvases');
   expect(onNoteCanvases).toHaveBeenCalledTimes(1);
   expect(onCommand).not.toHaveBeenCalled();
+});
+
+// #2: linking to another canvas is the same job as linking to a note, so it sits beside it on the bar
+// rather than behind the ⋮, which is where things go to be missed.
+test('Link to canvas is on the bar beside Link to note, greyed out until something is selected', () => {
+  expect(renderBar().isDisabled('canvas-link-canvas')).toBe(true);
+  const selected = renderBar({hasSelection: true});
+  expect(selected.isDisabled('canvas-link-canvas')).toBe(false);
+  selected.press('canvas-link-canvas');
+  expect(selected.onLinkToCanvas).toHaveBeenCalled();
+
+  // Not in the menu as well, or it would be offered twice.
+  const bar = renderBar({hasSelection: true});
+  bar.press('canvas-more');
+  expect(bar.isListed('canvas-menu-linkToCanvas')).toBe(false);
 });

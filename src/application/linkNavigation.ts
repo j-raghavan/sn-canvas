@@ -25,6 +25,8 @@ export type LinkNavigationDeps = {
   shown: {id: () => string; show: (dir: string, canvasId: string, at: NotePage | null) => Promise<void>};
   /** Saves the canvas shown, as the session does before leaving it. */
   saveShown: () => Promise<void>;
+  /** Whether [canvasId] is still saved in [dir]: a link to one that has gone is not followed (#2). */
+  canvasExists: (dir: string, canvasId: string) => Promise<boolean>;
   serially: (task: () => Promise<void>) => Promise<void>;
   /** Logs as news or as a warning. */
   report: (ok: boolean, message: string) => void;
@@ -51,6 +53,7 @@ export function createLinkNavigation({
   canvasDir,
   shown,
   saveShown,
+  canvasExists,
   serially,
   report,
 }: LinkNavigationDeps): LinkNavigation {
@@ -69,7 +72,43 @@ export function createLinkNavigation({
     return {kind: 'note', target, page: LINK_LAST_PAGE};
   };
 
-  const followLink = async (link: ElementLink): Promise<boolean> => {
+  /**
+   * A link to another canvas of the same note (#2). Nothing leaves the plugin: the canvas shown is
+   * saved and the target brought up in its place, with a step back to the one left. A target that is
+   * no longer saved is refused rather than loaded, since showing it would open an empty canvas and
+   * make it the note's own, losing the place the note had.
+   */
+  const followToCanvas = async (link: ElementLink): Promise<boolean> => {
+    // Being on it already is not a failure: taps queue, and the e-ink screen is slow enough that a
+    // second tap on a glyph is ordinary. Saying the canvas has gone about one on screen is not (#2).
+    let switched = false;
+    let alreadyHere = false;
+    await serially(async () => {
+      const dir = await canvasDir();
+      if (dir === null) {
+        return;
+      }
+      const from = shown.id();
+      alreadyHere = link.target === from;
+      if (alreadyHere || !(await canvasExists(dir, link.target))) {
+        return;
+      }
+      const at = await host.currentPage();
+      await shown.show(dir, link.target, at);
+      switched = true;
+      if (at !== null) {
+        trail = withStep(trail, {...at, kind: 'canvas', canvasId: from});
+      }
+    });
+    if (alreadyHere) {
+      logger.log(`${TAG}[LINK] canvas=${link.target} is the one shown; nothing to switch to`);
+      return true;
+    }
+    report(switched, `${TAG}[LINK] ${switched ? 'switched to' : 'could not switch to'} canvas=${link.target}`);
+    return switched;
+  };
+
+  const followToNote = async (link: ElementLink): Promise<boolean> => {
     let opened = false;
     await serially(async () => {
       await saveShown();
@@ -78,13 +117,16 @@ export function createLinkNavigation({
       if (!opened) {
         await view.comeBack();
       } else if (from !== null) {
-        trail = withStep(trail, {...from, canvasId: shown.id(), to: link.target});
+        trail = withStep(trail, {...from, kind: 'note', canvasId: shown.id(), to: link.target});
         badge.show(noteNameOf(from.notePath), link.target);
       }
     });
     report(opened, `${TAG}[LINK] ${opened ? 'followed' : 'could not follow'} link to ${link.target} page=${link.page}`);
     return opened;
   };
+
+  const followLink = (link: ElementLink): Promise<boolean> =>
+    link.kind === 'canvas' ? followToCanvas(link) : followToNote(link);
 
   const stepBack = (): Promise<void> =>
     serially(async () => {
@@ -94,6 +136,22 @@ export function createLinkNavigation({
       if (step === undefined || dir === null) {
         // Nothing to go back to (never offered): bringing Canvas up would show a canvas over a note it may not be.
         logger.warn(`${TAG}[LINK] nothing to go back to`);
+        return;
+      }
+      // The canvas a step goes back to can be deleted while you are away from it. Showing it would
+      // load nothing and record that nothing as the note's own canvas, which is the loss the follow
+      // path already refuses (#2, #46). The step is let go of instead, so Back moves on to the next.
+      if (!(await canvasExists(dir, step.canvasId))) {
+        trail = trail.slice(0, -1);
+        logger.warn(`${TAG}[LINK] canvas=${step.canvasId} is no longer here; that step back is gone`);
+        return;
+      }
+      if (step.kind === 'canvas') {
+        // The note never changed, so there is nothing to leave or come back to: bring the canvas the
+        // link was followed from back up in place of the one it led to (#2).
+        await shown.show(dir, step.canvasId, step);
+        trail = trail.slice(0, -1);
+        logger.log(`${TAG}[LINK] back to canvas=${step.canvasId}`);
         return;
       }
       const said = `to ${step.notePath} page=${step.page} canvas=${step.canvasId}`;

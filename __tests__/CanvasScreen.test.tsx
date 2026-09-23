@@ -510,6 +510,36 @@ describe('links', () => {
     expect(session.followLink).toHaveBeenCalledWith({kind: 'note', target: '/n.note', page: 2});
   });
 
+  // #2: a canvas link leaves Canvas on screen, so nothing else re-reads the trail. Without the screen
+  // doing it here, the header offers no way back from a link it has just followed.
+  test('following a canvas link offers the way back straight away', async () => {
+    const session = createFakeSession();
+    session.followLink.mockResolvedValue(true);
+    session.backTo.mockReturnValue(null);
+    const {renderer, has, labelled} = await render(session);
+    expect(has('canvas-back')).toBe(false);
+
+    // Following it is what puts the step on the trail.
+    session.backTo.mockReturnValue({notePath: '/note.note', page: 0, kind: 'canvas' as const, canvasId: 'c-from'});
+    await act(async () => {
+      renderer.root.findByType(CanvasNativeView).props.onFollowLink({nativeEvent: {kind: 'canvas', target: 'c-to', page: -1}});
+    });
+    expect(has('canvas-back')).toBe(true);
+    expect(labelled('Back to canvas')).toBe(true);
+  });
+
+  // The two failures read differently, because one canvas is gone and the other note would not open.
+  test('a canvas link whose canvas has gone says so, not that a note would not open', async () => {
+    const session = createFakeSession();
+    session.followLink.mockResolvedValue(false);
+    const {renderer, shows} = await render(session);
+    await act(async () => {
+      renderer.root.findByType(CanvasNativeView).props.onFollowLink({nativeEvent: {kind: 'canvas', target: 'c-gone', page: -1}});
+    });
+    expect(shows('That canvas is no longer here')).toBe(true);
+    expect(shows('Could not open that note')).toBe(false);
+  });
+
   test('a link that will not open says so, and one the bridge cannot read is ignored', async () => {
     const session = createFakeSession();
     session.followLink.mockResolvedValue(false);
@@ -546,6 +576,34 @@ describe("a note's canvases (#30)", () => {
     expect(has('canvas-list')).toBe(false);
   });
 
+  // #2: the same list, picked from to link the selection rather than to switch to one.
+  test('Link to canvas lists the others and puts the link on the selection', async () => {
+    const session = createFakeSession();
+    session.canvasesHere.mockResolvedValue(CANVASES);
+    const {press, has, labelled, shows} = await render(session);
+    await press('canvas-link-canvas');
+    // The canvas shown is not offered: an element linking to the canvas it sits on goes nowhere.
+    expect(labelled('Canvas made 19 Sep 2026, 13:01')).toBe(true);
+    expect(labelled('Canvas made Not saved to the note yet, shown')).toBe(false);
+
+    await press(`canvas-list-${canvasId}`);
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'linkSelected', ['canvas', canvasId, '-1']);
+    // The only sign the link landed: the picker closes and nothing else on screen changes.
+    expect(shows('Linked to the canvas')).toBe(true);
+    // Linking is not switching: the canvas shown does not change.
+    expect(session.switchTo).not.toHaveBeenCalled();
+    expect(has('canvas-list')).toBe(false);
+  });
+
+  test('a note with no other canvas says so rather than showing an empty list', async () => {
+    const session = createFakeSession();
+    session.canvasesHere.mockResolvedValue([CANVASES[0]]);
+    const {press, has, shows} = await render(session);
+    await press('canvas-link-canvas');
+    expect(has('canvas-list')).toBe(false);
+    expect(shows('This note has no other canvas to link to')).toBe(true);
+  });
+
   test('Done closes the list without switching', async () => {
     const session = createFakeSession();
     const {press, has} = await render(session);
@@ -559,7 +617,7 @@ describe("a note's canvases (#30)", () => {
 });
 
 describe('the way back along followed links', () => {
-  const STEP = {notePath: '/storage/emulated/0/Note/Work/presenting.note', page: 3, canvasId: 'c-1', to: '/n.note'};
+  const STEP = {notePath: '/storage/emulated/0/Note/Work/presenting.note', page: 3, kind: 'note' as const, canvasId: 'c-1', to: '/n.note'};
 
   test("a tap on the note's badge steps back through the session, and unmounting stops listening", async () => {
     const session = createFakeSession();

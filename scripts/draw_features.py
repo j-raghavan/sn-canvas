@@ -51,8 +51,8 @@ STROKE = 3
 
 # Where each control sits in the screenshot, measured once.
 HEADER_Y = 51
-ACTIONS_Y = 2369
-TOOLS_Y = 2449
+ACTIONS_Y = 2343
+TOOLS_Y = 2460
 HEADER = {"export": 1711, "save": 1782, "close": 1855}
 STYLE_TOGGLE = (1833, 163)
 COLOURS_AT = (1836, 352)
@@ -60,7 +60,11 @@ OPACITY_AT = (1852, 548)
 FILL_AT = (1836, 646)
 OUTLINE_AT = (1836, 728)
 SIZE_AT = (1836, 810)
-ACTIONS = [662, 736, 810, 884, 960, 1034, 1109, 1183, 1258]
+# Ten buttons since Link to canvas (#2). The pill measures 574..1345 in the screenshot, 771px for
+# 10 x 40dp plus padding and border, so the spacing is 74.5px about a centre of 960.
+# The zoom control (#12), bottom left of the canvas, beside the action bar.
+ZOOM_AT = (102, 2354)
+ACTIONS = [625, 699, 774, 848, 923, 997, 1072, 1146, 1221, 1295]
 TOOLS = [495, 576, 659, 742, 823, 906, 992, 1073, 1153, 1235, 1318, 1425]
 
 
@@ -170,6 +174,9 @@ def main(shot_path, debug=False):
     ):
         label(draw, font, text, (right, y), target, align="right", bend=-0.08)
 
+    # The zoom control, which sits beside the action bar rather than in it.
+    label(draw, font, "Zoom: tap for Fit, 100%, 50%, 25%", (60, 970), place(*ZOOM_AT), align="left", bend=0.06)
+
     # The action bar, labelled in the space above it.
     for text, index, at, align in (
         ("Undo", 0, (60, 700), "left"),
@@ -177,10 +184,11 @@ def main(shot_path, debug=False):
         ("Delete", 2, (60, 808), "left"),
         ("Duplicate", 3, (60, 862), "left"),
         ("Group", 4, (60, 916), "left"),
-        ("More: arrange, zoom, tables,\ncanvases in this note, new canvas", 8, (2060, 700), "right"),
-        ("Take the link off", 7, (2060, 790), "right"),
-        ("Link this to a note", 6, (2060, 844), "right"),
-        ("Ungroup", 5, (2060, 898), "right"),
+        ("More: arrange, zoom, tables,\ncanvases in this note, new canvas", 9, (2060, 700), "right"),
+        ("Take the link off", 8, (2060, 790), "right"),
+        ("Link this to another canvas", 7, (2060, 844), "right"),
+        ("Link this to a note", 6, (2060, 898), "right"),
+        ("Ungroup", 5, (2060, 952), "right"),
     ):
         label(draw, font, text, at, place(ACTIONS[index], ACTIONS_Y), align=align, bend=0.06)
 
@@ -209,6 +217,7 @@ def main(shot_path, debug=False):
             spot = place(x, TOOLS_Y)
             draw.ellipse([spot[0] - 5, spot[1] - 5, spot[0] + 5, spot[1] + 5], fill="red")
         for spot in (
+            place(*ZOOM_AT),
             place(HEADER["export"], HEADER_Y),
             place(HEADER["save"], HEADER_Y),
             place(HEADER["close"], HEADER_Y),

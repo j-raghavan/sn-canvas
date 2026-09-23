@@ -346,6 +346,11 @@ class CanvasJsonTest {
         val reloaded = CanvasJson.deserializeElements(CanvasJson.serializeElements(listOf(linked)))
         assertEquals(linked.link, reloaded.single().link)
 
+        // A link to another canvas of the same note (#2), which needed no change to what is saved.
+        val toCanvas = linked.copy(link = ElementLink(ElementLink.KIND_CANVAS, "c-mu1ib4it-0vx5"))
+        val canvasBack = CanvasJson.deserializeElements(CanvasJson.serializeElements(listOf(toCanvas)))
+        assertEquals(toCanvas.link, canvasBack.single().link)
+
         // A kind this build cannot follow: the element loads, without the link, rather than being dropped.
         val unknown = """{"version":1,"elements":[{"id":"l","type":"rectangle","link":{"kind":"portal","target":"x"}}]}"""
         assertNull(CanvasJson.deserializeElements(unknown).single().link)

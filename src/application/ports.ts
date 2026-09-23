@@ -14,11 +14,9 @@ export type NotePen = {type: number; width: number; color: number};
 /** What "Save to Note" did: put a thumbnail of the canvas into the note, or nothing. */
 export type SaveToNoteResult = 'inserted' | null;
 
-/** Where an element links to (FR7); the shapes the canvas stores and the screen follows. */
-export type ElementLink = {kind: 'note'; target: string; page: number};
-
-/** Open the target where it was last left, rather than at a page of Canvas's choosing. */
-export const LINK_LAST_PAGE = -1;
+// Where an element links to lives in the domain, since a canvas file holds it; re-exported so the
+// session and its adapters take everything they speak in from one place.
+export {LINK_LAST_PAGE, type ElementLink} from '../domain/canvasLink';
 
 /** The live canvas view's persistence, by absolute path, the canvas folder's own small files, and the pen it gives back. */
 export type CanvasStorePort = {

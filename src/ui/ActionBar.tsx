@@ -9,7 +9,7 @@ import type {CanvasUiState} from '../domain/styles';
 import type {CanvasCommand} from './nativeCanvasView';
 
 /** Actions the screen handles rather than the canvas: a session call, or a question asked first. */
-const SCREEN_ACTIONS = ['newCanvas', 'linkToNote', 'noteCanvases', 'clearCanvas'] as const;
+const SCREEN_ACTIONS = ['newCanvas', 'linkToNote', 'linkToCanvas', 'noteCanvases', 'clearCanvas'] as const;
 type ScreenAction = (typeof SCREEN_ACTIONS)[number];
 
 const isScreenAction = (action: CanvasCommand | ScreenAction): action is ScreenAction =>
@@ -77,6 +77,16 @@ const ACTIONS: readonly Action[] = [
     icon: require('../../assets/icons/action-link.png'),
     enabled: ui => ui.hasSelection,
   },
+  // Beside it, because linking to another canvas of this note is the same job (#2), and because an
+  // action worth doing does not belong behind the ⋮ any more than Link to note did. The icon is the
+  // badge it puts on the element, so the button says what you will get.
+  {
+    action: 'linkToCanvas',
+    testID: 'canvas-link-canvas',
+    label: 'Link to canvas',
+    icon: require('../../assets/icons/action-link-canvas.png'),
+    enabled: ui => ui.hasSelection,
+  },
   {
     action: 'unlinkSelected',
     testID: 'canvas-unlink',
@@ -129,6 +139,8 @@ type Props = {
   onClearCanvas: () => void;
   /** Asks for a note to link the selected element to; the screen runs the picker. */
   onLinkToNote: () => void;
+  /** Asks which canvas of this note the selection should link to (#2). */
+  onLinkToCanvas: () => void;
   /** Lists the canvases made in the open note, to show another. */
   onNoteCanvases: () => void;
   /** The ⋮ menu is opening: the screen puts the onboarding hints away, so neither is drawn over the other. */
@@ -141,6 +153,7 @@ export default function ActionBar({
   onNewCanvas,
   onClearCanvas,
   onLinkToNote,
+  onLinkToCanvas,
   onNoteCanvases,
   onMenuOpen,
 }: Props): React.JSX.Element {
@@ -151,6 +164,7 @@ export default function ActionBar({
   const screenActions: Record<ScreenAction, () => void> = {
     newCanvas: onNewCanvas,
     linkToNote: onLinkToNote,
+    linkToCanvas: onLinkToCanvas,
     noteCanvases: onNoteCanvases,
     clearCanvas: onClearCanvas,
   };

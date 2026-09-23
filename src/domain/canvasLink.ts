@@ -108,12 +108,23 @@ export function canvasIdFromThumbnailPath(path: unknown): string | null {
  * knows, with a target, or null. The canvas only ever sends links it stored,
  * but the bridge is a boundary and anything crossing it is checked.
  */
-export function parseElementLink(payload: unknown): {kind: 'note'; target: string; page: number} | null {
+/**
+ * Where an element links to (FR7): a note by its path, opened at [page]; or another canvas of the
+ * same note by its id, which [page] means nothing for (#2). The shape saved in a canvas file, so a
+ * kind a build does not know is dropped as it loads rather than followed ([parseElementLink]).
+ */
+export type ElementLink = {kind: 'note' | 'canvas'; target: string; page: number};
+
+/** Open the target where it was last left, rather than at a page of Canvas's choosing. */
+export const LINK_LAST_PAGE = -1;
+
+export function parseElementLink(payload: unknown): ElementLink | null {
   const body = (payload ?? {}) as {kind?: unknown; target?: unknown; page?: unknown};
-  if (body.kind !== 'note' || typeof body.target !== 'string' || body.target === '') {
+  const kind = body.kind === 'note' || body.kind === 'canvas' ? body.kind : null;
+  if (kind === null || typeof body.target !== 'string' || body.target === '') {
     return null;
   }
-  return {kind: 'note', target: body.target, page: Number.isInteger(body.page) ? (body.page as number) : -1};
+  return {kind, target: body.target, page: Number.isInteger(body.page) ? (body.page as number) : LINK_LAST_PAGE};
 }
 
 /** A lassoed note element's picture path (sn-plugin-lib `Element.picture.picturePath`), if it has one. */

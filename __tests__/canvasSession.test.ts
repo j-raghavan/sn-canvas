@@ -909,8 +909,167 @@ describe('links to notes', () => {
     expect(store.files.get(SCRATCH)).toBe('scratch, and more');
     expect(host.steps).toEqual(['close', 'open /n.note']);
     expect(badge.shown).toEqual({label: 'note', notePath: '/n.note'});
-    expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, canvasId: 'default', to: '/n.note'});
+    expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'note', canvasId: 'default', to: '/n.note'});
     expect(logger.lines).toContain('log [SNCANVAS][LINK] followed link to /n.note page=-1');
+  });
+
+  describe('links to another canvas of the same note (#2)', () => {
+    /** Two canvases saved in this note, with c-one shown and c-other the one a link leads to. */
+    const twoCanvases = async () => {
+      const kit = setup({[canvasFile('c-one')]: 'the first drawing', [canvasFile('c-other')]: 'the other drawing'});
+      await kit.session.open(500);
+      await kit.session.switchTo('c-one');
+      return kit;
+    };
+
+    test('following one brings the other canvas up, without leaving the note, and offers the way back', async () => {
+      const {store, host, badge, logger, session} = await twoCanvases();
+      const shownBefore = session.currentCanvasId();
+
+      expect(await session.followLink({kind: 'canvas', target: 'c-other', page: -1})).toBe(true);
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      // Nothing left the plugin, so no note opened and no badge went over one.
+      expect(host.steps).toEqual([]);
+      expect(badge.shown).toBeNull();
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: shownBefore});
+      expect(logger.lines).toContain('log [SNCANVAS][LINK] switched to canvas=c-other');
+    });
+
+    test('going back brings the canvas it was followed from up again, still without leaving', async () => {
+      const {store, host, session} = await twoCanvases();
+      const shownBefore = session.currentCanvasId();
+      await session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe(shownBefore);
+      expect(host.steps).toEqual([]);
+      expect(session.backTo()).toBeNull();
+      expect(store.shown).toBe('the first drawing');
+    });
+
+    // The same hazard as following a dead link, from the other end: the canvas a step goes back to can
+    // be deleted while you are away from it, and showing it would record that nothing as the note's.
+    // What show() records for the note, which decides what the sidebar reopens later. Both assertions
+    // matter: without the first, the second would pass on a fixture that never recorded c-other.
+    test('the canvas come back to is the one this note reopens, not the one the link led to', async () => {
+      const {store, session} = await twoCanvases();
+      await session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+      expect(savedIndex(store).lastByNote['/note.note']).toBe('c-other');
+
+      await session.goBack();
+      expect(savedIndex(store).lastByNote['/note.note']).toBe('c-one');
+    });
+
+    // Without a note page there is nothing to record a step against, and a step with no page would
+    // leave the header offering a way back to nowhere.
+    test('a canvas link followed from a page the host cannot name switches, but keeps no way back', async () => {
+      const {host, store, session} = await twoCanvases();
+      host.page = null;
+
+      expect(await session.followLink({kind: 'canvas', target: 'c-other', page: -1})).toBe(true);
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      expect(session.backTo()).toBeNull();
+    });
+
+    /** Three canvases, so a trail can hold more than one step and popping one is not popping all. */
+    const threeCanvases = async () => {
+      const kit = setup({
+        [canvasFile('c-one')]: 'the first drawing',
+        [canvasFile('c-other')]: 'the other drawing',
+        [canvasFile('c-third')]: 'the third drawing',
+      });
+      await kit.session.open(500);
+      await kit.session.switchTo('c-one');
+      await kit.session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+      await kit.session.followLink({kind: 'canvas', target: 'c-third', page: -1});
+      return kit;
+    };
+
+    // One step at a time, as the firmware's own Back does. With a single step on the trail, taking one
+    // and taking all leave the same trail, so nothing shorter than this tells them apart.
+    test('two canvas links followed come back one canvas at a time', async () => {
+      const {store, session} = await threeCanvases();
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      // The way back to the canvas the first link was followed from is still there to take.
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: 'c-one'});
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe('c-one');
+      expect(store.shown).toBe('the first drawing');
+      expect(session.backTo()).toBeNull();
+    });
+
+    test('a step back to a canvas that has gone drops that step and no more', async () => {
+      const {store, session} = await threeCanvases();
+      store.files.delete(canvasFile('c-other'));
+
+      await session.goBack();
+      // Nothing was shown for the dead step, and the step under it is still there to take.
+      expect(session.currentCanvasId()).toBe('c-third');
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: 'c-one'});
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe('c-one');
+      expect(store.shown).toBe('the first drawing');
+      expect(session.backTo()).toBeNull();
+    });
+
+    test('a step back to a canvas that has gone is dropped, not loaded over the note', async () => {
+      const {store, session, logger} = await twoCanvases();
+      await session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+      expect(session.currentCanvasId()).toBe('c-other');
+
+      store.files.delete(canvasFile('c-one'));
+      await session.goBack();
+
+      // Still on the canvas it was already showing, with its drawing, and the dead step let go of.
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      expect(session.backTo()).toBeNull();
+      expect(logger.lines).toContain('warn [SNCANVAS][LINK] canvas=c-one is no longer here; that step back is gone');
+    });
+
+    // Showing it would load nothing, and make that nothing the note's own canvas, losing its place.
+    test('a link to a canvas that is no longer saved is refused, and nothing is switched', async () => {
+      const {store, session, logger} = await twoCanvases();
+      const shownBefore = session.currentCanvasId();
+      store.files.delete(canvasFile('c-other'));
+
+      expect(await session.followLink({kind: 'canvas', target: 'c-other', page: -1})).toBe(false);
+      expect(session.currentCanvasId()).toBe(shownBefore);
+      expect(session.backTo()).toBeNull();
+      expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not switch to canvas=c-other');
+    });
+
+    // Taps queue and the screen is slow, so tapping a glyph twice is ordinary. The second is nothing
+    // to do, not a failure: saying the canvas has gone about one on screen would be a lie.
+    test('a link to the canvas already shown does nothing, and is not reported as a failure', async () => {
+      const {session, logger} = await twoCanvases();
+      const here = session.currentCanvasId();
+      expect(await session.followLink({kind: 'canvas', target: here, page: -1})).toBe(true);
+      expect(session.currentCanvasId()).toBe(here);
+      expect(session.backTo()).toBeNull();
+      expect(logger.lines).toContain(`log [SNCANVAS][LINK] canvas=${here} is the one shown; nothing to switch to`);
+      expect(logger.lines.some(line => line.includes('could not switch to'))).toBe(false);
+    });
+
+    test('tapping the same link twice switches once and leaves one step, not two', async () => {
+      const {session} = await twoCanvases();
+      const from = session.currentCanvasId();
+      const toOther = {kind: 'canvas', target: 'c-other', page: -1} as const;
+      expect(await session.followLink(toOther)).toBe(true);
+      expect(await session.followLink(toOther)).toBe(true);
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: from});
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe(from);
+      expect(session.backTo()).toBeNull();
+    });
   });
 
   test('a note that will not open brings Canvas straight back, with no badge and no step, and says so', async () => {
@@ -942,6 +1101,20 @@ describe('links to notes', () => {
     await session.open(500);
     expect(badge.shown).toBeNull();
     expect(session.backTo()).toBeNull();
+  });
+
+  // The same guard covers a note step: its canvas can be deleted while the note is open over it.
+  test('a step back whose canvas has gone is dropped rather than opening the note over nothing', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(500);
+    await session.followLink(link);
+    store.files.delete(SCRATCH);
+
+    await session.goBack();
+    // Nothing was opened or closed for it, and the step is let go of.
+    expect(host.openedNotes).toEqual([{path: '/n.note', page: -1}]);
+    expect(session.backTo()).toBeNull();
+    expect(logger.lines).toContain('warn [SNCANVAS][LINK] canvas=default is no longer here; that step back is gone');
   });
 
   test('with no step to take, going back does nothing but say so', async () => {

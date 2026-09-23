@@ -42,6 +42,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 - **Saving again adds another thumbnail** beside the one already there. Canvas only ever adds to a note, never writes into one, so old thumbnails are yours to keep or delete.
 - Every thumbnail links to its own canvas, so one note can hold as many canvases as you like.
 - **Link to a note.** Select something, then **⋮ → Link to note…** and pick the note. A chain badge appears on it; tap the badge and that note opens where you left it. **Remove link** takes it off again.
+- **Link to another canvas.** Select something, then tap the two-sheets button in the action bar and pick one of the note's other canvases. It gets a two-sheets badge rather than the chain, so you can tell at a glance whether tapping will leave the note; tapping brings that canvas up in place of this one, and **Back** in the header returns.
 - **Export to PDF:** the whole canvas on one page fitted to its content, in true colour with images included.
 - Closing Canvas saves it. Canvases are stored as structured, re-editable data, never flattened into ink.
 

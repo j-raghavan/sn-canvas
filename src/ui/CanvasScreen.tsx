@@ -9,8 +9,8 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType} from 'react-native';
 import type {BackBadgeTaps, CanvasSession, NoteCanvas} from '../application/canvasSession';
 import {INITIAL_UI_STATE, parseUiState, swatchColor, type CanvasUiState} from '../domain/styles';
-import {parseElementLink} from '../domain/canvasLink';
-import {noteNameOf, type TrailStep} from '../domain/linkTrail';
+import {LINK_LAST_PAGE, parseElementLink} from '../domain/canvasLink';
+import {backLabelOf, type TrailStep} from '../domain/linkTrail';
 import {parseTextEditRequest, type TextEditRequest} from '../domain/textEdit';
 import ActionBar from './ActionBar';
 import CanvasList from './CanvasList';
@@ -77,18 +77,32 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   const [isConfirmingClear, setConfirmingClear] = useState(false);
   const canvasRef = useRef<CanvasViewRef>(null);
   // #30: the canvases made in this note, while the list of them is open.
-  const [noteCanvases, setNoteCanvases] = useState<readonly NoteCanvas[] | null>(null);
+  // The note's canvases, shown either to switch to one or to link the selection to one (#2).
+  const [canvasPicker, setCanvasPicker] = useState<{canvases: readonly NoteCanvas[]; forLink: boolean} | null>(null);
   // #34: one step back along the links followed to this canvas, offered as the firmware offers its own.
   const [back, setBack] = useState<TrailStep | null>(null);
-  const goBack = useCallback(() => session.goBack().then(() => setBack(session.backTo())), [session]);
+  /**
+   * Runs something that can change the trail, then re-reads it. Every one of these used to say so for
+   * itself, and the one added for canvas links forgot, which left a link followed with no way back on
+   * screen: a canvas link leaves Canvas up, so nothing else re-reads it (#2).
+   */
+  const withTrail = useCallback(
+    async (run: () => Promise<unknown>) => {
+      await run();
+      setBack(session.backTo());
+    },
+    [session],
+  );
+
+  const goBack = useCallback(() => withTrail(() => session.goBack()), [session, withTrail]);
 
   // The plugin runtime stays warm between opens, so this screen can stay mounted across them: every press
   // re-resolves which canvas to show.
   useEffect(() => {
-    const openCanvas = (buttonId: number | null) => session.open(buttonId).then(() => setBack(session.backTo()));
+    const openCanvas = (buttonId: number | null) => withTrail(() => session.open(buttonId));
     openCanvas(buttonEvents.lastButtonId());
     return buttonEvents.onButton(openCanvas);
-  }, [session, buttonEvents]);
+  }, [session, buttonEvents, withTrail]);
 
   // The badge over a note a link opened: a tap is one step back, as the header's is.
   useEffect(() => backBadgeTaps.onTapped(goBack), [goBack, backBadgeTaps]);
@@ -135,28 +149,45 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   // FR7: a tap on a link's glyph; the note opens over the plugin, so nothing more is said about it here.
   const followLink = async (payload: unknown) => {
     const link = parseElementLink(payload);
-    if (link !== null && !(await session.followLink(link))) {
-      setNotice('Could not open that note');
+    if (link === null) {
+      return;
+    }
+    let followed = false;
+    await withTrail(async () => {
+      followed = await session.followLink(link);
+    });
+    if (!followed) {
+      setNotice(link.kind === 'canvas' ? 'That canvas is no longer here' : 'Could not open that note');
     }
   };
 
-  const showNoteCanvases = async () => setNoteCanvases(await session.canvasesHere());
+  const showNoteCanvases = async () => setCanvasPicker({canvases: await session.canvasesHere(), forLink: false});
 
-  const switchCanvas = async (canvasId: string) => {
-    setNoteCanvases(null);
-    await session.switchTo(canvasId);
-    setBack(session.backTo());
+  // #2: the same list, picked from to link rather than to switch. The canvas shown is not offered,
+  // since an element linking to the canvas it is drawn on would go nowhere.
+  const linkToCanvas = async () => {
+    const canvases = (await session.canvasesHere()).filter(canvas => !canvas.isShown);
+    if (canvases.length === 0) {
+      setNotice('This note has no other canvas to link to');
+      return;
+    }
+    setCanvasPicker({canvases, forLink: true});
   };
 
-  const newCanvas = async () => {
-    await session.newCanvas();
-    setBack(session.backTo());
+  const pickedCanvas = async (canvasId: string) => {
+    const forLink = canvasPicker?.forLink === true;
+    setCanvasPicker(null);
+    if (forLink) {
+      runCommand('linkSelected', ['canvas', canvasId, String(LINK_LAST_PAGE)]);
+      setNotice('Linked to the canvas');
+      return;
+    }
+    await withTrail(() => session.switchTo(canvasId));
   };
 
-  const clearCanvas = async () => {
-    await session.clearCanvas();
-    setBack(session.backTo());
-  };
+  const newCanvas = () => withTrail(() => session.newCanvas());
+
+  const clearCanvas = () => withTrail(() => session.clearCanvas());
 
   // FR12: confirm what happened, so the thumbnail isn't added twice for want of feedback, and a
   // refresh of the one already on the page doesn't look like nothing happened.
@@ -174,12 +205,12 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           {back !== null && (
             <Pressable
               testID="canvas-back"
-              accessibilityLabel={`Back to ${noteNameOf(back.notePath)}`}
+              accessibilityLabel={`Back to ${backLabelOf(back)}`}
               style={styles.backBadge}
               onPress={goBack}>
               <View style={styles.backBox}>
                 <Text style={styles.backLabel} numberOfLines={1}>
-                  {noteNameOf(back.notePath)}
+                  {backLabelOf(back)}
                 </Text>
               </View>
               <Image source={BACK_ARROW_ICON} style={styles.backArrow} />
@@ -226,6 +257,7 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           onNewCanvas={newCanvas}
           onClearCanvas={() => setConfirmingClear(true)}
           onLinkToNote={linkToNote}
+          onLinkToCanvas={linkToCanvas}
           onNoteCanvases={showNoteCanvases}
           onMenuOpen={() => setShowHints(false)}
         />
@@ -266,8 +298,8 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
             }}
           />
         )}
-        {noteCanvases !== null && (
-          <CanvasList canvases={noteCanvases} onPick={switchCanvas} onClose={() => setNoteCanvases(null)} />
+        {canvasPicker !== null && (
+          <CanvasList canvases={canvasPicker.canvases} onPick={pickedCanvas} onClose={() => setCanvasPicker(null)} />
         )}
         {editing !== null && (
           <TextEditor
