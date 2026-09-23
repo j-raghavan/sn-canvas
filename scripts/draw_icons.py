@@ -107,7 +107,9 @@ def fill_icon(name, interior_alpha=0, hatched=False, gradient=False):
             ramp_draw.line(scaled((SQUARE[0], y, SQUARE[2], y)), fill=(0, 0, 0, round(215 * fade)), width=SCALE)
         mask = Image.new("L", image.size, 0)
         ImageDraw.Draw(mask).rounded_rectangle(scaled(SQUARE), radius=10 * SCALE, fill=255)
-        image.paste(ramp, (0, 0), Image.composite(ramp, Image.new("RGBA", image.size), mask))
+        # The mask is the rounded rect alone. Passing the ramp through composite would hand paste an
+        # alpha band that is already the ramp's, and paste multiplies, so the fade came out squared.
+        image.paste(ramp, (0, 0), mask)
     if interior_alpha:
         draw.rounded_rectangle(scaled(SQUARE), radius=10 * SCALE, fill=(0, 0, 0, interior_alpha))
     if hatched:

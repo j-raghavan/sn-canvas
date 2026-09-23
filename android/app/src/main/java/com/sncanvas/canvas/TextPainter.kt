@@ -1,8 +1,10 @@
 package com.sncanvas.canvas
 
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Shader
 import android.text.TextPaint
 
 /**
@@ -29,8 +31,27 @@ internal class TextPainter(
         withRotation(canvas, element, bounds) {
             if (isNote) {
                 val tone = element.style.color
-                val tint = if (element.style.fill == FillStyle.SOLID) context.palette.solidFill(tone) else context.palette.semiFill(tone)
+                val fill = element.style.fill
+                // A ramp starts where a solid tint sits, so its top reads as the solid fill does (#59).
+                val tint =
+                    if (fill == FillStyle.SOLID || fill.ramps) context.palette.solidFill(tone) else context.palette.semiFill(tone)
                 notePaint.color = withAlpha(tint, element.style.alpha)
+                // Set every time, not only for a ramp: left on, a shader would tint the next note drawn.
+                notePaint.shader =
+                    if (fill.ramps) {
+                        val line = ShapeOutline.rampLine(bounds.top, bounds.bottom)
+                        LinearGradient(
+                            line[0],
+                            line[1],
+                            line[2],
+                            line[3],
+                            notePaint.color,
+                            StylePalette.fadeToNothing(notePaint.color),
+                            Shader.TileMode.CLAMP,
+                        )
+                    } else {
+                        null
+                    }
                 canvas.drawRect(bounds, notePaint)
             }
             if (context.editing?.elementId != element.id) {

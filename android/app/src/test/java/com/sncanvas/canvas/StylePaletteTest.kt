@@ -50,6 +50,21 @@ class StylePaletteTest {
         assertEquals(0x00123456, StylePalette.fadeToNothing(0x00123456))
     }
 
+    // A ramp runs from where a solid fill paints to that same colour gone: one hue fading out, in
+    // either palette, so the top of a gradient reads as a solid fill does on screen and in a PDF.
+    @Test
+    fun `a ramp's two ends are one colour fading out, in both palettes`() {
+        for (palette in StylePalette.entries) {
+            for (color in StyleColor.entries) {
+                val near = palette.solidFill(color)
+                val far = StylePalette.fadeToNothing(near)
+                assertTrue("$palette $color near end opaque", (near ushr 24) > 0)
+                assertEquals("$palette $color far end alpha", 0, far ushr 24)
+                assertEquals("$palette $color hue", near and 0xFFFFFF, far and 0xFFFFFF)
+            }
+        }
+    }
+
     @Test
     fun `mixWithWhite moves each channel toward white and keeps alpha`() {
         assertEquals(0x80406080.toInt(), StylePalette.mixWithWhite(0x80406080.toInt(), 0.0))
