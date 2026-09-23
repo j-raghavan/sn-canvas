@@ -50,6 +50,7 @@ test('parseUiState reads a well-formed event body', () => {
       hasLink: true,
       canRemoveTableRow: true,
       canRemoveTableColumn: true,
+      zoomPercent: 250,
       selectedType: 'table',
       style,
     }),
@@ -60,6 +61,7 @@ test('parseUiState reads a well-formed event body', () => {
     hasContent: true,
     canRemoveTableRow: true,
     canRemoveTableColumn: true,
+    zoomPercent: 250,
     selectionCount: 3,
     canUngroup: true,
     hasLink: true,
@@ -67,6 +69,16 @@ test('parseUiState reads a well-formed event body', () => {
     style,
   });
   expect(parseUiState({selectedType: ''}).selectedType).toBeNull();
+});
+
+// A zoom of nothing would read as 0% and offer no way back, so anything unusable is actual size (#12).
+test('a zoom the canvas could not say falls back to actual size', () => {
+  expect(parseUiState({zoomPercent: 250}).zoomPercent).toBe(250);
+  expect(parseUiState({}).zoomPercent).toBe(100);
+  expect(parseUiState({zoomPercent: 0}).zoomPercent).toBe(100);
+  expect(parseUiState({zoomPercent: -50}).zoomPercent).toBe(100);
+  expect(parseUiState({zoomPercent: 'lots'}).zoomPercent).toBe(100);
+  expect(parseUiState({zoomPercent: 12.5}).zoomPercent).toBe(100);
 });
 
 test('parseUiState falls back to the initial state for anything missing or unknown', () => {

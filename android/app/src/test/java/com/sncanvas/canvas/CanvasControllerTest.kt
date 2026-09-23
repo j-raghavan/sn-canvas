@@ -248,15 +248,28 @@ class CanvasControllerTest {
     }
 
     @Test
-    fun `viewport changes redraw without an undo step or a new UI state`() {
+    fun `viewport changes redraw and say the new zoom, without an undo step`() {
         controller.load(emptyList())
         val changesBefore = recorder.changes
         val statesBefore = recorder.uiStates.size
         controller.setViewport(ViewTransform(10.0, 20.0, 2.0))
         assertEquals(listOf(10.0, 20.0, 2.0), listOf(controller.state.viewportX, controller.state.viewportY, controller.state.zoom))
         assertEquals(changesBefore + 1, recorder.changes)
-        assertEquals(statesBefore, recorder.uiStates.size)
+        // The zoom control reads this, so the state goes out; the viewport is still not an edit (#12).
+        assertEquals(statesBefore + 1, recorder.uiStates.size)
+        assertEquals(200, ui.zoomPercent)
         assertFalse(ui.canUndo)
+
+        // A pan leaves the zoom where it was, so there is nothing new to say and nothing is sent.
+        controller.setViewport(ViewTransform(90.0, 90.0, 2.0))
+        assertEquals(statesBefore + 1, recorder.uiStates.size)
+
+        // Nor does a pinch too small to change the whole percent the control shows.
+        controller.setViewport(ViewTransform(90.0, 90.0, 2.001))
+        assertEquals(statesBefore + 1, recorder.uiStates.size)
+        controller.setViewport(ViewTransform(90.0, 90.0, 2.01))
+        assertEquals(statesBefore + 2, recorder.uiStates.size)
+        assertEquals(201, ui.zoomPercent)
     }
 
     @Test

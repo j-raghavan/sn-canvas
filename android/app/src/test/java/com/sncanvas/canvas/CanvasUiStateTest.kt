@@ -21,6 +21,7 @@ class CanvasUiStateTest {
                 "hasLink" to false,
                 "canRemoveTableRow" to true,
                 "canRemoveTableColumn" to true,
+                "zoomPercent" to 250,
                 "selectedType" to "table",
                 "style" to styleIds,
             ),
@@ -34,6 +35,7 @@ class CanvasUiStateTest {
                 selectionCount = 1,
                 canRemoveTableRow = true,
                 canRemoveTableColumn = true,
+                zoomPercent = 250,
             ).toPayload(),
         )
     }

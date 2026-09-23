@@ -90,7 +90,9 @@ class CanvasController(
     /** Pans and zooms; not an edit, so no undo step. */
     fun setViewport(transform: ViewTransform) {
         state = state.copy(viewportX = transform.viewportX, viewportY = transform.viewportY, zoom = transform.zoom)
-        listener.onChanged()
+        // Published as well as redrawn, so the zoom control keeps up with a pinch (#12). A pan, and a
+        // pinch too small to change the whole percent, publish a state equal to the last and send nothing.
+        changed()
     }
 
     /** Selects one element, or nothing; a grouped one brings its group with it. */
@@ -391,6 +393,7 @@ class CanvasController(
                 // greyed out rather than taking a press and doing nothing.
                 canRemoveTableRow = (tappedTable?.rows ?: 1) > 1,
                 canRemoveTableColumn = (tappedTable?.cols ?: 1) > 1,
+                zoomPercent = Math.round(state.zoom * 100).toInt(),
             )
         if (uiState == lastUiState) return
         lastUiState = uiState

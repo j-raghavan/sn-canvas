@@ -168,6 +168,8 @@ class CanvasViewManager(
                 "sendToBack" to { view -> view.controller.sendSelectedToBack() },
                 "zoomToFit" to { view -> view.zoomToFit() },
                 "zoomTo100" to { view -> view.zoomTo100() },
+                "zoomTo50" to { view -> view.zoomToPercent(50) },
+                "zoomTo25" to { view -> view.zoomToPercent(25) },
                 "tableAddRow" to { view -> view.controller.addTableRow() },
                 "tableAddColumn" to { view -> view.controller.addTableColumn() },
                 "tableRemoveRow" to { view -> view.controller.removeTableRow() },

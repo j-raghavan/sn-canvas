@@ -277,6 +277,17 @@ object CanvasCore {
         return state.copy(viewportX = newViewportX, viewportY = newViewportY, zoom = newZoom)
     }
 
+    /**
+     * [state] zoomed to [percent] of actual size, about a focal point the caller gives in world
+     * space; the zoom control's presets (#12). Clamped like any other zoom.
+     */
+    fun zoomToPercent(
+        state: CanvasState,
+        percent: Int,
+        focalWorldX: Double,
+        focalWorldY: Double,
+    ): CanvasState = zoomTo(state, percent / 100.0 / state.zoom, focalWorldX, focalWorldY)
+
     /** Appends [element] to the canvas (FR4: shape insertion). */
     fun insertElement(
         state: CanvasState,

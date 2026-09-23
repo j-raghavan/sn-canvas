@@ -257,11 +257,14 @@ class CanvasView(
     /** Frames all content in the view. */
     fun zoomToFit() = fitToContent()
 
-    /** Returns to 100% zoom about the view's center. */
-    fun zoomTo100() {
+    /** Zooms to [percent] of actual size about the view's center, for the zoom control's presets (#12). */
+    fun zoomToPercent(percent: Int) {
         val center = toWorld(width / 2f, height / 2f)
-        controller.setViewport(CanvasCore.zoomTo(controller.state, 1.0 / controller.state.zoom, center.x, center.y).transform)
+        controller.setViewport(CanvasCore.zoomToPercent(controller.state, percent, center.x, center.y).transform)
     }
+
+    /** Returns to 100% zoom about the view's center. */
+    fun zoomTo100() = zoomToPercent(100)
 
     /** Groups what is selected (FR7); logged, since nothing else says what the command found to group. */
     fun groupSelected() {
