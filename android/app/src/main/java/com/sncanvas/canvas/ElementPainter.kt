@@ -210,13 +210,11 @@ internal class ElementPainter(
     ) {
         // A paint of its own for a ramp, because fillPaint is shared with the missing-image fill,
         // which sets no shader: one left on it would tint whatever was drawn next (#59).
+        if (style.fill == FillStyle.NONE) return
         val paint = if (style.fill.ramps) gradientPaint else fillPaint
-        paint.color =
-            when (style.fill) {
-                FillStyle.NONE -> return
-                FillStyle.SEMI, FillStyle.PATTERN -> palette.semiFill(style.color)
-                FillStyle.SOLID, FillStyle.GRADIENT -> palette.solidFill(style.color)
-            }
+        // Which tint a fill reads as is decided in the palette, where a test can see it, since the
+        // sticky note's tint is the same decision made in another file this one cannot check (#59).
+        paint.color = palette.fillTint(style.fill, style.color)
         // Down the shape in the canvas's own space, so the ramp turns with a rotated shape rather
         // than staying upright against it, fading from the colour just set to nothing.
         paint.shader = if (style.fill.ramps) rampShader(bounds, paint.color) else null

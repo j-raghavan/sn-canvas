@@ -30,13 +30,9 @@ internal class TextPainter(
             if (isNote) {
                 val tone = element.style.color
                 val fill = element.style.fill
-                // Exhaustive, so a fill added later is a compile error here rather than quietly
-                // becoming a semi tint. A ramp starts where a solid tint sits (#59).
-                notePaint.color =
-                    when (fill) {
-                        FillStyle.SOLID, FillStyle.GRADIENT -> context.palette.solidFill(tone)
-                        FillStyle.NONE, FillStyle.SEMI, FillStyle.PATTERN -> context.palette.semiFill(tone)
-                    }
+                // The same decision the shape painter's fill makes, made in the one place a test can
+                // reach it: a note tinted by a fill reads as a shape filled with it (#59).
+                notePaint.color = context.palette.fillTint(fill, tone)
                 // Set every time, not only for a ramp: left on, a shader would tint the next note drawn.
                 notePaint.shader = if (fill.ramps) rampShader(bounds, notePaint.color) else null
                 // After the shader and the colour, as the shape painter does it, so one rule has one

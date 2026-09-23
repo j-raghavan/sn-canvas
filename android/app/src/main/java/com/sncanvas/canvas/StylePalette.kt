@@ -25,6 +25,24 @@ enum class StylePalette {
     /** The hatch lines of a pattern fill, drawn over [semiFill]. */
     fun patternLine(color: StyleColor): Int = mixWithWhite(stroke(color), PATTERN_WHITENESS)
 
+    /**
+     * The flat colour a [fill] of [color] is painted in: the solid tint for the fills that read as
+     * solid, the semi one for the rest. A ramp takes the solid tint, since that is the end it starts
+     * from (#59); NONE paints nothing on a shape, and tints a sticky note as a semi fill does.
+     *
+     * One home for that decision, because a shape's fill and a sticky note's tint are painted in
+     * different files, neither of which a test can reach: two hand-kept copies would be free to drift.
+     * Exhaustive, so a fill added later is a compile error here rather than quietly reading as semi.
+     */
+    fun fillTint(
+        fill: FillStyle,
+        color: StyleColor,
+    ): Int =
+        when (fill) {
+            FillStyle.SOLID, FillStyle.GRADIENT -> solidFill(color)
+            FillStyle.NONE, FillStyle.SEMI, FillStyle.PATTERN -> semiFill(color)
+        }
+
     companion object {
         private const val OPAQUE = 0xFF shl 24
 

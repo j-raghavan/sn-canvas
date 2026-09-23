@@ -65,6 +65,36 @@ class StylePaletteTest {
         }
     }
 
+    // #59: a shape's fill and a sticky note's tint are painted in two files, neither of which a test
+    // can reach. They both ask fillTint which tint a fill reads as, so the decision is pinned here
+    // once instead of drifting between two copies of it.
+    @Test
+    fun `each fill reads as the solid tint or the semi one, in both palettes`() {
+        for (palette in StylePalette.entries) {
+            for (color in StyleColor.entries) {
+                val solid = palette.solidFill(color)
+                val semi = palette.semiFill(color)
+                for (fill in listOf(FillStyle.SOLID, FillStyle.GRADIENT)) {
+                    assertEquals("$palette $color $fill", solid, palette.fillTint(fill, color))
+                }
+                for (fill in listOf(FillStyle.NONE, FillStyle.SEMI, FillStyle.PATTERN)) {
+                    assertEquals("$palette $color $fill", semi, palette.fillTint(fill, color))
+                }
+            }
+        }
+    }
+
+    // A ramp runs from its tint to that tint gone, so a fill that ramps has to start where a solid
+    // fill paints: one put in the semi branch would fade from a tint no solid fill ever shows.
+    @Test
+    fun `a fill that ramps takes the solid tint`() {
+        val ramping = FillStyle.entries.filter { it.ramps }
+        assertEquals(listOf(FillStyle.GRADIENT), ramping)
+        for (palette in StylePalette.entries) {
+            ramping.forEach { assertEquals("$palette $it", palette.solidFill(StyleColor.RED), palette.fillTint(it, StyleColor.RED)) }
+        }
+    }
+
     @Test
     fun `mixWithWhite moves each channel toward white and keeps alpha`() {
         assertEquals(0x80406080.toInt(), StylePalette.mixWithWhite(0x80406080.toInt(), 0.0))
