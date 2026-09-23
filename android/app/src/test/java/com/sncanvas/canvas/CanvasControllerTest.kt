@@ -271,6 +271,17 @@ class CanvasControllerTest {
         // Settling on the same zoom again says nothing new.
         controller.viewportSettled()
         assertEquals(statesBefore + 1, recorder.uiStates.size)
+
+        // Rounded, not truncated: 2.01 * 100 is 200.99999999999997 in a double, so a conversion that
+        // threw the fraction away would call this 200 and the control would read a percent short.
+        controller.setViewport(ViewTransform(0.0, 0.0, 2.01))
+        controller.viewportSettled()
+        assertEquals(201, ui.zoomPercent)
+
+        // And rounded down as readily as up: 200.4 is 200, which rounding always up would call 201.
+        controller.setViewport(ViewTransform(0.0, 0.0, 2.004))
+        controller.viewportSettled()
+        assertEquals(200, ui.zoomPercent)
     }
 
     @Test
