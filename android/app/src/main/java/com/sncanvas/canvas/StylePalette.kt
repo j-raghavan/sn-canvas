@@ -22,17 +22,6 @@ enum class StylePalette {
 
     fun solidFill(color: StyleColor): Int = mixWithWhite(stroke(color), SOLID_WHITENESS)
 
-    /**
-     * The two ends of [fill]'s ramp for [color], or null for a fill that is one flat colour (#59).
-     *
-     * A gradient runs from the solid fill to that same colour with its alpha cleared, so it fades to
-     * nothing rather than to white and comes out the same over the page, over an image and in a PDF.
-     */
-    fun gradientEnds(
-        fill: FillStyle,
-        color: StyleColor,
-    ): Pair<Int, Int>? = if (fill == FillStyle.GRADIENT) solidFill(color) to (solidFill(color) and NO_ALPHA) else null
-
     /** The hatch lines of a pattern fill, drawn over [semiFill]. */
     fun patternLine(color: StyleColor): Int = mixWithWhite(stroke(color), PATTERN_WHITENESS)
 
@@ -60,6 +49,13 @@ enum class StylePalette {
 
         /** Relative luminance (Rec. 709) of a 0xRRGGBB colour, on a 0..255 scale. */
         fun luminance(rgb: Int): Double = 0.2126 * (rgb shr 16 and 0xFF) + 0.7152 * (rgb shr 8 and 0xFF) + 0.0722 * (rgb and 0xFF)
+
+        /**
+         * [argb] with its alpha cleared: the same colour faded to nothing rather than to white, which
+         * is the far end of a gradient fill and comes out the same over the page, over an image and
+         * in a PDF (#59).
+         */
+        fun fadeToNothing(argb: Int): Int = argb and NO_ALPHA
 
         /** [argb] moved [whiteness] (0..1) of the way to white, alpha unchanged. */
         fun mixWithWhite(

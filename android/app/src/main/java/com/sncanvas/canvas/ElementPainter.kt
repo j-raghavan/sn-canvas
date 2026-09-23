@@ -210,20 +210,28 @@ internal class ElementPainter(
         style: ShapeStyle,
         palette: StylePalette,
     ) {
-        val ends = palette.gradientEnds(style.fill, style.color)
-        // A paint of its own for the gradient, because fillPaint is shared with the missing-image
-        // fill, which sets no shader: one left on it would tint whatever was drawn next (#59).
-        val paint = if (ends == null) fillPaint else gradientPaint
+        // A paint of its own for a ramp, because fillPaint is shared with the missing-image fill,
+        // which sets no shader: one left on it would tint whatever was drawn next (#59).
+        val paint = if (style.fill.ramps) gradientPaint else fillPaint
         paint.color =
             when (style.fill) {
                 FillStyle.NONE -> return
                 FillStyle.SEMI, FillStyle.PATTERN -> palette.semiFill(style.color)
                 FillStyle.SOLID, FillStyle.GRADIENT -> palette.solidFill(style.color)
             }
-        // Drawn down the shape in the canvas's own space, so it turns with a rotated shape rather
-        // than staying upright against it.
-        if (ends != null) {
-            paint.shader = LinearGradient(0f, bounds.top, 0f, bounds.bottom, ends.first, ends.second, Shader.TileMode.CLAMP)
+        // Down the shape in the canvas's own space, so the ramp turns with a rotated shape rather
+        // than staying upright against it, fading from the colour just set to nothing.
+        if (style.fill.ramps) {
+            paint.shader =
+                LinearGradient(
+                    0f,
+                    bounds.top,
+                    0f,
+                    bounds.bottom,
+                    paint.color,
+                    StylePalette.fadeToNothing(paint.color),
+                    Shader.TileMode.CLAMP,
+                )
         }
         paint.alpha = style.alpha
         canvas.drawPath(outline, paint)

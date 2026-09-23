@@ -1,7 +1,6 @@
 package com.sncanvas.canvas
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,24 +40,14 @@ class StylePaletteTest {
         }
     }
 
-    // #59: the gradient fades to nothing, not to white. Fading to white would come out as a white
-    // smear over an image or a coloured page, where fading to nothing lets what is under it through.
+    // #59: a ramp fades to nothing, not to white. Fading to white would come out as a white smear
+    // over an image or a coloured page, where fading to nothing lets what is under it through.
     @Test
-    fun `only the gradient fill has a ramp, from the solid fill to nothing`() {
-        for (palette in StylePalette.entries) {
-            // The flat fills have no ramp at all, so nothing but the gradient gets a shader.
-            for (flat in listOf(FillStyle.NONE, FillStyle.SEMI, FillStyle.SOLID, FillStyle.PATTERN)) {
-                assertNull("$palette $flat", palette.gradientEnds(flat, StyleColor.BLUE))
-            }
-
-            val (from, to) = palette.gradientEnds(FillStyle.GRADIENT, StyleColor.BLUE)!!
-            // It starts where a solid fill would, so the two read as the same colour at the top.
-            assertEquals("$palette from", palette.solidFill(StyleColor.BLUE), from)
-            assertTrue("$palette opaque end", (from ushr 24) > 0)
-            // And fades to nothing, keeping the colour, so it is one hue fading rather than a slide to grey.
-            assertEquals("$palette alpha", 0, to ushr 24)
-            assertEquals("$palette rgb", from and 0xFFFFFF, to and 0xFFFFFF)
-        }
+    fun `fadeToNothing clears the alpha and keeps the colour`() {
+        assertEquals(0x00406080, StylePalette.fadeToNothing(0xFF406080.toInt()))
+        assertEquals(0x00FFFFFF, StylePalette.fadeToNothing(0xFFFFFFFF.toInt()))
+        // Already faded stays faded rather than coming back.
+        assertEquals(0x00123456, StylePalette.fadeToNothing(0x00123456))
     }
 
     @Test

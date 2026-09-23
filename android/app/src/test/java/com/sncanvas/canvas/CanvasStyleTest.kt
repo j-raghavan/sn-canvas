@@ -23,7 +23,7 @@ class CanvasStyleTest {
      * than a second hand-rolled one, or org.json, stubbed under this plain-JUnit setup (see CanvasJson.kt).
      */
     @Test
-    fun `tldraw's 12 colours, 4 fills, 4 dashes and 4 sizes, matching the shared style-catalog fixture`() {
+    fun `tldraw's 12 colours, 5 fills, 4 dashes and 4 sizes, matching the shared style-catalog fixture`() {
         val catalog = styleCatalogFixture()
         assertEquals(catalog.array("colors").map { it.obj().string("id") }, StyleColor.entries.map { it.id })
         assertEquals(catalog.array("colors").map { it.obj().string("hex") }, StyleColor.entries.map { it.rgb.toHexColor() })
@@ -37,6 +37,13 @@ class CanvasStyleTest {
         assertEquals(catalog.obj("defaultStyle").string("dash"), ShapeStyle.DEFAULT.dash.id)
         assertEquals(catalog.obj("defaultStyle").string("size"), ShapeStyle.DEFAULT.size.id)
         assertEquals(catalog.number("minOpacity"), ShapeStyle.MIN_OPACITY, 0.0)
+    }
+
+    // #59: the fill says whether it is a ramp, so the painter asks it rather than naming the gradient
+    // itself. Only the gradient is one; everything else is a single flat colour.
+    @Test
+    fun `only the gradient fill ramps between two colours`() {
+        assertEquals(listOf(FillStyle.GRADIENT), FillStyle.entries.filter { it.ramps })
     }
 
     @Test
