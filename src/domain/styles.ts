@@ -57,6 +57,8 @@ export type CanvasUiState = {
   /** Whether a cell of the selected table was tapped, so Remove row and Remove column know which one (#53). */
   canRemoveTableRow: boolean;
   canRemoveTableColumn: boolean;
+  /** How far the canvas is zoomed, as a whole percent, for the zoom control to show (#12). */
+  zoomPercent: number;
   /** The selected element's type (such as 'table'), or null with nothing selected. */
   selectedType: string | null;
   style: CanvasStyle;
@@ -72,6 +74,7 @@ export const INITIAL_UI_STATE: CanvasUiState = {
   hasLink: false,
   canRemoveTableRow: false,
   canRemoveTableColumn: false,
+  zoomPercent: 100,
   selectedType: null,
   style: DEFAULT_STYLE,
 };
@@ -97,6 +100,8 @@ export function parseUiState(payload: unknown): CanvasUiState {
     hasLink: body.hasLink === true,
     canRemoveTableRow: body.canRemoveTableRow === true,
     canRemoveTableColumn: body.canRemoveTableColumn === true,
+    // A zoom of nothing would read as 0%, so anything unusable falls back to actual size.
+    zoomPercent: Number.isInteger(body.zoomPercent) && (body.zoomPercent as number) > 0 ? (body.zoomPercent as number) : 100,
     selectedType: typeof body.selectedType === 'string' && body.selectedType !== '' ? body.selectedType : null,
     style: {
       color: oneOf(COLOR_IDS, style.color, DEFAULT_STYLE.color),

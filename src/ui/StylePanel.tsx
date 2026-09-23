@@ -5,7 +5,7 @@
 // single property, which the canvas applies to the selection and to what is
 // drawn next.
 
-import React, {useState} from 'react';
+import React from 'react';
 import {
   Image,
   Pressable,
@@ -31,6 +31,7 @@ import {
   type FillId,
   type StyleProperty,
 } from '../domain/styles';
+import {useDisclosure} from './useDisclosure';
 
 const FILL_OPTIONS: Record<FillId, {label: string; icon: ImageSourcePropType}> = {
   none: {label: 'No fill', icon: require('../../assets/icons/fill-none.png')},
@@ -64,10 +65,12 @@ type Props = {
   /** The colour a swatch shows; the screen supplies the canvas's e-ink gray. */
   swatch: (color: ColorId) => string;
   onChange: (property: StyleProperty, value: string) => void;
+  /** The panel is opening: the hints go, the way the ⋮ menu and the zoom control put them away. */
+  onOpen: () => void;
 };
 
-export default function StylePanel({style, selectedType = null, swatch, onChange}: Props): React.JSX.Element {
-  const [isOpen, setOpen] = useState(false);
+export default function StylePanel({style, selectedType = null, swatch, onChange, onOpen}: Props): React.JSX.Element {
+  const {isOpen, toggle} = useDisclosure(onOpen);
   const opacityIndex = opacityStepIndex(style.opacity);
   const isImage = selectedType === IMAGE;
   const dashes = isImage ? IMAGE_DASHES : DASHES;
@@ -79,7 +82,7 @@ export default function StylePanel({style, selectedType = null, swatch, onChange
         accessibilityLabel={isOpen ? 'Hide styles' : 'Show styles'}
         accessibilityState={{expanded: isOpen}}
         style={styles.toggle}
-        onPress={() => setOpen(open => !open)}>
+        onPress={toggle}>
         <View style={[styles.swatch, {backgroundColor: swatch(style.color)}]} />
         <Image source={isOpen ? CHEVRON_UP : CHEVRON_DOWN} style={styles.chevron} />
       </Pressable>

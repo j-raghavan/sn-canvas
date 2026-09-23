@@ -33,6 +33,8 @@ export type CanvasCommand =
   | 'sendToBack'
   | 'zoomToFit'
   | 'zoomTo100'
+  | 'zoomTo50'
+  | 'zoomTo25'
   | 'setStyle'
   | 'setText'
   | 'tableAddRow'

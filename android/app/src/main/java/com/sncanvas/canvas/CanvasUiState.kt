@@ -25,6 +25,12 @@ data class CanvasUiState(
     /** Whether a cell of the selected table was tapped, so Remove row and Remove column know which (#53). */
     val canRemoveTableRow: Boolean = false,
     val canRemoveTableColumn: Boolean = false,
+    /**
+     * How far the canvas is zoomed, as a whole percent. Whole, because it is what the zoom control
+     * shows and the UI state is only published when it differs from the last: a pinch that moves the
+     * zoom without changing the number it reads sends nothing (#12).
+     */
+    val zoomPercent: Int = 100,
 ) {
     fun toPayload(): Map<String, Any> =
         mapOf(
@@ -37,6 +43,7 @@ data class CanvasUiState(
             "hasLink" to hasLink,
             "canRemoveTableRow" to canRemoveTableRow,
             "canRemoveTableColumn" to canRemoveTableColumn,
+            "zoomPercent" to zoomPercent,
             "selectedType" to selectedType.orEmpty(),
             "style" to
                 mapOf(

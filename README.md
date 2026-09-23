@@ -17,7 +17,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 ## Features
 
 ### An infinite canvas inside your notes
-- **Endless space.** Pinch with two fingers to zoom (5% to 2000%), drag with the hand tool to pan. A minimap shows where you are while you move; drag its rectangle, or tap anywhere on it, to travel across the canvas (with a finger while a drawing tool is in hand, so the pen keeps drawing).
+- **Endless space.** Pinch with two fingers to zoom (5% to 2000%), drag with the hand tool to pan. The pill in the bottom left says what you are zoomed to, and tapping it offers **Fit**, **100%**, **50%** and **25%**, so there is always a way back to a size you know. A minimap shows where you are while you move; drag its rectangle, or tap anywhere on it, to travel across the canvas (with a finger while a drawing tool is in hand, so the pen keeps drawing).
 - **Palm rejection.** With a drawing tool, only the pen draws, just like Supernote's own notes. A hand resting on the screen never leaves a mark.
 - **Hints when you need them.** Open an empty canvas and hand-drawn hints point at each control. Touch the canvas or pick a tool to dismiss them, and a canvas with work on it opens without them, so they never cover your drawing. Clear a canvas and they are there again next time; **?** brings them back whenever you want.
 

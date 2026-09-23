@@ -181,6 +181,29 @@ class CanvasCoreTest {
         assertEquals(before, after, 0.0001)
     }
 
+    // The zoom control's presets (#12): the percent is what the button says, so 25 is quarter size and
+    // not 25 times it, whatever the canvas happened to be zoomed to before.
+    @Test
+    fun `zoomToPercent goes to that percent of actual size, from wherever it was`() {
+        assertEquals(0.25, CanvasCore.zoomToPercent(baseState, 25, 0.0, 0.0).zoom, 0.0001)
+        assertEquals(0.5, CanvasCore.zoomToPercent(baseState, 50, 0.0, 0.0).zoom, 0.0001)
+        assertEquals(1.0, CanvasCore.zoomToPercent(baseState, 100, 0.0, 0.0).zoom, 0.0001)
+        // From a canvas already zoomed a long way in, the answer is the same: it is not a factor.
+        val zoomedIn = CanvasCore.zoomTo(baseState, scaleFactor = 8.0, focalWorldX = 0.0, focalWorldY = 0.0)
+        assertEquals(8.0, zoomedIn.zoom, 0.0001)
+        assertEquals(0.25, CanvasCore.zoomToPercent(zoomedIn, 25, 0.0, 0.0).zoom, 0.0001)
+    }
+
+    @Test
+    fun `zoomToPercent keeps the focal point stationary, and clamps like any other zoom`() {
+        val zoomed = CanvasCore.zoomToPercent(baseState, 50, focalWorldX = 10.0, focalWorldY = 10.0)
+        val before = (10.0 - baseState.viewportX) * baseState.zoom
+        val after = (10.0 - zoomed.viewportX) * zoomed.zoom
+        assertEquals(before, after, 0.0001)
+        assertEquals(CanvasCore.MAX_ZOOM, CanvasCore.zoomToPercent(baseState, 100_000, 0.0, 0.0).zoom, 0.0001)
+        assertEquals(CanvasCore.MIN_ZOOM, CanvasCore.zoomToPercent(baseState, 1, 0.0, 0.0).zoom, 0.0001)
+    }
+
     @Test
     fun `zoomTo clamps to MIN_ZOOM and MAX_ZOOM`() {
         val zoomedOut = CanvasCore.zoomTo(baseState, scaleFactor = 0.0001, focalWorldX = 0.0, focalWorldY = 0.0)

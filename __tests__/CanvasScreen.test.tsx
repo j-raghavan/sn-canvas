@@ -136,6 +136,30 @@ describe('toolbar', () => {
   );
 });
 
+describe('the zoom control (#12)', () => {
+  test('the pill shows the zoom the canvas reports, and a preset reaches the canvas', async () => {
+    const {renderer, press, emitCanvasState} = await render();
+    await emitCanvasState({zoomPercent: 250});
+    expect(renderer.root.findByProps({testID: 'canvas-zoom'}).props.accessibilityLabel).toBe('Zoom, 250%');
+    await press('canvas-zoom');
+    await press('canvas-zoom-50');
+    expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'zoomTo50', []);
+  });
+
+  // The hints sit where both panels open, so opening either has to put them away. Proved here rather
+  // than only in the components, or the screen could stop passing the callback and nothing would say.
+  test.each([
+    ['canvas-zoom', 'the zoom presets'],
+    ['style-toggle', 'the style panel'],
+  ])('opening %s puts the hints away', async testID => {
+    const {press, has, emitCanvasLoaded} = await render();
+    await emitCanvasLoaded({hasContent: false});
+    expect(has('canvas-hints')).toBe(true);
+    await press(testID);
+    expect(has('canvas-hints')).toBe(false);
+  });
+});
+
 describe('help hints', () => {
   const CAPTIONS = [
     'Export, save to note & close',
@@ -143,6 +167,7 @@ describe('help hints', () => {
     'Pick a tool & start drawing!',
     'Tap again to clear the canvas',
     'Show or hide these hints',
+    'Zoom, and the way back to 100%',
   ];
 
   /** An empty canvas finished loading: what the canvas reports when it has nothing on it. */
@@ -152,7 +177,7 @@ describe('help hints', () => {
     const {has, labelled, isPressed, emitCanvasLoaded} = await render();
     await openedEmpty(emitCanvasLoaded);
     expect(has('canvas-hints')).toBe(true);
-    expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true, true]);
+    expect(CAPTIONS.map(labelled)).toEqual(CAPTIONS.map(() => true));
     expect(isPressed('canvas-help')).toBe(true);
   });
 

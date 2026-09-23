@@ -160,6 +160,9 @@ class CanvasView(
                     minimap.show()
                     return true
                 }
+
+                /** The pinch is over: tell the zoom control where it ended up (#12). */
+                override fun onScaleEnd(detector: ScaleGestureDetector) = controller.viewportSettled()
             },
         )
 
@@ -257,11 +260,15 @@ class CanvasView(
     /** Frames all content in the view. */
     fun zoomToFit() = fitToContent()
 
-    /** Returns to 100% zoom about the view's center. */
-    fun zoomTo100() {
+    /** Zooms to [percent] of actual size about the view's center, for the zoom control's presets (#12). */
+    fun zoomToPercent(percent: Int) {
         val center = toWorld(width / 2f, height / 2f)
-        controller.setViewport(CanvasCore.zoomTo(controller.state, 1.0 / controller.state.zoom, center.x, center.y).transform)
+        controller.setViewport(CanvasCore.zoomToPercent(controller.state, percent, center.x, center.y).transform)
+        controller.viewportSettled()
     }
+
+    /** Returns to 100% zoom about the view's center. */
+    fun zoomTo100() = zoomToPercent(100)
 
     /** Groups what is selected (FR7); logged, since nothing else says what the command found to group. */
     fun groupSelected() {
@@ -292,6 +299,7 @@ class CanvasView(
         isFitPending = width == 0 || height == 0
         if (isFitPending) return
         controller.setViewport(ViewTransforms.fitToView(controller.state.elements, width.toDouble(), height.toDouble(), FIT_PADDING_PX))
+        controller.viewportSettled()
     }
 
     /** Opens the JS keyboard editor over [target]'s text (FR6/FR24). */
@@ -346,6 +354,13 @@ class CanvasView(
                 else -> emptyList()
             }
         inputs.forEach(::handleInput)
+        // The touch stream is over, so whatever it moved has settled. onScaleEnd covers a pinch that
+        // finishes as one, but the detector stops being fed the moment the pen comes down, so a pinch
+        // interrupted that way never ends and the zoom control would keep the percent it started at.
+        // publish() sends nothing when the zoom has not moved, so this costs a comparison (#12).
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            controller.viewportSettled()
+        }
         return true
     }
 

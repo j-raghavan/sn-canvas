@@ -248,15 +248,40 @@ class CanvasControllerTest {
     }
 
     @Test
-    fun `viewport changes redraw without an undo step or a new UI state`() {
+    fun `viewport changes redraw without an undo step, and say nothing until they settle`() {
         controller.load(emptyList())
         val changesBefore = recorder.changes
         val statesBefore = recorder.uiStates.size
+
+        // Once per motion event through a pan or a pinch: redrawn, but nothing crosses to JS (NFR5).
         controller.setViewport(ViewTransform(10.0, 20.0, 2.0))
         assertEquals(listOf(10.0, 20.0, 2.0), listOf(controller.state.viewportX, controller.state.viewportY, controller.state.zoom))
         assertEquals(changesBefore + 1, recorder.changes)
         assertEquals(statesBefore, recorder.uiStates.size)
         assertFalse(ui.canUndo)
+
+        // Settled: the zoom control is told where it came to rest, and it is still not an edit.
+        controller.viewportSettled()
+        assertEquals(statesBefore + 1, recorder.uiStates.size)
+        assertEquals(200, ui.zoomPercent)
+        assertFalse(ui.canUndo)
+        // Nothing to redraw that setViewport has not already redrawn.
+        assertEquals(changesBefore + 1, recorder.changes)
+
+        // Settling on the same zoom again says nothing new.
+        controller.viewportSettled()
+        assertEquals(statesBefore + 1, recorder.uiStates.size)
+
+        // Rounded, not truncated: 2.01 * 100 is 200.99999999999997 in a double, so a conversion that
+        // threw the fraction away would call this 200 and the control would read a percent short.
+        controller.setViewport(ViewTransform(0.0, 0.0, 2.01))
+        controller.viewportSettled()
+        assertEquals(201, ui.zoomPercent)
+
+        // And rounded down as readily as up: 200.4 is 200, which rounding always up would call 201.
+        controller.setViewport(ViewTransform(0.0, 0.0, 2.004))
+        controller.viewportSettled()
+        assertEquals(200, ui.zoomPercent)
     }
 
     @Test
