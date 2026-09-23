@@ -159,8 +159,14 @@ test('every row spans the panel and spreads its own options across it', () => {
   // number, the panel kept the width it had when there were four fills and the gradient fell off the
   // edge of the screen. The padding is read back from the panel for the same reason.
   expect(panel.width).toBe(look('style-fill-none').width * FILLS.length + panel.padding * 2);
-  // Flush to both edges, so a row of four and a row of five start and end in line.
-  expect(look('style-colors-0').justifyContent).toBe('space-between');
+  // One absolute, because the line above moves with whatever the cell is: without this, a cell
+  // shrunk to fit a sixth fill would keep the panel honest and the icons unreadable. 44 is the cell
+  // the icons were drawn for, so a change here is a decision, not a side effect.
+  expect(look('style-fill-none').width).toBe(44);
+  // Every row, not just the colours: each row had to be named for this to mean what it says, since
+  // a row centred on its own would leave the others flush and nothing would have caught it.
+  const rows = ['style-colors-0', 'style-colors-1', 'style-colors-2', 'style-fills', 'style-dashes', 'style-sizes'];
+  expect(rows.map(row => look(row).justifyContent)).toEqual(rows.map(() => 'space-between'));
 });
 
 test('the twelve colours are three rows of four', () => {

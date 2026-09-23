@@ -143,7 +143,7 @@ export default function StylePanel({style, selectedType = null, swatch, onChange
           </View>
           <View style={styles.divider} />
           {!isImage && (
-            <View style={styles.row}>
+            <View testID="style-fills" style={styles.row}>
               {FILLS.map(fill => (
                 <Option
                   key={fill}
@@ -156,7 +156,7 @@ export default function StylePanel({style, selectedType = null, swatch, onChange
               ))}
             </View>
           )}
-          <View style={styles.row}>
+          <View testID="style-dashes" style={styles.row}>
             {dashes.map(dash => (
               <Option
                 key={dash}
@@ -168,7 +168,7 @@ export default function StylePanel({style, selectedType = null, swatch, onChange
               </Option>
             ))}
           </View>
-          <View style={styles.row}>
+          <View testID="style-sizes" style={styles.row}>
             {SIZES.map(size => (
               <Option
                 key={size}

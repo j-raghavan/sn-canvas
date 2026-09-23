@@ -30,13 +30,17 @@ internal class TextPainter(
             if (isNote) {
                 val tone = element.style.color
                 val fill = element.style.fill
-                // The same decision the shape painter's fill makes, made in the one place a test can
-                // reach it: a note tinted by a fill reads as a shape filled with it (#59).
-                notePaint.color = context.palette.fillTint(fill, tone)
+                // The same tint decision the shape painter's fill makes, made in the one place a
+                // test can reach it (#59). Only the tint: a note takes no hatching from PATTERN.
+                val tint = context.palette.fillTint(fill, tone)
+                notePaint.color = tint
+                // From the tint itself rather than read back off the paint, which would read the
+                // alpha back with it and apply the opacity twice, as this line once did.
                 // Set every time, not only for a ramp: left on, a shader would tint the next note drawn.
-                notePaint.shader = if (fill.ramps) rampShader(bounds, notePaint.color) else null
-                // After the shader and the colour, as the shape painter does it, so one rule has one
-                // mechanism: Paint.alpha modulates whatever is under it.
+                notePaint.shader = if (fill.ramps) rampShader(bounds, tint) else null
+                // After the colour, which carries its own alpha and would undo this. Order against
+                // the shader no longer matters, now that the shader is built from the tint: alpha
+                // modulates whatever is under it, whenever it is set.
                 notePaint.alpha = element.style.alpha
                 canvas.drawRect(bounds, notePaint)
             }

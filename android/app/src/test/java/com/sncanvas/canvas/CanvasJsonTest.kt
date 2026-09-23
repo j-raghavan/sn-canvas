@@ -256,11 +256,16 @@ class CanvasJsonTest {
 
     // --- styles (FR19) -------------------------------------------------------------------
 
+    // Every fill, not one of them (#59). This pinned PATTERN alone, so a fill that did not survive
+    // the trip would pass here: saved as something else, or read back as none. That is a user
+    // drawing a fill, closing the note and finding it gone, which is the worst way to lose one.
     @Test
-    fun `styles survive a save and load`() {
-        val style = ShapeStyle(StyleColor.LIGHT_BLUE, 0.5, FillStyle.PATTERN, DashStyle.DOTTED, SizeStyle.XL)
-        val element = Element(id = "s", type = "ellipse", width = 10.0, height = 10.0, style = style)
-        assertEquals(listOf(element), CanvasJson.deserializeElements(CanvasJson.serializeElements(listOf(element))))
+    fun `every fill survives a save and load`() {
+        for (fill in FillStyle.entries) {
+            val style = ShapeStyle(StyleColor.LIGHT_BLUE, 0.5, fill, DashStyle.DOTTED, SizeStyle.XL)
+            val element = Element(id = "s", type = "ellipse", width = 10.0, height = 10.0, style = style)
+            assertEquals("$fill", listOf(element), CanvasJson.deserializeElements(CanvasJson.serializeElements(listOf(element))))
+        }
     }
 
     @Test
