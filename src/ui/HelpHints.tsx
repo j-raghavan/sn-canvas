@@ -7,9 +7,10 @@
 import React from 'react';
 import {Image, StyleSheet, View, type ImageSourcePropType, type ImageStyle} from 'react-native';
 import {TOOLBAR_GEOMETRY} from './Toolbar';
+import {ZOOM_GEOMETRY} from './ZoomControl';
 
 type Layout = {width: number; height: number; tipX: number; tipY: number};
-const LAYOUT: Record<'header' | 'styles' | 'toolbar' | 'eraser' | 'help', Layout> = require('../../assets/hints/hints.json');
+const LAYOUT: Record<'header' | 'styles' | 'toolbar' | 'eraser' | 'help' | 'zoom', Layout> = require('../../assets/hints/hints.json');
 
 // CanvasScreen's header: its 16dp padding, then Close and Save to Note (38dp each), to the middle of Export.
 const EXPORT_CENTER_RIGHT = 16 + 38 * 2 + 38 / 2;
@@ -23,6 +24,12 @@ const GAP = 4;
 const tipFromTopRight = (layout: Layout, right: number, top: number): ImageStyle => ({
   top: top - layout.tipY,
   right: right - (layout.width - layout.tipX),
+});
+
+/** A hint placed so its arrow's tip is [left] in from the left edge and [bottom] up from the bottom. */
+const tipFromBottomLeft = (layout: Layout, left: number, bottom: number): ImageStyle => ({
+  bottom: bottom - (layout.height - layout.tipY),
+  left: left - layout.tipX,
 });
 
 /** A hint placed so its arrow's tip is [x] from the middle and [bottom] up from the bottom. */
@@ -62,6 +69,12 @@ const HINTS: ReadonlyArray<{label: string; source: ImageSourcePropType; layout: 
     source: require('../../assets/hints/hint-help.png'),
     layout: LAYOUT.help,
     place: tipFromBottomCenter(LAYOUT.help, TOOLBAR_GEOMETRY.helpCenterX, TOOLBAR_GEOMETRY.top + GAP),
+  },
+  {
+    label: 'Zoom, and the way back to 100%',
+    source: require('../../assets/hints/hint-zoom.png'),
+    layout: LAYOUT.zoom,
+    place: tipFromBottomLeft(LAYOUT.zoom, ZOOM_GEOMETRY.centerX, ZOOM_GEOMETRY.bottom + ZOOM_GEOMETRY.height + GAP),
   },
 ];
 

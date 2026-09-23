@@ -4,7 +4,7 @@
  * see the zoom and get back without opening a menu.
  */
 import React from 'react';
-import {Text} from 'react-native';
+import {Image, Text} from 'react-native';
 import ReactTestRenderer, {act} from 'react-test-renderer';
 import {INITIAL_UI_STATE, type CanvasUiState} from '../src/domain/styles';
 import ZoomControl from '../src/ui/ZoomControl';
@@ -29,7 +29,12 @@ const renderControl = (overrides: Partial<CanvasUiState> = {}) => {
       .findAllByType(Text)
       .map(node => node.props.children.join(''))
       .join('');
-  return {onCommand, press, isListed, shown, readout};
+  // The chevron beside the readout, which is what says the pill can be tapped at all.
+  const chevron = () => {
+    const images = renderer.root.findByProps({testID: 'canvas-zoom'}).findAllByType(Image);
+    return images.length === 0 ? null : images[0].props.source;
+  };
+  return {onCommand, press, isListed, shown, readout, chevron};
 };
 
 const PRESETS = ['canvas-zoom-fit', 'canvas-zoom-100', 'canvas-zoom-50', 'canvas-zoom-25'];
@@ -70,4 +75,20 @@ test('the button closes the panel again, so it is not stuck open over the canvas
   control.press('canvas-zoom');
   expect(control.isListed('canvas-zoom-fit')).toBe(false);
   expect(control.onCommand).not.toHaveBeenCalled();
+});
+
+// Reported on the device: without it the pill reads as a readout and nobody tries tapping it. The
+// style button solves the same problem the same way, so the chevron is the app's own signal (#12).
+test('the pill carries a chevron, which flips when the panel opens', () => {
+  const control = renderControl();
+  const closed = control.chevron();
+  expect(closed).not.toBeNull();
+
+  control.press('canvas-zoom');
+  const open = control.chevron();
+  expect(open).not.toBeNull();
+  expect(open).not.toEqual(closed);
+
+  control.press('canvas-zoom');
+  expect(control.chevron()).toEqual(closed);
 });

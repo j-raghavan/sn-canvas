@@ -143,6 +143,7 @@ describe('help hints', () => {
     'Pick a tool & start drawing!',
     'Tap again to clear the canvas',
     'Show or hide these hints',
+    'Zoom, and the way back to 100%',
   ];
 
   /** An empty canvas finished loading: what the canvas reports when it has nothing on it. */
@@ -152,7 +153,7 @@ describe('help hints', () => {
     const {has, labelled, isPressed, emitCanvasLoaded} = await render();
     await openedEmpty(emitCanvasLoaded);
     expect(has('canvas-hints')).toBe(true);
-    expect(CAPTIONS.map(labelled)).toEqual([true, true, true, true, true]);
+    expect(CAPTIONS.map(labelled)).toEqual(CAPTIONS.map(() => true));
     expect(isPressed('canvas-help')).toBe(true);
   });
 
