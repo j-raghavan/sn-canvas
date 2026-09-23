@@ -581,8 +581,7 @@ describe("a note's canvases (#30)", () => {
     const session = createFakeSession();
     session.canvasesHere.mockResolvedValue(CANVASES);
     const {press, has, labelled, shows} = await render(session);
-    await press('canvas-more');
-    await press('canvas-menu-linkToCanvas');
+    await press('canvas-link-canvas');
     // The canvas shown is not offered: an element linking to the canvas it sits on goes nowhere.
     expect(labelled('Canvas made 19 Sep 2026, 13:01')).toBe(true);
     expect(labelled('Canvas made Not saved to the note yet, shown')).toBe(false);
@@ -600,8 +599,7 @@ describe("a note's canvases (#30)", () => {
     const session = createFakeSession();
     session.canvasesHere.mockResolvedValue([CANVASES[0]]);
     const {press, has, shows} = await render(session);
-    await press('canvas-more');
-    await press('canvas-menu-linkToCanvas');
+    await press('canvas-link-canvas');
     expect(has('canvas-list')).toBe(false);
     expect(shows('This note has no other canvas to link to')).toBe(true);
   });

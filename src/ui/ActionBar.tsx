@@ -77,6 +77,16 @@ const ACTIONS: readonly Action[] = [
     icon: require('../../assets/icons/action-link.png'),
     enabled: ui => ui.hasSelection,
   },
+  // Beside it, because linking to another canvas of this note is the same job (#2), and because an
+  // action worth doing does not belong behind the ⋮ any more than Link to note did. The icon is the
+  // badge it puts on the element, so the button says what you will get.
+  {
+    action: 'linkToCanvas',
+    testID: 'canvas-link-canvas',
+    label: 'Link to canvas',
+    icon: require('../../assets/icons/action-link-canvas.png'),
+    enabled: ui => ui.hasSelection,
+  },
   {
     action: 'unlinkSelected',
     testID: 'canvas-unlink',
@@ -111,8 +121,6 @@ const MENU: readonly MenuItem[] = [
   {action: 'tableRemoveColumn', label: 'Remove this column', tableOnly: true, needsRemovableColumn: true},
   // Also on the zoom control, deliberately. They were here first and are where people who found them
   // will look; the control exists because most people did not find them at all (#12).
-  // In the menu rather than on the bar: linking to a note is what people reach for, and the bar is full.
-  {action: 'linkToCanvas', label: 'Link to canvas…', needsSelection: true},
   {action: 'zoomToFit', label: 'Zoom to fit'},
   {action: 'zoomTo100', label: 'Zoom to 100%'},
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},

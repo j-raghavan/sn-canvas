@@ -206,3 +206,18 @@ test('Canvases in this note goes to the screen, which lists them, and is there w
   expect(onNoteCanvases).toHaveBeenCalledTimes(1);
   expect(onCommand).not.toHaveBeenCalled();
 });
+
+// #2: linking to another canvas is the same job as linking to a note, so it sits beside it on the bar
+// rather than behind the ⋮, which is where things go to be missed.
+test('Link to canvas is on the bar beside Link to note, greyed out until something is selected', () => {
+  expect(renderBar().isDisabled('canvas-link-canvas')).toBe(true);
+  const selected = renderBar({hasSelection: true});
+  expect(selected.isDisabled('canvas-link-canvas')).toBe(false);
+  selected.press('canvas-link-canvas');
+  expect(selected.onLinkToCanvas).toHaveBeenCalled();
+
+  // Not in the menu as well, or it would be offered twice.
+  const bar = renderBar({hasSelection: true});
+  bar.press('canvas-more');
+  expect(bar.isListed('canvas-menu-linkToCanvas')).toBe(false);
+});
