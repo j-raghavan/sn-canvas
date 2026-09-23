@@ -1,10 +1,8 @@
 package com.sncanvas.canvas
 
 import android.graphics.Canvas
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Shader
 import android.text.TextPaint
 
 /**
@@ -32,26 +30,18 @@ internal class TextPainter(
             if (isNote) {
                 val tone = element.style.color
                 val fill = element.style.fill
-                // A ramp starts where a solid tint sits, so its top reads as the solid fill does (#59).
-                val tint =
-                    if (fill == FillStyle.SOLID || fill.ramps) context.palette.solidFill(tone) else context.palette.semiFill(tone)
-                notePaint.color = withAlpha(tint, element.style.alpha)
-                // Set every time, not only for a ramp: left on, a shader would tint the next note drawn.
-                notePaint.shader =
-                    if (fill.ramps) {
-                        val line = ShapeOutline.rampLine(bounds.top, bounds.bottom)
-                        LinearGradient(
-                            line[0],
-                            line[1],
-                            line[2],
-                            line[3],
-                            notePaint.color,
-                            StylePalette.fadeToNothing(notePaint.color),
-                            Shader.TileMode.CLAMP,
-                        )
-                    } else {
-                        null
+                // Exhaustive, so a fill added later is a compile error here rather than quietly
+                // becoming a semi tint. A ramp starts where a solid tint sits (#59).
+                notePaint.color =
+                    when (fill) {
+                        FillStyle.SOLID, FillStyle.GRADIENT -> context.palette.solidFill(tone)
+                        FillStyle.NONE, FillStyle.SEMI, FillStyle.PATTERN -> context.palette.semiFill(tone)
                     }
+                // Set every time, not only for a ramp: left on, a shader would tint the next note drawn.
+                notePaint.shader = if (fill.ramps) rampShader(bounds, notePaint.color) else null
+                // After the shader and the colour, as the shape painter does it, so one rule has one
+                // mechanism: Paint.alpha modulates whatever is under it.
+                notePaint.alpha = element.style.alpha
                 canvas.drawRect(bounds, notePaint)
             }
             if (context.editing?.elementId != element.id) {

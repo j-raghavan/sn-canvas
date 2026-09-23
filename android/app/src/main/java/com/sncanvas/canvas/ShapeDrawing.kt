@@ -1,16 +1,34 @@
+@file:Suppress("TooManyFunctions") // one primitive per thing that gets drawn, which is what this file is
+
 package com.sncanvas.canvas
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.RectF
+import android.graphics.Shader
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
 // Drawing primitives shared by the live view, the note thumbnail and the minimap.
+
+/**
+ * The shader a ramp fill paints with (#59): [color] at the top of [bounds] fading to that same
+ * colour gone at its bottom. Shared, because a shape's fill and a sticky note's tint are painted in
+ * different files and a ramp written out twice is a ramp that drifts; the line itself is
+ * [ShapeOutline.rampLine], which is where its direction is decided and tested.
+ */
+internal fun rampShader(
+    bounds: RectF,
+    color: Int,
+): LinearGradient {
+    val line = ShapeOutline.rampLine(bounds.top, bounds.bottom)
+    return LinearGradient(line[0], line[1], line[2], line[3], color, StylePalette.fadeToNothing(color), Shader.TileMode.CLAMP)
+}
 
 /** [world] on screen through [transform]. */
 internal fun screenPoint(

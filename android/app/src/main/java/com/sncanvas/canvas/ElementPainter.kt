@@ -3,11 +3,9 @@ package com.sncanvas.canvas
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Shader
 
 /**
  * Paints one element in its style (FR19): shapes and connectors with colour
@@ -221,19 +219,7 @@ internal class ElementPainter(
             }
         // Down the shape in the canvas's own space, so the ramp turns with a rotated shape rather
         // than staying upright against it, fading from the colour just set to nothing.
-        if (style.fill.ramps) {
-            val line = ShapeOutline.rampLine(bounds.top, bounds.bottom)
-            paint.shader =
-                LinearGradient(
-                    line[0],
-                    line[1],
-                    line[2],
-                    line[3],
-                    paint.color,
-                    StylePalette.fadeToNothing(paint.color),
-                    Shader.TileMode.CLAMP,
-                )
-        }
+        paint.shader = if (style.fill.ramps) rampShader(bounds, paint.color) else null
         paint.alpha = style.alpha
         canvas.drawPath(outline, paint)
         if (style.fill == FillStyle.PATTERN) hatch(canvas, outline, bounds, palette.patternLine(style.color), style.alpha)
