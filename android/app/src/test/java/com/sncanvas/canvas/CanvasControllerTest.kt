@@ -248,28 +248,29 @@ class CanvasControllerTest {
     }
 
     @Test
-    fun `viewport changes redraw and say the new zoom, without an undo step`() {
+    fun `viewport changes redraw without an undo step, and say nothing until they settle`() {
         controller.load(emptyList())
         val changesBefore = recorder.changes
         val statesBefore = recorder.uiStates.size
+
+        // Once per motion event through a pan or a pinch: redrawn, but nothing crosses to JS (NFR5).
         controller.setViewport(ViewTransform(10.0, 20.0, 2.0))
         assertEquals(listOf(10.0, 20.0, 2.0), listOf(controller.state.viewportX, controller.state.viewportY, controller.state.zoom))
         assertEquals(changesBefore + 1, recorder.changes)
-        // The zoom control reads this, so the state goes out; the viewport is still not an edit (#12).
+        assertEquals(statesBefore, recorder.uiStates.size)
+        assertFalse(ui.canUndo)
+
+        // Settled: the zoom control is told where it came to rest, and it is still not an edit.
+        controller.viewportSettled()
         assertEquals(statesBefore + 1, recorder.uiStates.size)
         assertEquals(200, ui.zoomPercent)
         assertFalse(ui.canUndo)
+        // Nothing to redraw that setViewport has not already redrawn.
+        assertEquals(changesBefore + 1, recorder.changes)
 
-        // A pan leaves the zoom where it was, so there is nothing new to say and nothing is sent.
-        controller.setViewport(ViewTransform(90.0, 90.0, 2.0))
+        // Settling on the same zoom again says nothing new.
+        controller.viewportSettled()
         assertEquals(statesBefore + 1, recorder.uiStates.size)
-
-        // Nor does a pinch too small to change the whole percent the control shows.
-        controller.setViewport(ViewTransform(90.0, 90.0, 2.001))
-        assertEquals(statesBefore + 1, recorder.uiStates.size)
-        controller.setViewport(ViewTransform(90.0, 90.0, 2.01))
-        assertEquals(statesBefore + 2, recorder.uiStates.size)
-        assertEquals(201, ui.zoomPercent)
     }
 
     @Test

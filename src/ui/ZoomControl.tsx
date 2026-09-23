@@ -41,13 +41,12 @@ export default function ZoomControl({ui, onCommand, onOpen}: Props): React.JSX.E
   const [isOpen, setOpen] = useState(false);
 
   const toggle = () => {
-    setOpen(open => {
-      // Closing is not an opening, so the hints are not put away twice.
-      if (!open) {
-        onOpen();
-      }
-      return !open;
-    });
+    // Outside the updater, which has to stay pure: React may run it more than once, and this reaches
+    // into the screen. Closing is not an opening, so the hints are not put away twice.
+    if (!isOpen) {
+      onOpen();
+    }
+    setOpen(!isOpen);
   };
 
   const run = (command: CanvasCommand) => {

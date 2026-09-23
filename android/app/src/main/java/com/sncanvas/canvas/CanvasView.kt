@@ -160,6 +160,9 @@ class CanvasView(
                     minimap.show()
                     return true
                 }
+
+                /** The pinch is over: tell the zoom control where it ended up (#12). */
+                override fun onScaleEnd(detector: ScaleGestureDetector) = controller.viewportSettled()
             },
         )
 
@@ -261,6 +264,7 @@ class CanvasView(
     fun zoomToPercent(percent: Int) {
         val center = toWorld(width / 2f, height / 2f)
         controller.setViewport(CanvasCore.zoomToPercent(controller.state, percent, center.x, center.y).transform)
+        controller.viewportSettled()
     }
 
     /** Returns to 100% zoom about the view's center. */
@@ -295,6 +299,7 @@ class CanvasView(
         isFitPending = width == 0 || height == 0
         if (isFitPending) return
         controller.setViewport(ViewTransforms.fitToView(controller.state.elements, width.toDouble(), height.toDouble(), FIT_PADDING_PX))
+        controller.viewportSettled()
     }
 
     /** Opens the JS keyboard editor over [target]'s text (FR6/FR24). */

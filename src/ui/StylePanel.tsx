@@ -72,13 +72,12 @@ export default function StylePanel({style, selectedType = null, swatch, onChange
   const [isOpen, setOpen] = useState(false);
 
   const toggle = () => {
-    setOpen(open => {
-      // Closing is not an opening, so the hints are not put away twice.
-      if (!open) {
-        onOpen();
-      }
-      return !open;
-    });
+    // Outside the updater, which has to stay pure: React may run it more than once, and this reaches
+    // into the screen. Closing is not an opening, so the hints are not put away twice.
+    if (!isOpen) {
+      onOpen();
+    }
+    setOpen(!isOpen);
   };
   const opacityIndex = opacityStepIndex(style.opacity);
   const isImage = selectedType === IMAGE;

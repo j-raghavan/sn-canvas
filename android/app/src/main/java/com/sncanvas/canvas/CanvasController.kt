@@ -90,10 +90,18 @@ class CanvasController(
     /** Pans and zooms; not an edit, so no undo step. */
     fun setViewport(transform: ViewTransform) {
         state = state.copy(viewportX = transform.viewportX, viewportY = transform.viewportY, zoom = transform.zoom)
-        // Published as well as redrawn, so the zoom control keeps up with a pinch (#12). A pan, and a
-        // pinch too small to change the whole percent, publish a state equal to the last and send nothing.
-        changed()
+        // Redrawn, not published. This runs once per motion event through a pan or a pinch, and raw
+        // gesture frames are not to cross to JS (NFR5); the zoom control hears about it when the
+        // gesture settles, through [viewportSettled] (#12).
+        listener.onChanged()
     }
+
+    /**
+     * The viewport has settled: a pinch has ended, or a command put it somewhere on purpose. Publishes,
+     * so the zoom control shows where it came to rest. Nothing to redraw, since [setViewport] already
+     * did that for every frame on the way here (#12).
+     */
+    fun viewportSettled() = publish()
 
     /** Selects one element, or nothing; a grouped one brings its group with it. */
     fun select(id: String?) {
