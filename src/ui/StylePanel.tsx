@@ -40,12 +40,17 @@ const colorRows = Array.from({length: Math.ceil(COLORS.length / COLORS_PER_ROW)}
 );
 
 /**
- * One option's width, and the panel five of them across, since the fills are five (#59). Every row
- * then spans the same width and spreads its own options across it, flush to both edges: five fills
+ * One option's width, and the panel as wide as the fills, which are the longest row (#59). Every row
+ * then spans that same width and spreads its own options across it, flush to both edges: the fills
  * touch, four sizes stand further apart, and each row starts and ends in line with the others.
+ * Taken from [FILLS] rather than counted here, so a fill added later widens the panel to fit it
+ * instead of pushing the last one off the edge, which is how the gradient first went missing.
  */
 const OPTION_WIDTH = 44;
-const ROW_WIDTH = OPTION_WIDTH * 5;
+const ROW_WIDTH = OPTION_WIDTH * FILLS.length;
+
+/** The panel's inset, which it is wider than a row by on both sides. */
+const PANEL_PADDING = 8;
 
 const FILL_OPTIONS: Record<FillId, {label: string; icon: ImageSourcePropType}> = {
   none: {label: 'No fill', icon: require('../../assets/icons/fill-none.png')},
@@ -229,8 +234,8 @@ const styles = StyleSheet.create({
   },
   panel: {
     marginTop: 6,
-    width: ROW_WIDTH + 16,
-    padding: 8,
+    width: ROW_WIDTH + PANEL_PADDING * 2,
+    padding: PANEL_PADDING,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#cccccc',

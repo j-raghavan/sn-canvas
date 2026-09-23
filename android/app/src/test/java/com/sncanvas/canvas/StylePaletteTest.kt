@@ -71,6 +71,12 @@ class StylePaletteTest {
     // Only the fills that read as solid are named: the rest is whatever the enum has left, so a fill
     // added later is checked here without anyone remembering to add it, and is expected to read as
     // semi until it is named here. Listing both sides by hand would leave a sixth fill in neither.
+    //
+    // The unnamed group is "semi or nothing", not strictly semi: NONE is in it and paints no shape
+    // at all, the tint mattering only to a sticky note. A later fill that paints nothing would join
+    // it silently. That is the trade, taken deliberately: the cheap side to be wrong on is the one
+    // that defaults, since a ramping fill left out of the named set would fade from a tone no solid
+    // fill ever paints, which `a fill that ramps takes the solid tint` is here to catch.
     private val readAsSolid = setOf(FillStyle.SOLID, FillStyle.GRADIENT)
 
     /** Every fill's tint for one palette and colour, against the member each one has to equal. */

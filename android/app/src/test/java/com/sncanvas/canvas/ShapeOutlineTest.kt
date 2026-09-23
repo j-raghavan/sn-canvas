@@ -75,8 +75,12 @@ class ShapeOutlineTest {
         // Downward: solid at the top, faded at the bottom, never the other way up.
         assertTrue(line[3] > line[1])
         // Given bottom first it is the same line, so the ramp cannot be flipped by argument order.
+        // Stated intent rather than a guard against anything reachable: both call sites pass
+        // top then bottom, an element's height is never negative and zoom is always positive, so
+        // today the edges cannot arrive the other way round.
         assertArrayEquals(line, ShapeOutline.rampLine(90f, 20f), 0f)
-        // A shape with no height at all gives a line, not a crash.
+        // Equal edges give an equal-ended line. What happens to a gradient drawn along one is
+        // Skia's business and no test here reaches it; this pins the line, not the painting.
         assertArrayEquals(floatArrayOf(0f, 5f, 0f, 5f), ShapeOutline.rampLine(5f, 5f), 0f)
     }
 }

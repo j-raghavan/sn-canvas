@@ -9,8 +9,8 @@ import android.graphics.RectF
 
 /**
  * Paints one element in its style (FR19): shapes and connectors with colour
- * through a [StylePalette], opacity, fill (none, semi, solid or hatched
- * pattern), dash (hand-drawn, dashed, dotted or solid) and size; freehand
+ * through a [StylePalette], opacity, fill (none, semi, solid, hatched pattern
+ * or gradient), dash (hand-drawn, dashed, dotted or solid) and size; freehand
  * strokes as lines as wide as the pen pressed (FR5); images from [images],
  * framed by their style's outline, or by none (FR22); and text, notes and table
  * cells through [TextPainter]. [CanvasRenderer] decides what to draw; this

@@ -80,6 +80,7 @@ test.each([
   ['style-color-red', 'color', 'red'],
   ['style-opacity-0.25', 'opacity', '0.25'],
   ['style-fill-pattern', 'fill', 'pattern'],
+  ['style-fill-gradient', 'fill', 'gradient'],
   ['style-dash-dashed', 'dash', 'dashed'],
   ['style-size-xl', 'size', 'xl'],
 ])('tapping %s sends %s = %s', (testID, property, value) => {
@@ -140,12 +141,6 @@ test('every fill in the catalog has a button, gradient included', () => {
   expect(FILLS.map(fill => isSelected(`style-fill-${fill}`))).toEqual(FILLS.map(fill => fill === 'gradient'));
 });
 
-test('choosing the gradient sends it as a style change', () => {
-  const {tap, onChange} = renderPanel();
-  tap('style-fill-gradient');
-  expect(onChange).toHaveBeenCalledWith('fill', 'gradient');
-});
-
 // Asked for on the device: a colour should line up with the outline and the size under it, so every
 // row of four is laid out the same way rather than the colours using cells of their own (#59).
 test('a colour takes the same cell as an outline and a size, so the columns line up', () => {
@@ -158,13 +153,14 @@ test('a colour takes the same cell as an outline and a size, so the columns line
 });
 
 test('every row spans the panel and spreads its own options across it', () => {
-  const {look, host} = renderPanel();
-  // Wide enough for five fills at full size, which is what lets the rows stay justified rather than
-  // the fills being squeezed or spilling out of the panel.
-  expect(look('style-panel').width).toBe(look('style-fill-none').width * 5 + 16);
+  const {look} = renderPanel();
+  const panel = look('style-panel');
+  // Wide enough for every fill at full size, counted from FILLS rather than written in: pinned to a
+  // number, the panel kept the width it had when there were four fills and the gradient fell off the
+  // edge of the screen. The padding is read back from the panel for the same reason.
+  expect(panel.width).toBe(look('style-fill-none').width * FILLS.length + panel.padding * 2);
   // Flush to both edges, so a row of four and a row of five start and end in line.
   expect(look('style-colors-0').justifyContent).toBe('space-between');
-  expect(host('style-colors-0').props.children).toHaveLength(4);
 });
 
 test('the twelve colours are three rows of four', () => {
