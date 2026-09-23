@@ -34,7 +34,7 @@ import {
 import {useDisclosure} from './useDisclosure';
 
 /** Four to a row, so a colour lines up with the outline and size below it. */
-const COLORS_PER_ROW = 4;
+export const COLORS_PER_ROW = 4;
 const colorRows = Array.from({length: Math.ceil(COLORS.length / COLORS_PER_ROW)}, (_, row) =>
   COLORS.slice(row * COLORS_PER_ROW, (row + 1) * COLORS_PER_ROW),
 );

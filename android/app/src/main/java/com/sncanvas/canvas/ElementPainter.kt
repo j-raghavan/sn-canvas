@@ -49,8 +49,17 @@ internal class ElementPainter(
             isAntiAlias = true
         }
 
-    /** The gradient fill's own paint (#59): see [drawFill] for why it is not [fillPaint]. */
-    private val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    /**
+     * The light box a missing image shows as. Its own paint, not [fillPaint]: it wants one colour
+     * and nothing else, where a fill sets colour, shader and alpha every time it draws. Sharing one
+     * paint between the two meant a fill's shader could outlive it here, which is what a gradient
+     * made possible (#59).
+     */
+    private val missingImagePaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = MISSING_IMAGE_FILL
+        }
 
     private val fillPaint =
         Paint().apply {
@@ -127,8 +136,7 @@ internal class ElementPainter(
         canvas: Canvas,
         bounds: RectF,
     ) {
-        fillPaint.color = MISSING_IMAGE_FILL
-        canvas.drawRect(bounds, fillPaint)
+        canvas.drawRect(bounds, missingImagePaint)
         hatchPaint.color = Color.GRAY
         canvas.drawLine(bounds.left, bounds.top, bounds.right, bounds.bottom, hatchPaint)
         canvas.drawLine(bounds.left, bounds.bottom, bounds.right, bounds.top, hatchPaint)
@@ -211,22 +219,22 @@ internal class ElementPainter(
         // Nothing to paint, and nothing is: a fill of NONE never reaches a paint. The tint below
         // would give it a usable colour, so this is the only thing keeping an unfilled shape empty.
         if (style.fill == FillStyle.NONE) return
-        // A paint of its own for a ramp, because fillPaint is shared with the missing-image fill,
-        // which sets no shader: one left on it would tint whatever was drawn next (#59).
-        val paint = if (style.fill.ramps) gradientPaint else fillPaint
         // Which tint a fill reads as is decided in the palette, where a test can see it, since the
         // sticky note's tint is the same decision made in another file this one cannot check (#59).
         val tint = palette.fillTint(style.fill, style.color)
-        paint.color = tint
-        // The ramp is built from the tint itself, not read back off the paint: reading it back reads
-        // the alpha back with it, which is how a note's opacity came to be applied twice. Handed the
-        // tint directly, no ordering of these four lines can bring that back.
+        // Colour, shader, alpha, draw, every time and on every path: the shader is set to null for a
+        // flat fill rather than left alone, so a ramp cannot outlive the shape it belonged to. That
+        // is why one paint serves every fill here.
+        fillPaint.color = tint
+        // Built from the tint itself, not read back off the paint: reading it back reads the alpha
+        // back with it, which is how a note's opacity came to be applied twice. Handed the tint
+        // directly, no ordering of these lines can bring that back.
         //
         // Down the shape in the canvas's own space, so the ramp turns with a rotated shape rather
         // than staying upright against it, fading from that tint to nothing.
-        paint.shader = if (style.fill.ramps) rampShader(bounds, tint) else null
-        paint.alpha = style.alpha
-        canvas.drawPath(outline, paint)
+        fillPaint.shader = if (style.fill.ramps) rampShader(bounds, tint) else null
+        fillPaint.alpha = style.alpha
+        canvas.drawPath(outline, fillPaint)
         if (style.fill == FillStyle.PATTERN) hatch(canvas, outline, bounds, palette.patternLine(style.color), style.alpha)
     }
 

@@ -5,8 +5,8 @@
 import React from 'react';
 import {StyleSheet} from 'react-native';
 import ReactTestRenderer, {act} from 'react-test-renderer';
-import {COLORS, DEFAULT_STYLE, FILLS, type CanvasStyle} from '../src/domain/styles';
-import StylePanel from '../src/ui/StylePanel';
+import {COLORS, DEFAULT_STYLE, FILLS, SIZES, type CanvasStyle} from '../src/domain/styles';
+import StylePanel, {COLORS_PER_ROW} from '../src/ui/StylePanel';
 
 const renderPanel = (style: CanvasStyle = DEFAULT_STYLE, open = true) => {
   const onChange = jest.fn();
@@ -169,7 +169,20 @@ test('every row spans the panel and spreads its own options across it', () => {
   expect(rows.map(row => look(row).justifyContent)).toEqual(rows.map(() => 'space-between'));
 });
 
-test('the twelve colours are three rows of four', () => {
+// Counted from COLORS and COLORS_PER_ROW rather than written out as [4, 4, 4]: what matters is that
+// the rows carve up the colours evenly and drop none of them, and that holds at twelve colours or
+// sixteen. Written as literals, this test would have had to be edited to add a colour, and editing
+// a test to make it pass again is how a test stops meaning what it says.
+test('the colours are carved into full rows, every colour placed once', () => {
   const {host} = renderPanel();
-  expect([0, 1, 2].map(row => host(`style-colors-${row}`).props.children.length)).toEqual([4, 4, 4]);
+  // The anchor, and the reason the number is four: a colour sits above an outline and a size, so the
+  // row holds as many as those rows do. Without this the test reads COLORS_PER_ROW on both sides and
+  // any value would satisfy it, which is the same identity the panel width nearly shipped with.
+  expect(COLORS_PER_ROW).toBe(SIZES.length);
+  const rowCount = Math.ceil(COLORS.length / COLORS_PER_ROW);
+  const counts = Array.from({length: rowCount}, (_, row) => host(`style-colors-${row}`).props.children.length);
+  expect(counts.reduce((total, count) => total + count, 0)).toBe(COLORS.length);
+  // Full except the last, which is short only when the colours do not divide evenly.
+  expect(counts.slice(0, -1)).toEqual(counts.slice(0, -1).map(() => COLORS_PER_ROW));
+  expect(counts.at(-1)).toBeLessThanOrEqual(COLORS_PER_ROW);
 });
