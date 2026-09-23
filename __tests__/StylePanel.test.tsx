@@ -145,3 +145,29 @@ test('choosing the gradient sends it as a style change', () => {
   tap('style-fill-gradient');
   expect(onChange).toHaveBeenCalledWith('fill', 'gradient');
 });
+
+// Asked for on the device: a colour should line up with the outline and the size under it, so every
+// row of four is laid out the same way rather than the colours using cells of their own (#59).
+test('a colour takes the same cell as an outline and a size, so the columns line up', () => {
+  const {look} = renderPanel();
+  const colour = look('style-color-black').width;
+  expect(colour).toBe(look('style-size-m').width);
+  expect(colour).toBe(look('style-dash-draw').width);
+  // And the same as a fill, so the five fills span exactly what four colours do.
+  expect(colour).toBe(look('style-fill-none').width);
+});
+
+test('every row spans the panel and spreads its own options across it', () => {
+  const {look, host} = renderPanel();
+  // Wide enough for five fills at full size, which is what lets the rows stay justified rather than
+  // the fills being squeezed or spilling out of the panel.
+  expect(look('style-panel').width).toBe(look('style-fill-none').width * 5 + 16);
+  // Flush to both edges, so a row of four and a row of five start and end in line.
+  expect(look('style-colors-0').justifyContent).toBe('space-between');
+  expect(host('style-colors-0').props.children).toHaveLength(4);
+});
+
+test('the twelve colours are three rows of four', () => {
+  const {host} = renderPanel();
+  expect([0, 1, 2].map(row => host(`style-colors-${row}`).props.children.length)).toEqual([4, 4, 4]);
+});

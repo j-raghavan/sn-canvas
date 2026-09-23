@@ -33,6 +33,20 @@ import {
 } from '../domain/styles';
 import {useDisclosure} from './useDisclosure';
 
+/** Four to a row, so a colour lines up with the outline and size below it. */
+const COLORS_PER_ROW = 4;
+const colorRows = Array.from({length: Math.ceil(COLORS.length / COLORS_PER_ROW)}, (_, row) =>
+  COLORS.slice(row * COLORS_PER_ROW, (row + 1) * COLORS_PER_ROW),
+);
+
+/**
+ * One option's width, and the panel five of them across, since the fills are five (#59). Every row
+ * then spans the same width and spreads its own options across it, flush to both edges: five fills
+ * touch, four sizes stand further apart, and each row starts and ends in line with the others.
+ */
+const OPTION_WIDTH = 44;
+const ROW_WIDTH = OPTION_WIDTH * 5;
+
 const FILL_OPTIONS: Record<FillId, {label: string; icon: ImageSourcePropType}> = {
   none: {label: 'No fill', icon: require('../../assets/icons/fill-none.png')},
   semi: {label: 'Semi fill', icon: require('../../assets/icons/fill-semi.png')},
@@ -88,20 +102,22 @@ export default function StylePanel({style, selectedType = null, swatch, onChange
         <Image source={isOpen ? CHEVRON_UP : CHEVRON_DOWN} style={styles.chevron} />
       </Pressable>
       {isOpen && (
-        <View style={styles.panel}>
-          <View style={styles.colors}>
-            {COLORS.map(color => (
-              <Option
-                key={color.id}
-                testID={`style-color-${color.id}`}
-                label={color.name}
-                active={color.id === style.color}
-                activeStyle={styles.swatchActive}
-                onPress={() => onChange('color', color.id)}>
-                <View style={[styles.swatch, {backgroundColor: swatch(color.id)}]} />
-              </Option>
-            ))}
-          </View>
+        <View testID="style-panel" style={styles.panel}>
+          {colorRows.map((row, index) => (
+            <View key={row[0].id} testID={`style-colors-${index}`} style={styles.row}>
+              {row.map(color => (
+                <Option
+                  key={color.id}
+                  testID={`style-color-${color.id}`}
+                  label={color.name}
+                  active={color.id === style.color}
+                  activeStyle={styles.swatchActive}
+                  onPress={() => onChange('color', color.id)}>
+                  <View style={[styles.swatch, {backgroundColor: swatch(color.id)}]} />
+                </Option>
+              ))}
+            </View>
+          ))}
           {/* Twelve grays alone don't identify a colour on e-ink, so the panel names it. */}
           <Text style={styles.caption}>{colorName(style.color)}</Text>
           <View style={styles.slider}>
@@ -213,22 +229,19 @@ const styles = StyleSheet.create({
   },
   panel: {
     marginTop: 6,
-    width: 196,
+    width: ROW_WIDTH + 16,
     padding: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#cccccc',
     backgroundColor: '#ffffff',
   },
-  colors: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
   row: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   option: {
-    width: 44,
+    width: OPTION_WIDTH,
     height: 40,
     marginVertical: 2,
     borderRadius: 8,
