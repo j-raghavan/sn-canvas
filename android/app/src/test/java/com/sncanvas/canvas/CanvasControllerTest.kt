@@ -492,6 +492,24 @@ class CanvasControllerTest {
         assertEquals(controller.selectedIds, groups.getValue(controller.selectedElements.first().groupId).map { it.id }.toSet())
     }
 
+    // One Remove link serves both kinds: an element holds a link, not a link of a sort, so nothing
+    // about taking one off depends on where it went (#2).
+    @Test
+    fun `Remove link takes off a canvas link as readily as a note one`() {
+        controller.load(listOf(box))
+        controller.select("box")
+        controller.linkSelected(ElementLink(ElementLink.KIND_CANVAS, "c-other"))
+        assertTrue(ui.hasLink)
+
+        controller.unlinkSelected()
+        assertNull(controller.selected?.link)
+        assertFalse(ui.hasLink)
+        // And it is one undoable step, so the link comes back. Undo selects nothing, so say what to look at.
+        controller.undo()
+        controller.select("box")
+        assertEquals(ElementLink.KIND_CANVAS, controller.selected?.link?.kind)
+    }
+
     // A link of a kind this build cannot follow would be dropped as the canvas loaded, so storing one
     // makes a link that vanishes on reopening. Refused here, where the command arrives (#2).
     @Test
