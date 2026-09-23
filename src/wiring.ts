@@ -22,10 +22,12 @@ const logger: Logger = {
 };
 
 /**
- * Canvas's file permissions, asked for once: index.js calls it as the plugin
- * loads, and each session awaits the same request before it opens a canvas.
+ * Canvas's file permissions, asked for by what is about to happen: keeping
+ * canvases needs read, write and delete, while an export only writes (#17).
+ * index.js asks for the canvas folder's as the plugin loads, and each session
+ * awaits the same request before it opens a canvas.
  */
-export const requestFileAccess = createFileAccess(logger);
+export const fileAccess = createFileAccess(logger);
 
 // One badge for the plugin: every session shows and hides the same one, and the screen hears its taps.
 const backBadge = createNativeBackBadge(logger);
@@ -37,7 +39,7 @@ export const backBadgeTaps: BackBadgeTaps = backBadge;
 export function buildCanvasSession(): CanvasSession {
   return createCanvasSession({
     store: createNativeCanvasStore(logger),
-    host: createHostSdk(logger, requestFileAccess),
+    host: createHostSdk(logger, fileAccess),
     badge: backBadge,
     newCanvasId: () => mintCanvasId(Date.now(), Math.random),
     logger,

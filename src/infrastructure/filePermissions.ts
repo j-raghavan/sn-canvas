@@ -9,10 +9,12 @@
 // touches the canvas folder before the answer is in.
 // Ref: docs.supernote.com/en/plugin-base/permission
 //
-// Asked for as soon as the plugin loads (index.js: at install, and each time
-// the plugin starts), as sn-shapes and sn-mindmap do, and awaited by the
-// session before it opens the first canvas. Both share one request (see
-// wiring.ts), so the user sees each dialog once.
+// What keeping canvases needs is asked for as soon as the plugin loads
+// (index.js: at install, and each time the plugin starts), as sn-shapes and
+// sn-mindmap do, and awaited by the session before it opens the first canvas.
+// Exporting a PDF asks only to write, since that is all it does (#17).
+// Everything goes through the one object from wiring.ts, so whatever the
+// purpose, the user sees each dialog once.
 
 import {PluginManager} from 'sn-plugin-lib';
 import {TAG} from '../diagnostics/log';
@@ -24,16 +26,32 @@ export const FILE_WRITE = 'plugin.permission.FILE:WRITE';
 export const FILE_DELETE = 'plugin.permission.FILE:DELETE';
 
 /**
- * A request for Canvas's file permissions: read, write and delete, one dialog
- * at a time and only for those not granted yet. It resolves true when write
- * and delete are both granted, and never rejects. A call while one is in
- * flight shares it; a call after it settled asks again, for any refused.
+ * What Canvas asks the firmware for, by what it is about to do. Each permission
+ * is asked for only when it is not granted yet, one dialog at a time, and a
+ * permission already being asked for is awaited rather than asked again, so a
+ * dialog never goes up twice. Neither call rejects.
  */
-export function createFileAccess(logger: Logger): () => Promise<boolean> {
-  let inFlight: Promise<boolean> | null = null;
+export type FileAccess = {
+  /** Read, write and delete: what keeping canvases in MyStyle/SnCanvas needs. */
+  forCanvases: () => Promise<boolean>;
+  /**
+   * Write, and nothing else: what putting a PDF in EXPORT needs. Asking to
+   * delete for it showed a dialog about deleting files to someone who only
+   * wanted a PDF, and refused the export when they said no (#17).
+   */
+  forExports: () => Promise<boolean>;
+};
+
+export function createFileAccess(logger: Logger): FileAccess {
+  // One promise per permission, while it is being asked for, so two things
+  // wanting the same one wait on the same dialog.
+  const asking = new Map<string, Promise<boolean>>();
+  // And every dialog waits its turn, so a second caller arriving partway
+  // through another's run never puts a second dialog up beside it.
+  let queue: Promise<unknown> = Promise.resolve();
 
   // hasPermission: 0 not granted, 1 granted. requestPermission: 0 deny, 1 while using, 2 always.
-  const grant = async (name: string): Promise<boolean> => {
+  const ask = async (name: string): Promise<boolean> => {
     try {
       const had = await PluginManager.hasPermission(name);
       const got = had > 0 ? had : await PluginManager.requestPermission(name);
@@ -45,19 +63,26 @@ export function createFileAccess(logger: Logger): () => Promise<boolean> {
     }
   };
 
-  const ask = async (): Promise<boolean> => {
-    await grant(FILE_READ);
-    const canWrite = await grant(FILE_WRITE);
-    const canDelete = await grant(FILE_DELETE);
-    return canWrite && canDelete;
+  const grant = (name: string): Promise<boolean> => {
+    const already = asking.get(name);
+    if (already !== undefined) {
+      return already;
+    }
+    // [ask] answers false rather than rejecting, whatever the firmware does, so the next dialog
+    // follows this one however this one went and a refusal never stalls the queue.
+    const answer = queue.then(() => ask(name)).finally(() => asking.delete(name));
+    queue = answer;
+    asking.set(name, answer);
+    return answer;
   };
 
-  return () => {
-    if (inFlight === null) {
-      inFlight = ask().finally(() => {
-        inFlight = null;
-      });
-    }
-    return inFlight;
+  return {
+    forCanvases: async () => {
+      await grant(FILE_READ);
+      const canWrite = await grant(FILE_WRITE);
+      const canDelete = await grant(FILE_DELETE);
+      return canWrite && canDelete;
+    },
+    forExports: () => grant(FILE_WRITE),
   };
 }

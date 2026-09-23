@@ -41,7 +41,9 @@ import {createHostSdk} from '../src/infrastructure/hostSdk';
 import {createRecordingLogger} from './helpers/fakePorts';
 
 const failure = () => Promise.reject(new Error('host said no'));
-const requestAccess = jest.fn().mockResolvedValue(true);
+const forCanvases = jest.fn().mockResolvedValue(true);
+const forExports = jest.fn().mockResolvedValue(true);
+const requestAccess = {forCanvases, forExports};
 
 test('pluginDir is the host path, or null when it has none or the call fails', async () => {
   const logger = createRecordingLogger();
@@ -55,9 +57,12 @@ test('pluginDir is the host path, or null when it has none or the call fails', a
   expect(logger.lines).toEqual(['warn [SNCANVAS] getPluginDirPath failed: Error: host said no']);
 });
 
-test('requestFileAccess is the shared file-permission request it is given', async () => {
-  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestFileAccess()).toBe(true);
-  expect(requestAccess).toHaveBeenCalledTimes(1);
+test('requestCanvasFolderAccess is the shared file-permission request it is given', async () => {
+  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestCanvasFolderAccess()).toBe(true);
+  // An export asks only to write (#17), which is a different request.
+  expect(await createHostSdk(createRecordingLogger(), requestAccess).requestExportAccess()).toBe(true);
+  expect(forExports).toHaveBeenCalled();
+  expect(forCanvases).toHaveBeenCalledTimes(1);
 });
 
 test('lassoedElements unwraps the element list, and is empty for anything else', async () => {

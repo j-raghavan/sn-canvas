@@ -68,6 +68,8 @@ The first time Canvas opens it asks for file access, once:
 | Write files | Save canvases and note thumbnails, copy inserted images into the canvas, write PDF exports |
 | Delete files | Remove the unsaved scratch canvas once Save to Note turns it into a linked canvas (or clean up if that fails), and move canvases saved by older versions into `MyStyle/SnCanvas` |
 
+Canvas asks for all three when it starts, so the dialogs come together rather than interrupting you later. Exporting a PDF is the exception: it writes a file and nothing else, so it asks only to write. Saying no to deleting leaves exports working. It is keeping canvases in `MyStyle/SnCanvas` that needs it.
+
 ## How to use
 
 1. Open a note, open the **Plugins** list in the sidebar, and tap **Canvas**.

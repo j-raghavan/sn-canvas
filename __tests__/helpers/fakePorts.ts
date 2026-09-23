@@ -150,7 +150,10 @@ export type FakeHost = HostPort & {
   insertSucceeds: boolean;
   /** Whether the user grants file write access (else canvases stay in the plugin folder). */
   fileWrite: boolean;
+  /** What the firmware says to a request to write alone, which is all an export asks for (#17). */
+  fileWriteOnly: boolean;
   accessRequests: number;
+  writeRequests: number;
   /** The note page the user is on. */
   page: NotePage | null;
   /** The elements on that page, as getElements reports them ([notePicture] builds one). */
@@ -209,7 +212,9 @@ export const createFakeHost = (): FakeHost => {
     inserted: [],
     insertSucceeds: true,
     fileWrite: false,
+    fileWriteOnly: true,
     accessRequests: 0,
+    writeRequests: 0,
     page: {notePath: '/note.note', page: 0},
     elements: [],
     unsaved: [],
@@ -220,9 +225,14 @@ export const createFakeHost = (): FakeHost => {
     async pluginDir() {
       return host.dir;
     },
-    async requestFileAccess() {
+    async requestCanvasFolderAccess() {
       host.accessRequests += 1;
       return host.fileWrite;
+    },
+    // Only writing is asked for here, so a refused delete does not stop it (#17).
+    async requestExportAccess() {
+      host.writeRequests += 1;
+      return host.fileWriteOnly;
     },
     async lassoedElements() {
       return host.lassoed;

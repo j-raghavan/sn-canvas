@@ -1,14 +1,15 @@
 // HostPort over sn-plugin-lib. It normalizes the SDK's loosely typed
 // {success, result} envelopes into plain values and never rejects.
 //
-// File access is the one shared request from wiring.ts (see
-// infrastructure/filePermissions.ts), injected so index.js and the session ask
-// through the same one.
+// File access comes from wiring.ts (see infrastructure/filePermissions.ts) as
+// a request per purpose, injected so index.js and the session ask through the
+// same one and a dialog is never put up twice.
 
 import {PluginCommAPI, PluginFileAPI, PluginManager, PluginNoteAPI, RattaFileSelector} from 'sn-plugin-lib';
 import type {HostPort, NotePen} from '../application/canvasSession';
 import {elementSummary, notePageOf, picturesOf} from '../domain/canvasIndex';
 import {TAG} from '../diagnostics/log';
+import type {FileAccess} from './filePermissions';
 import {resultOf, succeeded, type Logger} from '../sdk/types';
 import {neverThrows} from './neverThrows';
 
@@ -22,7 +23,7 @@ const isNotePen = (pen: unknown): pen is NotePen =>
   pen !== null &&
   (['type', 'width', 'color'] as const).every(code => Number.isFinite((pen as Record<string, unknown>)[code]));
 
-export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<boolean>): HostPort {
+export function createHostSdk(logger: Logger, access: FileAccess): HostPort {
   const attempt = neverThrows(logger);
 
   const listOf = (response: unknown): unknown[] => {
@@ -32,7 +33,8 @@ export function createHostSdk(logger: Logger, requestFileAccess: () => Promise<b
 
   return {
     pluginDir: () => attempt('getPluginDirPath', null, async () => (await PluginManager.getPluginDirPath()) || null),
-    requestFileAccess,
+    requestCanvasFolderAccess: access.forCanvases,
+    requestExportAccess: access.forExports,
     notePen: () =>
       attempt('getPenInfo', null, async () => {
         const pen = resultOf<unknown>(await PluginCommAPI.getPenInfo());
