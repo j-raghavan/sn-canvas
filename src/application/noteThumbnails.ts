@@ -12,6 +12,7 @@
 import {
   claimPending,
   elementSummary,
+  pendingOn,
   pictureNumbersOf,
   picturesOf,
   withLastCanvas,
@@ -94,9 +95,22 @@ export function createNoteThumbnails({
    * looking emptier than it is (seen on device: a page with a thumbnail on it
    * read back as having no pictures at all).
    */
-  const picturesOn = async (at: NotePage): Promise<unknown[]> => {
-    await host.saveNote();
-    return picturesOf(await host.pageElements(at));
+  const picturesOn = async (at: NotePage, dir: string): Promise<unknown[]> => {
+    const read = async () => {
+      await host.saveNote();
+      return picturesOf(await host.pageElements(at));
+    };
+    const found = await read();
+    // A read that finds none is read again when links are waiting on that page. No pictures is what
+    // this firmware gives for pages that have them, and it is also the truth for a page whose
+    // pictures have all been deleted; the two decide opposite things about the links waiting there,
+    // so it is worth the seconds to ask twice. Only the failing path pays (#47).
+    if (found.length > 0 || pendingOn(await index.load(dir), at).length === 0) {
+      return found;
+    }
+    const again = await read();
+    logger.log(`${TAG}[LINK] page=${at.page} read no pictures with links waiting; read again and found ${again.length}`);
+    return again;
   };
 
   /**
@@ -136,7 +150,7 @@ export function createNoteThumbnails({
     const thumbnail = thumbnailPath(dir, linkedId);
     // The page as it is before the thumbnail goes in: the new picture is the one that was not there (leavePendingLink).
     const at = await host.currentPage();
-    const already = at === null ? null : {at, pictures: await picturesOn(at)};
+    const already = at === null ? null : {at, pictures: await picturesOn(at, dir)};
     // The scratch canvas is written under its new id, and kept there; any other is saved where it was loaded from.
     const saved = await (fromScratch ? store.saveAs(canvasFile) : store.save(canvasFile));
     const drawn = saved && (await store.renderThumbnail(thumbnail));
@@ -189,25 +203,7 @@ export function createNoteThumbnails({
     }
     const {at, pictures} = link.known;
     const knownPictureNumbers = pictureNumbersOf(pictures);
-    // withPending refuses a link that knew no pictures on a page others are waiting on: it would be
-    // asked first and answer every lasso there, so every thumbnail would open this canvas. Refusing
-    // is not free, since this thumbnail goes on the page all the same and an older link that did not
-    // know it claims it and opens the older canvas, but that is one thumbnail answering wrongly
-    // rather than all of them (#47). The index it refuses is the one it was given, unchanged.
-    const pending = {...at, canvasId: link.linkedId, knownPictureNumbers};
-    let left = false;
-    await index.update(link.dir, current => {
-      const next = withPending(current, pending);
-      left = next !== current;
-      return next;
-    });
-    if (!left) {
-      logger.warn(
-        `${TAG}[LINK] page=${at.page} read no pictures though links are waiting on it; no pending link for ` +
-          `canvas=${link.linkedId}, so a thumbnail already linked on this page may answer for it`,
-      );
-      return;
-    }
+    await index.update(link.dir, current => withPending(current, {...at, canvasId: link.linkedId, knownPictureNumbers}));
     logger.log(`${TAG}[LINK] pending link for canvas=${link.linkedId} page=${at.page} knownPictures=${knownPictureNumbers.length}`);
   };
 

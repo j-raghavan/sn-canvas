@@ -281,23 +281,6 @@ const couldBe = (link: PendingLink, num: number | null): boolean =>
   num === null || !link.knownPictureNumbers.includes(num);
 
 /**
- * Whether a link knowing [knownPictureNumbers] would match every picture on [at], which is what a
- * link that knows none does: [claimPending] asks only that the picture was not one it knew.
- *
- * Harmless on a page nothing is waiting on, and the ordinary first save onto a blank page. On a
- * page that already has links it is not: being newest it is asked first, so it answers every lasso
- * there and every thumbnail on the page opens this one canvas. The page read comes back with no
- * pictures on this firmware even when the page has them, so that is the likely case (#47).
- *
- * Leaving no link is not free either. The thumbnail still goes onto the page, and an older link
- * there did not know it, so that link claims it and it opens the older canvas. What suppression
- * buys is the size of the mistake: one thumbnail answering wrongly instead of all of them.
- */
-export function wouldClaimEverythingOn(index: CanvasIndex, link: PendingLink): boolean {
-  return link.knownPictureNumbers.length === 0 && pendingOn(index, link).length > 0;
-}
-
-/**
  * The links on a page that a picture could still be waiting to be claimed by, given [pictures],
  * every picture on that page now. A link could be about any picture it did not already know, and
  * one thumbnail is one picture, so this is the largest set of links that can be given a picture
@@ -338,20 +321,14 @@ const stillWaiting = (onPage: readonly PendingLink[], pictures: readonly number[
  * thumbnail to be claimed by; the rest never will be, and until this they stayed for good and
  * filled the index until the cap started dropping the ones that were still good (#47).
  *
- * A read that found no pictures is refused outright ([wouldClaimEverythingOn]), so it can neither
- * leave a link that answers for every thumbnail nor prune one on the strength of a read this
- * firmware gives for pages that do have pictures.
+ * A page with no pictures on it has nothing any of its links can ever be claimed by, so they all
+ * go and the one being left is the only one there, which is what makes it safe for it to know no
+ * pictures. That rests on the read being true, which is why an empty one is taken twice before it
+ * is believed ([createNoteThumbnails]'s picturesOn).
  */
 export function withPending(index: CanvasIndex, link: PendingLink): CanvasIndex {
-  // Refused rather than left, so the rule is decided by the same read that applies it.
-  if (wouldClaimEverythingOn(index, link)) {
-    return index;
-  }
-  const onPage = pendingOn(index, link);
-  // A read that found nothing never gets here with links to weigh: it is refused above unless the
-  // page has none, so there is no case where an empty read could prune a live link.
-  const kept = stillWaiting(onPage, link.knownPictureNumbers);
-  const spent = new Set(onPage.filter(other => !kept.includes(other)));
+  const kept = stillWaiting(pendingOn(index, link), link.knownPictureNumbers);
+  const spent = new Set(pendingOn(index, link).filter(other => !kept.includes(other)));
   return {...index, pending: [...index.pending.filter(other => !spent.has(other)), link].slice(-MAX_PENDING)};
 }
 

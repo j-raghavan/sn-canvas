@@ -443,38 +443,26 @@ describe('links back to a canvas', () => {
     ).toEqual([['c-2', [5]]]);
   });
 
-  // A link that knew no pictures matches every lasso on its page, and being newest it answers them
-  // all, so the links that can tell their thumbnails apart are never reached. The page read comes
-  // back with no pictures on this firmware even when the page has them (#47).
-  test('a page read that finds nothing leaves no link where others are already waiting', async () => {
+  // A read that finds nothing is taken twice before it is believed, because this firmware returns no
+  // pictures for pages that have them. Confirmed, it means the page really is empty, so the links
+  // waiting there are waiting for thumbnails that have gone, and the new one is alone (#47).
+  test('a page read that finds nothing is taken twice, and a page really empty keeps no old links', async () => {
     const {store, host, logger, session} = setup({[SCRATCH]: 'first drawing'});
     await session.open(500);
     host.elements = [notePicture(5)];
     await session.saveToNote();
-    host.unsaved = [notePicture(6)];
+    const savesBefore = host.noteSaves;
 
-    // The read comes back empty although the page holds both pictures.
     await session.newCanvas();
     store.shown = 'second drawing';
     host.elements = [];
-    host.unsaved = [];
     await session.saveToNote();
     await session.close();
 
-    expect(
-      savedIndex(store).pending.map((link: {canvasId: string}) => link.canvasId),
-    ).toEqual(['c-1']);
-    expect(logger.lines).toContain(
-      'warn [SNCANVAS][LINK] page=0 read no pictures though links are waiting on it; no pending link for ' +
-        'canvas=c-2, so a thumbnail already linked on this page may answer for it',
-    );
-
-    // What suppression actually costs, pinned so nobody reads the warning as harmless: c-2's
-    // thumbnail goes onto the page anyway, and c-1's link did not know it, so it claims it and
-    // opens c-1. One thumbnail answering wrongly, against all of them had the link been written.
-    host.lassoed = [lassoedPicture(7)];
-    await session.open(501);
-    expect(store.shown).toBe('first drawing');
+    // Asked twice, because links were waiting on that page; each read saves the note first.
+    expect(host.noteSaves).toBeGreaterThan(savesBefore + 1);
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] page=0 read no pictures with links waiting; read again and found 0');
+    expect(savedIndex(store).pending.map((link: {canvasId: string}) => link.canvasId)).toEqual(['c-2']);
   });
 
   // On a page nothing is waiting on, a read that finds nothing is the ordinary first save onto a
@@ -486,6 +474,33 @@ describe('links back to a canvas', () => {
     await session.saveToNote();
     await session.close();
     expect(savedIndex(store).pending.map((link: {canvasId: string}) => link.canvasId)).toEqual(['c-1']);
+  });
+
+  // The suppression counts links waiting on the page, not thumbnails on it. When the waiting links
+  // are stale, which is the state pruning exists to clean up, an empty read is the truth and the
+  // link would have been right. main gets this sequence entirely right (#47).
+  test('a canvas saved after the page was emptied still opens from its own thumbnail', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [notePicture(1)];
+    await session.saveToNote();
+
+    // Everything on the page is deleted, c-1's thumbnail included, so the page really is empty and
+    // the read that finds nothing is telling the truth.
+    host.elements = [];
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    // c-2's thumbnail lands as picture 3.
+    host.elements = [notePicture(3)];
+
+    await session.newCanvas();
+    store.shown = 'third drawing';
+    await session.saveToNote();
+
+    host.lassoed = [lassoedPicture(3)];
+    await session.open(501);
+    expect(store.shown).toBe('second drawing');
   });
 
   test('two canvases saved to one page each keep a thumbnail that opens its own canvas (#30)', async () => {

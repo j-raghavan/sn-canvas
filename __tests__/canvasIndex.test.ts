@@ -20,7 +20,6 @@ import {
   withLastCanvas,
   withPending,
   pendingOn,
-  wouldClaimEverythingOn,
   type NotePage,
   type PendingLink,
 } from '../src/domain/canvasIndex';
@@ -146,10 +145,10 @@ describe('pruning links the page can no longer account for (#47)', () => {
     ]);
   });
 
-  test('a page read that found no pictures is refused, so it can neither be left nor prune anything', () => {
+  test('a page with no pictures on it keeps no links, so the one being left is the only one there', () => {
     const withA = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
-    // The same index back, so c-a is still waiting and c-b was not added to answer for it.
-    expect(withPending(withA, pendingFor('c-b'))).toBe(withA);
+    // Nothing on the page can ever be c-a's thumbnail, so c-a goes and c-b is left alone with it.
+    expect(withPending(withA, pendingFor('c-b')).pending).toEqual([pendingFor('c-b')]);
   });
 
   test('links waiting on other pages and other notes are left alone', () => {
@@ -167,6 +166,38 @@ describe('pruning links the page can no longer account for (#47)', () => {
     ]);
   });
 
+  // Every other test here reads and writes page 0, so `=== at.page` and `<= at.page` are the same
+  // thing to them and a save on a later page could prune an earlier page's live links unnoticed.
+  test('a save on a later page leaves the links waiting on earlier pages of the same note alone', () => {
+    const page1 = {notePath: '/note.note', page: 1};
+    const page2 = {notePath: '/note.note', page: 2};
+    const waiting = withPending(EMPTY_INDEX, pendingFor('c-a', [5], page1));
+    expect(pendingOn(waiting, page2)).toEqual([]);
+    // Page 2's read says nothing about page 1, however well its numbers line up with page 1's link.
+    expect(withPending(waiting, pendingFor('c-b', [5], page2)).pending).toEqual([
+      pendingFor('c-a', [5], page1),
+      pendingFor('c-b', [5], page2),
+    ]);
+  });
+
+  // The matching may move a link already placed, and has to leave the board as it found it when that
+  // move fails. Recording the move before finding out whether it works keeps a link that has nowhere
+  // to go. Found by trying every arrangement of three links over pictures 1 to 3: this is the only
+  // one that tells the two apart.
+  test('a link with nowhere left to go is not kept by a move that failed', () => {
+    // c-a and c-c can only be about picture 1; c-b could be about any of the three. One of c-a and
+    // c-c gets picture 1 and the other has nowhere to go.
+    const three = parseCanvasIndex(
+      JSON.stringify({pending: [pendingFor('c-a', [2, 3]), pendingFor('c-b', []), pendingFor('c-c', [2, 3])]}),
+    );
+    expect(three.pending).toHaveLength(3);
+    expect(withPending(three, pendingFor('c-d', [1, 2, 3])).pending.map(link => link.canvasId)).toEqual([
+      'c-b',
+      'c-c',
+      'c-d',
+    ]);
+  });
+
   test('pendingOn is the links waiting on one page, oldest first', () => {
     // c-a knew only picture 1, and c-c's read found 2 as well, so c-a's thumbnail is still there.
     const index = [pendingFor('c-a', [1]), pendingFor('c-b', [9], {notePath: '/other.note', page: 0}), pendingFor('c-c', [1, 2])].reduce(
@@ -175,24 +206,6 @@ describe('pruning links the page can no longer account for (#47)', () => {
     );
     expect(pendingOn(index, PAGE).map(link => link.canvasId)).toEqual(['c-a', 'c-c']);
     expect(pendingOn(EMPTY_INDEX, PAGE)).toEqual([]);
-  });
-});
-
-describe('wouldClaimEverythingOn (#47)', () => {
-  test('a link that knows no pictures would claim every lasso on a page others are waiting on', () => {
-    const busy = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
-    expect(wouldClaimEverythingOn(busy, pendingFor('c-b'))).toBe(true);
-  });
-
-  test('on a page nothing is waiting on it is the ordinary first save, and harmless', () => {
-    expect(wouldClaimEverythingOn(EMPTY_INDEX, pendingFor('c-b'))).toBe(false);
-    const elsewhere = withPending(EMPTY_INDEX, pendingFor('c-a', [5], {notePath: '/other.note', page: 0}));
-    expect(wouldClaimEverythingOn(elsewhere, pendingFor('c-b'))).toBe(false);
-  });
-
-  test('a read that found pictures tells its thumbnail apart, however busy the page', () => {
-    const busy = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
-    expect(wouldClaimEverythingOn(busy, pendingFor('c-b', [5]))).toBe(false);
   });
 });
 
