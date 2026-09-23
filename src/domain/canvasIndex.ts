@@ -260,6 +260,27 @@ export function pendingOn(index: CanvasIndex, at: NotePage): readonly PendingLin
 }
 
 /**
+ * The links waiting on page [at], newest first, which is the order both the matching and a lasso
+ * ask them in: the newest knew the most thumbnails, so it is about the fewest pictures.
+ */
+const newestFirstOn = (index: CanvasIndex, at: NotePage): readonly PendingLink[] => [...pendingOn(index, at)].reverse();
+
+/**
+ * Whether the picture numbered [num] could be [link]'s thumbnail: the thumbnail is the picture that
+ * was not on the page when the link was left, so any number it did not know could be its. A picture
+ * with no number at all (null) could be any of them.
+ *
+ * The one rule, asked in both directions: [stillWaiting] asks it of every picture for one link, and
+ * [claimPending] of every link for one picture.
+ *
+ * The null arm is spelled out rather than left to `includes`, which would answer the same for a
+ * list of numbers. Nothing can tell the two apart, so it is here to say what a numberless picture
+ * means and not because the answer would change.
+ */
+const couldBe = (link: PendingLink, num: number | null): boolean =>
+  num === null || !link.knownPictureNumbers.includes(num);
+
+/**
  * Whether a link knowing [knownPictureNumbers] would match every picture on [at], which is what a
  * link that knows none does: [claimPending] asks only that the picture was not one it knew.
  *
@@ -272,8 +293,8 @@ export function pendingOn(index: CanvasIndex, at: NotePage): readonly PendingLin
  * there did not know it, so that link claims it and it opens the older canvas. What suppression
  * buys is the size of the mistake: one thumbnail answering wrongly instead of all of them.
  */
-export function wouldClaimEverythingOn(index: CanvasIndex, at: NotePage, knownPictureNumbers: readonly number[]): boolean {
-  return knownPictureNumbers.length === 0 && pendingOn(index, at).length > 0;
+export function wouldClaimEverythingOn(index: CanvasIndex, link: PendingLink): boolean {
+  return link.knownPictureNumbers.length === 0 && pendingOn(index, link).length > 0;
 }
 
 /**
@@ -290,7 +311,7 @@ export function wouldClaimEverythingOn(index: CanvasIndex, at: NotePage, knownPi
  */
 const stillWaiting = (onPage: readonly PendingLink[], pictures: readonly number[]): readonly PendingLink[] => {
   const takenBy = new Map<number, PendingLink>();
-  const couldBeIts = (link: PendingLink) => pictures.filter(num => !link.knownPictureNumbers.includes(num));
+  const couldBeIts = (link: PendingLink) => pictures.filter(num => couldBe(link, num));
   const place = (link: PendingLink, tried: Set<number>): boolean =>
     couldBeIts(link).some(num => {
       if (tried.has(num)) {
@@ -317,14 +338,19 @@ const stillWaiting = (onPage: readonly PendingLink[], pictures: readonly number[
  * thumbnail to be claimed by; the rest never will be, and until this they stayed for good and
  * filled the index until the cap started dropping the ones that were still good (#47).
  *
- * An empty read prunes nothing: no pictures is also what this firmware returns for a page that has
- * them, and throwing away live links on the strength of that would lose the canvas behind a
- * thumbnail. It only ever costs a save, since the next one with a real read prunes them.
+ * A read that found no pictures is refused outright ([wouldClaimEverythingOn]), so it can neither
+ * leave a link that answers for every thumbnail nor prune one on the strength of a read this
+ * firmware gives for pages that do have pictures.
  */
 export function withPending(index: CanvasIndex, link: PendingLink): CanvasIndex {
+  // Refused rather than left, so the rule is decided by the same read that applies it.
+  if (wouldClaimEverythingOn(index, link)) {
+    return index;
+  }
   const onPage = pendingOn(index, link);
-  const kept =
-    link.knownPictureNumbers.length === 0 ? onPage : stillWaiting(onPage, link.knownPictureNumbers);
+  // A read that found nothing never gets here with links to weigh: it is refused above unless the
+  // page has none, so there is no case where an empty read could prune a live link.
+  const kept = stillWaiting(onPage, link.knownPictureNumbers);
   const spent = new Set(onPage.filter(other => !kept.includes(other)));
   return {...index, pending: [...index.pending.filter(other => !spent.has(other)), link].slice(-MAX_PENDING)};
 }
@@ -338,11 +364,7 @@ export function withPending(index: CanvasIndex, link: PendingLink): CanvasIndex 
 export function claimPending(index: CanvasIndex, lassoed: readonly unknown[], at: NotePage): Claim | null {
   for (const picture of picturesOf(lassoed)) {
     const num = numberOf(picture);
-    const claimant = [...index.pending]
-      .reverse()
-      .find(
-        link => link.notePath === at.notePath && link.page === at.page && (num === null || !link.knownPictureNumbers.includes(num)),
-      );
+    const claimant = newestFirstOn(index, at).find(link => couldBe(link, num));
     if (claimant !== undefined) {
       return {index: {...index, pending: index.pending.filter(link => link !== claimant)}, canvasId: claimant.canvasId, picture};
     }

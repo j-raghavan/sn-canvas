@@ -95,7 +95,9 @@ test.each([
 });
 
 test('only the newest pending links are kept, saved or loaded', () => {
-  const links = Array.from({length: MAX_PENDING + 5}, (_, n) => pendingFor(`c-${n}`));
+  // One page each, so the cap is the only thing deciding: links on one page prune and refuse each
+  // other, which is what is being kept apart from here.
+  const links = Array.from({length: MAX_PENDING + 5}, (_, n) => pendingFor(`c-${n}`, [], {notePath: '/note.note', page: n}));
   const added = links.reduce(withPending, EMPTY_INDEX);
   expect(added.pending).toEqual(links.slice(-MAX_PENDING));
   expect(parseCanvasIndex(JSON.stringify({pending: links})).pending).toEqual(links.slice(-MAX_PENDING));
@@ -144,9 +146,10 @@ describe('pruning links the page can no longer account for (#47)', () => {
     ]);
   });
 
-  test('a page read that found no pictures prunes nothing, since that is also what a failed read looks like', () => {
+  test('a page read that found no pictures is refused, so it can neither be left nor prune anything', () => {
     const withA = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
-    expect(withPending(withA, pendingFor('c-b')).pending).toEqual([pendingFor('c-a', [5]), pendingFor('c-b')]);
+    // The same index back, so c-a is still waiting and c-b was not added to answer for it.
+    expect(withPending(withA, pendingFor('c-b'))).toBe(withA);
   });
 
   test('links waiting on other pages and other notes are left alone', () => {
@@ -178,18 +181,18 @@ describe('pruning links the page can no longer account for (#47)', () => {
 describe('wouldClaimEverythingOn (#47)', () => {
   test('a link that knows no pictures would claim every lasso on a page others are waiting on', () => {
     const busy = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
-    expect(wouldClaimEverythingOn(busy, PAGE, [])).toBe(true);
+    expect(wouldClaimEverythingOn(busy, pendingFor('c-b'))).toBe(true);
   });
 
   test('on a page nothing is waiting on it is the ordinary first save, and harmless', () => {
-    expect(wouldClaimEverythingOn(EMPTY_INDEX, PAGE, [])).toBe(false);
+    expect(wouldClaimEverythingOn(EMPTY_INDEX, pendingFor('c-b'))).toBe(false);
     const elsewhere = withPending(EMPTY_INDEX, pendingFor('c-a', [5], {notePath: '/other.note', page: 0}));
-    expect(wouldClaimEverythingOn(elsewhere, PAGE, [])).toBe(false);
+    expect(wouldClaimEverythingOn(elsewhere, pendingFor('c-b'))).toBe(false);
   });
 
   test('a read that found pictures tells its thumbnail apart, however busy the page', () => {
     const busy = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
-    expect(wouldClaimEverythingOn(busy, PAGE, [5])).toBe(false);
+    expect(wouldClaimEverythingOn(busy, pendingFor('c-b', [5]))).toBe(false);
   });
 });
 

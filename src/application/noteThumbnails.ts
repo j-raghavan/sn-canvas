@@ -17,7 +17,6 @@ import {
   withLastCanvas,
   withPending,
   withoutCanvas,
-  wouldClaimEverythingOn,
   type CanvasIndex,
   type NotePage,
 } from '../domain/canvasIndex';
@@ -190,18 +189,25 @@ export function createNoteThumbnails({
     }
     const {at, pictures} = link.known;
     const knownPictureNumbers = pictureNumbersOf(pictures);
-    // A link that knew no pictures is asked first and answers every lasso on its page, so every
-    // thumbnail there would open this canvas. Leaving none is not free: this thumbnail goes on the
-    // page all the same and an older link, which did not know it, claims it and opens the older
-    // canvas. One thumbnail answering wrongly is the price of not making all of them do it (#47).
-    if (wouldClaimEverythingOn(await index.load(link.dir), at, knownPictureNumbers)) {
+    // withPending refuses a link that knew no pictures on a page others are waiting on: it would be
+    // asked first and answer every lasso there, so every thumbnail would open this canvas. Refusing
+    // is not free, since this thumbnail goes on the page all the same and an older link that did not
+    // know it claims it and opens the older canvas, but that is one thumbnail answering wrongly
+    // rather than all of them (#47). The index it refuses is the one it was given, unchanged.
+    const pending = {...at, canvasId: link.linkedId, knownPictureNumbers};
+    let left = false;
+    await index.update(link.dir, current => {
+      const next = withPending(current, pending);
+      left = next !== current;
+      return next;
+    });
+    if (!left) {
       logger.warn(
         `${TAG}[LINK] page=${at.page} read no pictures though links are waiting on it; no pending link for ` +
           `canvas=${link.linkedId}, so a thumbnail already linked on this page may answer for it`,
       );
       return;
     }
-    await index.update(link.dir, current => withPending(current, {...at, canvasId: link.linkedId, knownPictureNumbers}));
     logger.log(`${TAG}[LINK] pending link for canvas=${link.linkedId} page=${at.page} knownPictures=${knownPictureNumbers.length}`);
   };
 
