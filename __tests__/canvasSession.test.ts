@@ -950,6 +950,29 @@ describe('links to notes', () => {
 
     // The same hazard as following a dead link, from the other end: the canvas a step goes back to can
     // be deleted while you are away from it, and showing it would record that nothing as the note's.
+    // What show() records for the note, which decides what the sidebar reopens later. Both assertions
+    // matter: without the first, the second would pass on a fixture that never recorded c-other.
+    test('the canvas come back to is the one this note reopens, not the one the link led to', async () => {
+      const {store, session} = await twoCanvases();
+      await session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+      expect(savedIndex(store).lastByNote['/note.note']).toBe('c-other');
+
+      await session.goBack();
+      expect(savedIndex(store).lastByNote['/note.note']).toBe('c-one');
+    });
+
+    // Without a note page there is nothing to record a step against, and a step with no page would
+    // leave the header offering a way back to nowhere.
+    test('a canvas link followed from a page the host cannot name switches, but keeps no way back', async () => {
+      const {host, store, session} = await twoCanvases();
+      host.page = null;
+
+      expect(await session.followLink({kind: 'canvas', target: 'c-other', page: -1})).toBe(true);
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      expect(session.backTo()).toBeNull();
+    });
+
     /** Three canvases, so a trail can hold more than one step and popping one is not popping all. */
     const threeCanvases = async () => {
       const kit = setup({

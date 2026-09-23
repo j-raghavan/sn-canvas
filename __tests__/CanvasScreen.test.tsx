@@ -528,6 +528,18 @@ describe('links', () => {
     expect(labelled('Back to canvas')).toBe(true);
   });
 
+  // The two failures read differently, because one canvas is gone and the other note would not open.
+  test('a canvas link whose canvas has gone says so, not that a note would not open', async () => {
+    const session = createFakeSession();
+    session.followLink.mockResolvedValue(false);
+    const {renderer, shows} = await render(session);
+    await act(async () => {
+      renderer.root.findByType(CanvasNativeView).props.onFollowLink({nativeEvent: {kind: 'canvas', target: 'c-gone', page: -1}});
+    });
+    expect(shows('That canvas is no longer here')).toBe(true);
+    expect(shows('Could not open that note')).toBe(false);
+  });
+
   test('a link that will not open says so, and one the bridge cannot read is ignored', async () => {
     const session = createFakeSession();
     session.followLink.mockResolvedValue(false);
@@ -568,7 +580,7 @@ describe("a note's canvases (#30)", () => {
   test('Link to canvas lists the others and puts the link on the selection', async () => {
     const session = createFakeSession();
     session.canvasesHere.mockResolvedValue(CANVASES);
-    const {press, has, labelled} = await render(session);
+    const {press, has, labelled, shows} = await render(session);
     await press('canvas-more');
     await press('canvas-menu-linkToCanvas');
     // The canvas shown is not offered: an element linking to the canvas it sits on goes nowhere.
@@ -577,6 +589,8 @@ describe("a note's canvases (#30)", () => {
 
     await press(`canvas-list-${canvasId}`);
     expect(mockDispatchViewManagerCommand).toHaveBeenCalledWith(42, 'linkSelected', ['canvas', canvasId, '-1']);
+    // The only sign the link landed: the picker closes and nothing else on screen changes.
+    expect(shows('Linked to the canvas')).toBe(true);
     // Linking is not switching: the canvas shown does not change.
     expect(session.switchTo).not.toHaveBeenCalled();
     expect(has('canvas-list')).toBe(false);
