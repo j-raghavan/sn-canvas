@@ -950,6 +950,52 @@ describe('links to notes', () => {
 
     // The same hazard as following a dead link, from the other end: the canvas a step goes back to can
     // be deleted while you are away from it, and showing it would record that nothing as the note's.
+    /** Three canvases, so a trail can hold more than one step and popping one is not popping all. */
+    const threeCanvases = async () => {
+      const kit = setup({
+        [canvasFile('c-one')]: 'the first drawing',
+        [canvasFile('c-other')]: 'the other drawing',
+        [canvasFile('c-third')]: 'the third drawing',
+      });
+      await kit.session.open(500);
+      await kit.session.switchTo('c-one');
+      await kit.session.followLink({kind: 'canvas', target: 'c-other', page: -1});
+      await kit.session.followLink({kind: 'canvas', target: 'c-third', page: -1});
+      return kit;
+    };
+
+    // One step at a time, as the firmware's own Back does. With a single step on the trail, taking one
+    // and taking all leave the same trail, so nothing shorter than this tells them apart.
+    test('two canvas links followed come back one canvas at a time', async () => {
+      const {store, session} = await threeCanvases();
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(store.shown).toBe('the other drawing');
+      // The way back to the canvas the first link was followed from is still there to take.
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: 'c-one'});
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe('c-one');
+      expect(store.shown).toBe('the first drawing');
+      expect(session.backTo()).toBeNull();
+    });
+
+    test('a step back to a canvas that has gone drops that step and no more', async () => {
+      const {store, session} = await threeCanvases();
+      store.files.delete(canvasFile('c-other'));
+
+      await session.goBack();
+      // Nothing was shown for the dead step, and the step under it is still there to take.
+      expect(session.currentCanvasId()).toBe('c-third');
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: 'c-one'});
+
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe('c-one');
+      expect(store.shown).toBe('the first drawing');
+      expect(session.backTo()).toBeNull();
+    });
+
     test('a step back to a canvas that has gone is dropped, not loaded over the note', async () => {
       const {store, session, logger} = await twoCanvases();
       await session.followLink({kind: 'canvas', target: 'c-other', page: -1});
