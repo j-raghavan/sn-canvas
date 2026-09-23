@@ -108,3 +108,10 @@ test('opacityStepIndex finds the nearest slider step', () => {
   expect([1, 0.1, 0.3, 0.6, 0.75].map(opacityStepIndex)).toEqual([4, 0, 1, 2, 3]);
 });
 
+// #59: a fill the canvas draws has to survive the bridge, or the panel shows one thing while the
+// canvas draws another and the next tap sends the wrong style back.
+test('every fill the catalog lists comes back through parseUiState, gradient included', () => {
+  expect(FILLS.map(fill => parseUiState({style: {fill}}).style.fill)).toEqual([...FILLS]);
+  // And one it has never heard of still falls back rather than coming through.
+  expect(parseUiState({style: {fill: 'plaid'}}).style.fill).toBe(DEFAULT_STYLE.fill);
+});

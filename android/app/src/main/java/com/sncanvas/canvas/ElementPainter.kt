@@ -222,12 +222,13 @@ internal class ElementPainter(
         // Down the shape in the canvas's own space, so the ramp turns with a rotated shape rather
         // than staying upright against it, fading from the colour just set to nothing.
         if (style.fill.ramps) {
+            val line = ShapeOutline.rampLine(bounds.top, bounds.bottom)
             paint.shader =
                 LinearGradient(
-                    0f,
-                    bounds.top,
-                    0f,
-                    bounds.bottom,
+                    line[0],
+                    line[1],
+                    line[2],
+                    line[3],
                     paint.color,
                     StylePalette.fadeToNothing(paint.color),
                     Shader.TileMode.CLAMP,
