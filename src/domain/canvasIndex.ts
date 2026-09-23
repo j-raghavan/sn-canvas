@@ -264,10 +264,13 @@ export function pendingOn(index: CanvasIndex, at: NotePage): readonly PendingLin
  * link that knows none does: [claimPending] asks only that the picture was not one it knew.
  *
  * Harmless on a page nothing is waiting on, and the ordinary first save onto a blank page. On a
- * page that already has links it is not: being newest, it would answer every lasso there and the
- * links that can actually tell their thumbnails apart would never be reached. The page read comes
- * back with no pictures on this firmware even when the page has them, so that is the likely case
- * (#47).
+ * page that already has links it is not: being newest it is asked first, so it answers every lasso
+ * there and every thumbnail on the page opens this one canvas. The page read comes back with no
+ * pictures on this firmware even when the page has them, so that is the likely case (#47).
+ *
+ * Leaving no link is not free either. The thumbnail still goes onto the page, and an older link
+ * there did not know it, so that link claims it and it opens the older canvas. What suppression
+ * buys is the size of the mistake: one thumbnail answering wrongly instead of all of them.
  */
 export function wouldClaimEverythingOn(index: CanvasIndex, at: NotePage, knownPictureNumbers: readonly number[]): boolean {
   return knownPictureNumbers.length === 0 && pendingOn(index, at).length > 0;
@@ -275,20 +278,34 @@ export function wouldClaimEverythingOn(index: CanvasIndex, at: NotePage, knownPi
 
 /**
  * The links on a page that a picture could still be waiting to be claimed by, given [pictures],
- * every picture on that page now. Newest first, because the newest link knew the most thumbnails
- * and so has the fewest pictures it could be about; each takes one, and one left with none is
- * waiting for a thumbnail the page no longer has (#47).
+ * every picture on that page now. A link could be about any picture it did not already know, and
+ * one thumbnail is one picture, so this is the largest set of links that can be given a picture
+ * each; whatever cannot be is waiting for a thumbnail the page no longer has (#47).
+ *
+ * Taking each link's first free picture in turn is not enough. A newer link can know fewer numbers
+ * than an older one, because a picture's number is its place in the page and a deletion renumbers
+ * what is left, so their claims are not nested and a link can take the one picture another had left.
+ * Hence the reassignment below: a link may displace one already placed, as long as that one can be
+ * put somewhere else.
  */
 const stillWaiting = (onPage: readonly PendingLink[], pictures: readonly number[]): readonly PendingLink[] => {
-  const free = new Set(pictures);
-  const waiting = new Set<PendingLink>();
-  [...onPage].reverse().forEach(link => {
-    const couldBeIts = [...free].find(num => !link.knownPictureNumbers.includes(num));
-    if (couldBeIts !== undefined) {
-      free.delete(couldBeIts);
-      waiting.add(link);
-    }
-  });
+  const takenBy = new Map<number, PendingLink>();
+  const couldBeIts = (link: PendingLink) => pictures.filter(num => !link.knownPictureNumbers.includes(num));
+  const place = (link: PendingLink, tried: Set<number>): boolean =>
+    couldBeIts(link).some(num => {
+      if (tried.has(num)) {
+        return false;
+      }
+      tried.add(num);
+      const holder = takenBy.get(num);
+      if (holder === undefined || place(holder, tried)) {
+        takenBy.set(num, link);
+        return true;
+      }
+      return false;
+    });
+  // Newest first: it knew the most thumbnails, so it has the fewest pictures to be placed among.
+  const waiting = new Set([...onPage].reverse().filter(link => place(link, new Set())));
   return onPage.filter(link => waiting.has(link));
 };
 

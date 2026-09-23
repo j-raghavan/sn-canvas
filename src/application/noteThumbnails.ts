@@ -190,14 +190,14 @@ export function createNoteThumbnails({
     }
     const {at, pictures} = link.known;
     const knownPictureNumbers = pictureNumbersOf(pictures);
-    // A link that knew no pictures answers every lasso on its page, so on a page other links are
-    // waiting on it would take their thumbnails' lassos and give back the wrong canvas. Leaving none
-    // is no worse: Open Canvas falls back to the newest canvas, and the links already there still
-    // work (#47).
+    // A link that knew no pictures is asked first and answers every lasso on its page, so every
+    // thumbnail there would open this canvas. Leaving none is not free: this thumbnail goes on the
+    // page all the same and an older link, which did not know it, claims it and opens the older
+    // canvas. One thumbnail answering wrongly is the price of not making all of them do it (#47).
     if (wouldClaimEverythingOn(await index.load(link.dir), at, knownPictureNumbers)) {
       logger.warn(
         `${TAG}[LINK] page=${at.page} read no pictures though links are waiting on it; no pending link for ` +
-          `canvas=${link.linkedId}, so Open Canvas on its thumbnail will show the newest canvas`,
+          `canvas=${link.linkedId}, so a thumbnail already linked on this page may answer for it`,
       );
       return;
     }

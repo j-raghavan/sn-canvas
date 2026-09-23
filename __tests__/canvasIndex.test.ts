@@ -127,6 +127,23 @@ describe('pruning links the page can no longer account for (#47)', () => {
     expect(withPending(two, pendingFor('c-c', [1])).pending).toEqual([pendingFor('c-b', [138, 139]), pendingFor('c-c', [1])]);
   });
 
+  // A newer link can know FEWER pictures than an older one, because numInPage is positional and a
+  // deletion renumbers what is left. Then the sets are not nested and taking the first free picture
+  // for each link in turn can starve one that had somewhere else to go (#47).
+  test('a link is kept whenever some picture could be its, even if a newer link wanted that one too', () => {
+    // Saving cannot reach this pair, since adding c-new would prune c-old on the spot, but an index
+    // written by an earlier build loads straight into it. Page holds 1, 2 and 3: c-old can only be
+    // about 1, c-new could be about 1 or 2.
+    const two = parseCanvasIndex(JSON.stringify({pending: [pendingFor('c-old', [2, 3]), pendingFor('c-new', [3])]}));
+    expect(two.pending).toHaveLength(2);
+    // c-new must take 2 and leave 1 for c-old, rather than taking 1 and starving it.
+    expect(withPending(two, pendingFor('c-next', [1, 2, 3])).pending.map(link => link.canvasId)).toEqual([
+      'c-old',
+      'c-new',
+      'c-next',
+    ]);
+  });
+
   test('a page read that found no pictures prunes nothing, since that is also what a failed read looks like', () => {
     const withA = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
     expect(withPending(withA, pendingFor('c-b')).pending).toEqual([pendingFor('c-a', [5]), pendingFor('c-b')]);

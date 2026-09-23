@@ -466,8 +466,15 @@ describe('links back to a canvas', () => {
     ).toEqual(['c-1']);
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] page=0 read no pictures though links are waiting on it; no pending link for ' +
-        'canvas=c-2, so Open Canvas on its thumbnail will show the newest canvas',
+        'canvas=c-2, so a thumbnail already linked on this page may answer for it',
     );
+
+    // What suppression actually costs, pinned so nobody reads the warning as harmless: c-2's
+    // thumbnail goes onto the page anyway, and c-1's link did not know it, so it claims it and
+    // opens c-1. One thumbnail answering wrongly, against all of them had the link been written.
+    host.lassoed = [lassoedPicture(7)];
+    await session.open(501);
+    expect(store.shown).toBe('first drawing');
   });
 
   // On a page nothing is waiting on, a read that finds nothing is the ordinary first save onto a
