@@ -909,7 +909,7 @@ describe('links to notes', () => {
     expect(store.files.get(SCRATCH)).toBe('scratch, and more');
     expect(host.steps).toEqual(['close', 'open /n.note']);
     expect(badge.shown).toEqual({label: 'note', notePath: '/n.note'});
-    expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, canvasId: 'default', to: '/n.note'});
+    expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'note', canvasId: 'default', to: '/n.note'});
     expect(logger.lines).toContain('log [SNCANVAS][LINK] followed link to /n.note page=-1');
   });
 
@@ -932,7 +932,7 @@ describe('links to notes', () => {
       // Nothing left the plugin, so no note opened and no badge went over one.
       expect(host.steps).toEqual([]);
       expect(badge.shown).toBeNull();
-      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, canvasId: shownBefore, to: '/note.note', withinNote: true});
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: shownBefore});
       expect(logger.lines).toContain('log [SNCANVAS][LINK] switched to canvas=c-other');
     });
 

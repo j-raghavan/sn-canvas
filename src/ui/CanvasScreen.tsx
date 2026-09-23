@@ -81,15 +81,28 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   const [canvasPicker, setCanvasPicker] = useState<{canvases: readonly NoteCanvas[]; forLink: boolean} | null>(null);
   // #34: one step back along the links followed to this canvas, offered as the firmware offers its own.
   const [back, setBack] = useState<TrailStep | null>(null);
-  const goBack = useCallback(() => session.goBack().then(() => setBack(session.backTo())), [session]);
+  /**
+   * Runs something that can change the trail, then re-reads it. Every one of these used to say so for
+   * itself, and the one added for canvas links forgot, which left a link followed with no way back on
+   * screen: a canvas link leaves Canvas up, so nothing else re-reads it (#2).
+   */
+  const withTrail = useCallback(
+    async (run: () => Promise<unknown>) => {
+      await run();
+      setBack(session.backTo());
+    },
+    [session],
+  );
+
+  const goBack = useCallback(() => withTrail(() => session.goBack()), [session, withTrail]);
 
   // The plugin runtime stays warm between opens, so this screen can stay mounted across them: every press
   // re-resolves which canvas to show.
   useEffect(() => {
-    const openCanvas = (buttonId: number | null) => session.open(buttonId).then(() => setBack(session.backTo()));
+    const openCanvas = (buttonId: number | null) => withTrail(() => session.open(buttonId));
     openCanvas(buttonEvents.lastButtonId());
     return buttonEvents.onButton(openCanvas);
-  }, [session, buttonEvents]);
+  }, [session, buttonEvents, withTrail]);
 
   // The badge over a note a link opened: a tap is one step back, as the header's is.
   useEffect(() => backBadgeTaps.onTapped(goBack), [goBack, backBadgeTaps]);
@@ -136,10 +149,16 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   // FR7: a tap on a link's glyph; the note opens over the plugin, so nothing more is said about it here.
   const followLink = async (payload: unknown) => {
     const link = parseElementLink(payload);
-    if (link === null || (await session.followLink(link))) {
+    if (link === null) {
       return;
     }
-    setNotice(link.kind === 'canvas' ? 'That canvas is no longer here' : 'Could not open that note');
+    let followed = false;
+    await withTrail(async () => {
+      followed = await session.followLink(link);
+    });
+    if (!followed) {
+      setNotice(link.kind === 'canvas' ? 'That canvas is no longer here' : 'Could not open that note');
+    }
   };
 
   const showNoteCanvases = async () => setCanvasPicker({canvases: await session.canvasesHere(), forLink: false});
@@ -163,19 +182,12 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
       setNotice('Linked to the canvas');
       return;
     }
-    await session.switchTo(canvasId);
-    setBack(session.backTo());
+    await withTrail(() => session.switchTo(canvasId));
   };
 
-  const newCanvas = async () => {
-    await session.newCanvas();
-    setBack(session.backTo());
-  };
+  const newCanvas = () => withTrail(() => session.newCanvas());
 
-  const clearCanvas = async () => {
-    await session.clearCanvas();
-    setBack(session.backTo());
-  };
+  const clearCanvas = () => withTrail(() => session.clearCanvas());
 
   // FR12: confirm what happened, so the thumbnail isn't added twice for want of feedback, and a
   // refresh of the one already on the page doesn't look like nothing happened.

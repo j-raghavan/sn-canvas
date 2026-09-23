@@ -93,7 +93,7 @@ export function createLinkNavigation({
       await shown.show(dir, link.target, at);
       switched = true;
       if (at !== null) {
-        trail = withStep(trail, {...at, canvasId: from, to: at.notePath, withinNote: true});
+        trail = withStep(trail, {...at, kind: 'canvas', canvasId: from});
       }
     });
     report(switched, `${TAG}[LINK] ${switched ? 'switched to' : 'could not switch to'} canvas=${link.target}`);
@@ -109,7 +109,7 @@ export function createLinkNavigation({
       if (!opened) {
         await view.comeBack();
       } else if (from !== null) {
-        trail = withStep(trail, {...from, canvasId: shown.id(), to: link.target});
+        trail = withStep(trail, {...from, kind: 'note', canvasId: shown.id(), to: link.target});
         badge.show(noteNameOf(from.notePath), link.target);
       }
     });
@@ -130,7 +130,7 @@ export function createLinkNavigation({
         logger.warn(`${TAG}[LINK] nothing to go back to`);
         return;
       }
-      if (step.withinNote === true) {
+      if (step.kind === 'canvas') {
         // The note never changed, so there is nothing to leave or come back to: bring the canvas the
         // link was followed from back up in place of the one it led to (#2).
         await shown.show(dir, step.canvasId, step);

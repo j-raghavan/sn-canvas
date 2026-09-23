@@ -510,6 +510,24 @@ describe('links', () => {
     expect(session.followLink).toHaveBeenCalledWith({kind: 'note', target: '/n.note', page: 2});
   });
 
+  // #2: a canvas link leaves Canvas on screen, so nothing else re-reads the trail. Without the screen
+  // doing it here, the header offers no way back from a link it has just followed.
+  test('following a canvas link offers the way back straight away', async () => {
+    const session = createFakeSession();
+    session.followLink.mockResolvedValue(true);
+    session.backTo.mockReturnValue(null);
+    const {renderer, has, labelled} = await render(session);
+    expect(has('canvas-back')).toBe(false);
+
+    // Following it is what puts the step on the trail.
+    session.backTo.mockReturnValue({notePath: '/note.note', page: 0, kind: 'canvas' as const, canvasId: 'c-from'});
+    await act(async () => {
+      renderer.root.findByType(CanvasNativeView).props.onFollowLink({nativeEvent: {kind: 'canvas', target: 'c-to', page: -1}});
+    });
+    expect(has('canvas-back')).toBe(true);
+    expect(labelled('Back to canvas')).toBe(true);
+  });
+
   test('a link that will not open says so, and one the bridge cannot read is ignored', async () => {
     const session = createFakeSession();
     session.followLink.mockResolvedValue(false);
@@ -587,7 +605,7 @@ describe("a note's canvases (#30)", () => {
 });
 
 describe('the way back along followed links', () => {
-  const STEP = {notePath: '/storage/emulated/0/Note/Work/presenting.note', page: 3, canvasId: 'c-1', to: '/n.note'};
+  const STEP = {notePath: '/storage/emulated/0/Note/Work/presenting.note', page: 3, kind: 'note' as const, canvasId: 'c-1', to: '/n.note'};
 
   test("a tap on the note's badge steps back through the session, and unmounting stops listening", async () => {
     const session = createFakeSession();
