@@ -254,9 +254,82 @@ export function lastCanvasFor(index: CanvasIndex, notePath: string | null): stri
   return canvasesIn(index, notePath).includes(last) || !belongsToANote(index, last) ? last : null;
 }
 
-/** [index] with [link] waiting for its thumbnail; only the newest [MAX_PENDING] are kept. */
+/** The links waiting on page [at], oldest first. */
+export function pendingOn(index: CanvasIndex, at: NotePage): readonly PendingLink[] {
+  return index.pending.filter(link => link.notePath === at.notePath && link.page === at.page);
+}
+
+/**
+ * The links waiting on page [at], newest first, which is the order both the matching and a lasso
+ * ask them in: the newest knew the most thumbnails, so it is about the fewest pictures.
+ */
+const newestFirstOn = (index: CanvasIndex, at: NotePage): readonly PendingLink[] => [...pendingOn(index, at)].reverse();
+
+/**
+ * Whether the picture numbered [num] could be [link]'s thumbnail: the thumbnail is the picture that
+ * was not on the page when the link was left, so any number it did not know could be its. A picture
+ * with no number at all (null) could be any of them.
+ *
+ * The one rule, asked in both directions: [stillWaiting] asks it of every picture for one link, and
+ * [claimPending] of every link for one picture.
+ *
+ * The null arm is spelled out rather than left to `includes`, which would answer the same for a
+ * list of numbers. Nothing can tell the two apart, so it is here to say what a numberless picture
+ * means and not because the answer would change.
+ */
+const couldBe = (link: PendingLink, num: number | null): boolean =>
+  num === null || !link.knownPictureNumbers.includes(num);
+
+/**
+ * The links on a page that a picture could still be waiting to be claimed by, given [pictures],
+ * every picture on that page now. A link could be about any picture it did not already know, and
+ * one thumbnail is one picture, so this is the largest set of links that can be given a picture
+ * each; whatever cannot be is waiting for a thumbnail the page no longer has (#47).
+ *
+ * Taking each link's first free picture in turn is not enough. A newer link can know fewer numbers
+ * than an older one, because a picture's number is its place in the page and a deletion renumbers
+ * what is left, so their claims are not nested and a link can take the one picture another had left.
+ * Hence the reassignment below: a link may displace one already placed, as long as that one can be
+ * put somewhere else.
+ */
+const stillWaiting = (onPage: readonly PendingLink[], pictures: readonly number[]): readonly PendingLink[] => {
+  const takenBy = new Map<number, PendingLink>();
+  const couldBeIts = (link: PendingLink) => pictures.filter(num => couldBe(link, num));
+  const place = (link: PendingLink, tried: Set<number>): boolean =>
+    couldBeIts(link).some(num => {
+      if (tried.has(num)) {
+        return false;
+      }
+      tried.add(num);
+      const holder = takenBy.get(num);
+      if (holder === undefined || place(holder, tried)) {
+        takenBy.set(num, link);
+        return true;
+      }
+      return false;
+    });
+  // Newest first: it knew the most thumbnails, so it has the fewest pictures to be placed among.
+  const waiting = new Set([...onPage].reverse().filter(link => place(link, new Set())));
+  return onPage.filter(link => waiting.has(link));
+};
+
+/**
+ * [index] with [link] waiting for its thumbnail; only the newest [MAX_PENDING] are kept.
+ *
+ * Links the page can no longer account for go at the same time. [link]'s known numbers are every
+ * picture on that page as it is now, so they say which of the links already there still have a
+ * thumbnail to be claimed by; the rest never will be, and until this they stayed for good and
+ * filled the index until the cap started dropping the ones that were still good (#47).
+ *
+ * A page with no pictures on it has nothing any of its links can ever be claimed by, so they all
+ * go and the one being left is the only one there, which is what makes it safe for it to know no
+ * pictures. That rests on the read being true, which is why an empty one is taken twice before it
+ * is believed ([createNoteThumbnails]'s picturesOn).
+ */
 export function withPending(index: CanvasIndex, link: PendingLink): CanvasIndex {
-  return {...index, pending: [...index.pending, link].slice(-MAX_PENDING)};
+  const kept = stillWaiting(pendingOn(index, link), link.knownPictureNumbers);
+  const spent = new Set(pendingOn(index, link).filter(other => !kept.includes(other)));
+  return {...index, pending: [...index.pending.filter(other => !spent.has(other)), link].slice(-MAX_PENDING)};
 }
 
 /**
@@ -268,11 +341,7 @@ export function withPending(index: CanvasIndex, link: PendingLink): CanvasIndex 
 export function claimPending(index: CanvasIndex, lassoed: readonly unknown[], at: NotePage): Claim | null {
   for (const picture of picturesOf(lassoed)) {
     const num = numberOf(picture);
-    const claimant = [...index.pending]
-      .reverse()
-      .find(
-        link => link.notePath === at.notePath && link.page === at.page && (num === null || !link.knownPictureNumbers.includes(num)),
-      );
+    const claimant = newestFirstOn(index, at).find(link => couldBe(link, num));
     if (claimant !== undefined) {
       return {index: {...index, pending: index.pending.filter(link => link !== claimant)}, canvasId: claimant.canvasId, picture};
     }

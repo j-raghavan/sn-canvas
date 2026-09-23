@@ -19,6 +19,7 @@ import {
   serializeCanvasIndex,
   withLastCanvas,
   withPending,
+  pendingOn,
   type NotePage,
   type PendingLink,
 } from '../src/domain/canvasIndex';
@@ -93,10 +94,119 @@ test.each([
 });
 
 test('only the newest pending links are kept, saved or loaded', () => {
-  const links = Array.from({length: MAX_PENDING + 5}, (_, n) => pendingFor(`c-${n}`));
+  // One page each, so the cap is the only thing deciding: links on one page prune and refuse each
+  // other, which is what is being kept apart from here.
+  const links = Array.from({length: MAX_PENDING + 5}, (_, n) => pendingFor(`c-${n}`, [], {notePath: '/note.note', page: n}));
   const added = links.reduce(withPending, EMPTY_INDEX);
   expect(added.pending).toEqual(links.slice(-MAX_PENDING));
   expect(parseCanvasIndex(JSON.stringify({pending: links})).pending).toEqual(links.slice(-MAX_PENDING));
+});
+
+describe('pruning links the page can no longer account for (#47)', () => {
+  test('a link whose thumbnail has gone from the page goes with it', () => {
+    // c-a's thumbnail was placed as picture 42. It has since been deleted, so the page is back to
+    // picture 5 alone and nothing lassoed there can ever be c-a's thumbnail.
+    const withA = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
+    expect(withPending(withA, pendingFor('c-b', [5])).pending).toEqual([pendingFor('c-b', [5])]);
+  });
+
+  test('a link whose thumbnail is still on the page stays', () => {
+    const withA = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
+    // The page now holds 5 and c-a's thumbnail, 42, so c-a is still waiting for a lasso.
+    expect(withPending(withA, pendingFor('c-b', [5, 42])).pending).toEqual([
+      pendingFor('c-a', [5]),
+      pendingFor('c-b', [5, 42]),
+    ]);
+  });
+
+  test('the links are matched to the pictures one each, so only the ones left over go', () => {
+    // The state this came from: both of these were left when the page still numbered its pictures in
+    // the hundreds, and every one of those pictures has gone. One picture is on the page now, and the
+    // newer link is the one that could be about it, so the older is what is left over (#47).
+    const two = withPending(withPending(EMPTY_INDEX, pendingFor('c-a', [138])), pendingFor('c-b', [138, 139]));
+    expect(two.pending).toHaveLength(2);
+    expect(withPending(two, pendingFor('c-c', [1])).pending).toEqual([pendingFor('c-b', [138, 139]), pendingFor('c-c', [1])]);
+  });
+
+  // A newer link can know FEWER pictures than an older one, because numInPage is positional and a
+  // deletion renumbers what is left. Then the sets are not nested and taking the first free picture
+  // for each link in turn can starve one that had somewhere else to go (#47).
+  test('a link is kept whenever some picture could be its, even if a newer link wanted that one too', () => {
+    // Saving cannot reach this pair, since adding c-new would prune c-old on the spot, but an index
+    // written by an earlier build loads straight into it. Page holds 1, 2 and 3: c-old can only be
+    // about 1, c-new could be about 1 or 2.
+    const two = parseCanvasIndex(JSON.stringify({pending: [pendingFor('c-old', [2, 3]), pendingFor('c-new', [3])]}));
+    expect(two.pending).toHaveLength(2);
+    // c-new must take 2 and leave 1 for c-old, rather than taking 1 and starving it.
+    expect(withPending(two, pendingFor('c-next', [1, 2, 3])).pending.map(link => link.canvasId)).toEqual([
+      'c-old',
+      'c-new',
+      'c-next',
+    ]);
+  });
+
+  test('a page with no pictures on it keeps no links, so the one being left is the only one there', () => {
+    const withA = withPending(EMPTY_INDEX, pendingFor('c-a', [5]));
+    // Nothing on the page can ever be c-a's thumbnail, so c-a goes and c-b is left alone with it.
+    expect(withPending(withA, pendingFor('c-b')).pending).toEqual([pendingFor('c-b')]);
+  });
+
+  test('links waiting on other pages and other notes are left alone', () => {
+    const elsewhere = {notePath: '/other.note', page: 0};
+    const otherPage = {notePath: '/note.note', page: 3};
+    const index = [pendingFor('c-a', [5]), pendingFor('c-b', [5], elsewhere), pendingFor('c-c', [5], otherPage)].reduce(
+      withPending,
+      EMPTY_INDEX,
+    );
+    // The read is of PAGE, and takes out only PAGE's spent link.
+    expect(withPending(index, pendingFor('c-d', [5])).pending).toEqual([
+      pendingFor('c-b', [5], elsewhere),
+      pendingFor('c-c', [5], otherPage),
+      pendingFor('c-d', [5]),
+    ]);
+  });
+
+  // Every other test here reads and writes page 0, so `=== at.page` and `<= at.page` are the same
+  // thing to them and a save on a later page could prune an earlier page's live links unnoticed.
+  test('a save on a later page leaves the links waiting on earlier pages of the same note alone', () => {
+    const page1 = {notePath: '/note.note', page: 1};
+    const page2 = {notePath: '/note.note', page: 2};
+    const waiting = withPending(EMPTY_INDEX, pendingFor('c-a', [5], page1));
+    expect(pendingOn(waiting, page2)).toEqual([]);
+    // Page 2's read says nothing about page 1, however well its numbers line up with page 1's link.
+    expect(withPending(waiting, pendingFor('c-b', [5], page2)).pending).toEqual([
+      pendingFor('c-a', [5], page1),
+      pendingFor('c-b', [5], page2),
+    ]);
+  });
+
+  // The matching may move a link already placed, and has to leave the board as it found it when that
+  // move fails. Recording the move before finding out whether it works keeps a link that has nowhere
+  // to go. Found by trying every arrangement of three links over pictures 1 to 3: this is the only
+  // one that tells the two apart.
+  test('a link with nowhere left to go is not kept by a move that failed', () => {
+    // c-a and c-c can only be about picture 1; c-b could be about any of the three. One of c-a and
+    // c-c gets picture 1 and the other has nowhere to go.
+    const three = parseCanvasIndex(
+      JSON.stringify({pending: [pendingFor('c-a', [2, 3]), pendingFor('c-b', []), pendingFor('c-c', [2, 3])]}),
+    );
+    expect(three.pending).toHaveLength(3);
+    expect(withPending(three, pendingFor('c-d', [1, 2, 3])).pending.map(link => link.canvasId)).toEqual([
+      'c-b',
+      'c-c',
+      'c-d',
+    ]);
+  });
+
+  test('pendingOn is the links waiting on one page, oldest first', () => {
+    // c-a knew only picture 1, and c-c's read found 2 as well, so c-a's thumbnail is still there.
+    const index = [pendingFor('c-a', [1]), pendingFor('c-b', [9], {notePath: '/other.note', page: 0}), pendingFor('c-c', [1, 2])].reduce(
+      withPending,
+      EMPTY_INDEX,
+    );
+    expect(pendingOn(index, PAGE).map(link => link.canvasId)).toEqual(['c-a', 'c-c']);
+    expect(pendingOn(EMPTY_INDEX, PAGE)).toEqual([]);
+  });
 });
 
 describe('claimPending', () => {

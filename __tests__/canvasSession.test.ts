@@ -423,6 +423,86 @@ describe('links back to a canvas', () => {
     expect(store.shown).toBe('drawing');
   });
 
+  // Every save left a link and nothing ever took one away, so links.json filled to its cap and
+  // started dropping the oldest, which are the ones most likely still to have a thumbnail (#47).
+  test('a link whose thumbnail is no longer on the page goes on the next save', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [notePicture(5)];
+    await session.saveToNote();
+    // The thumbnail is deleted before it is ever lassoed, so the page is back to picture 5 alone.
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    await session.close();
+    expect(
+      savedIndex(store).pending.map((link: {canvasId: string; knownPictureNumbers: number[]}) => [
+        link.canvasId,
+        link.knownPictureNumbers,
+      ]),
+    ).toEqual([['c-2', [5]]]);
+  });
+
+  // A read that finds nothing is taken twice before it is believed, because this firmware returns no
+  // pictures for pages that have them. Confirmed, it means the page really is empty, so the links
+  // waiting there are waiting for thumbnails that have gone, and the new one is alone (#47).
+  test('a page read that finds nothing is taken twice, and a page really empty keeps no old links', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [notePicture(5)];
+    await session.saveToNote();
+    const savesBefore = host.noteSaves;
+
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    host.elements = [];
+    await session.saveToNote();
+    await session.close();
+
+    // Asked twice, because links were waiting on that page; each read saves the note first.
+    expect(host.noteSaves).toBeGreaterThan(savesBefore + 1);
+    expect(logger.lines).toContain('log [SNCANVAS][LINK] page=0 read no pictures with links waiting; read again and found 0');
+    expect(savedIndex(store).pending.map((link: {canvasId: string}) => link.canvasId)).toEqual(['c-2']);
+  });
+
+  // On a page nothing is waiting on, a read that finds nothing is the ordinary first save onto a
+  // blank page, and the link is the only one there, so it can only ever answer for its own thumbnail.
+  test('a page read that finds nothing still leaves the first link on a blank page', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [];
+    await session.saveToNote();
+    await session.close();
+    expect(savedIndex(store).pending.map((link: {canvasId: string}) => link.canvasId)).toEqual(['c-1']);
+  });
+
+  // The suppression counts links waiting on the page, not thumbnails on it. When the waiting links
+  // are stale, which is the state pruning exists to clean up, an empty read is the truth and the
+  // link would have been right. main gets this sequence entirely right (#47).
+  test('a canvas saved after the page was emptied still opens from its own thumbnail', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
+    await session.open(500);
+    host.elements = [notePicture(1)];
+    await session.saveToNote();
+
+    // Everything on the page is deleted, c-1's thumbnail included, so the page really is empty and
+    // the read that finds nothing is telling the truth.
+    host.elements = [];
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    // c-2's thumbnail lands as picture 3.
+    host.elements = [notePicture(3)];
+
+    await session.newCanvas();
+    store.shown = 'third drawing';
+    await session.saveToNote();
+
+    host.lassoed = [lassoedPicture(3)];
+    await session.open(501);
+    expect(store.shown).toBe('second drawing');
+  });
+
   test('two canvases saved to one page each keep a thumbnail that opens its own canvas (#30)', async () => {
     const {store, host, session} = setup({[SCRATCH]: 'first drawing'});
     await session.open(500);
