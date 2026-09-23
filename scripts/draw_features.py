@@ -54,12 +54,14 @@ HEADER_Y = 51
 ACTIONS_Y = 2343
 TOOLS_Y = 2460
 HEADER = {"export": 1711, "save": 1782, "close": 1855}
-STYLE_TOGGLE = (1833, 163)
-COLOURS_AT = (1836, 352)
-OPACITY_AT = (1852, 548)
-FILL_AT = (1836, 646)
-OUTLINE_AT = (1836, 728)
-SIZE_AT = (1836, 810)
+# The style panel, re-measured once it grew a column for the gradient fill (#59). The rows kept their
+# heights; only the panel's left edge moved, since it is pinned to the right of the screen.
+STYLE_TOGGLE = (1834, 163)
+COLOURS_AT = (1839, 352)
+OPACITY_AT = (1836, 548)
+FILL_AT = (1843, 645)
+OUTLINE_AT = (1840, 728)
+SIZE_AT = (1838, 810)
 # Ten buttons since Link to canvas (#2). The pill measures 574..1345 in the screenshot, 771px for
 # 10 x 40dp plus padding and border, so the spacing is 74.5px about a centre of 960.
 # The zoom control (#12), bottom left of the canvas, beside the action bar.
@@ -168,7 +170,7 @@ def main(shot_path, debug=False):
         ("Colours & styles: tap to open or close", place(*STYLE_TOGGLE), 307),
         ("12 colours, named below", place(*COLOURS_AT), 361),
         ("Opacity", place(*OPACITY_AT), 415),
-        ("Fill: none, semi, solid, hatched", place(*FILL_AT), 469),
+        ("Fill: none, semi, solid, hatched, gradient", place(*FILL_AT), 469),
         ("Outline: hand-drawn, dashed, dotted, solid", place(*OUTLINE_AT), 523),
         ("Size: S, M, L, XL", place(*SIZE_AT), 577),
     ):
