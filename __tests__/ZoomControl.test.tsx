@@ -11,9 +11,12 @@ import ZoomControl from '../src/ui/ZoomControl';
 
 const renderControl = (overrides: Partial<CanvasUiState> = {}) => {
   const onCommand = jest.fn();
+  const onOpen = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = ReactTestRenderer.create(<ZoomControl ui={{...INITIAL_UI_STATE, ...overrides}} onCommand={onCommand} />);
+    renderer = ReactTestRenderer.create(
+      <ZoomControl ui={{...INITIAL_UI_STATE, ...overrides}} onCommand={onCommand} onOpen={onOpen} />,
+    );
   });
   const press = (testID: string) =>
     act(() => {
@@ -34,7 +37,7 @@ const renderControl = (overrides: Partial<CanvasUiState> = {}) => {
     const images = renderer.root.findByProps({testID: 'canvas-zoom'}).findAllByType(Image);
     return images.length === 0 ? null : images[0].props.source;
   };
-  return {onCommand, press, isListed, shown, readout, chevron};
+  return {onCommand, onOpen, press, isListed, shown, readout, chevron};
 };
 
 const PRESETS = ['canvas-zoom-fit', 'canvas-zoom-100', 'canvas-zoom-50', 'canvas-zoom-25'];
@@ -91,4 +94,18 @@ test('the pill carries a chevron, which flips when the panel opens', () => {
 
   control.press('canvas-zoom');
   expect(control.chevron()).toEqual(closed);
+});
+
+// The panel opens upward, right where the hint's arrow comes down, so the hint has to go with it. The
+// ⋮ menu, the tools and an inserted image all put the hints away the same way (#12).
+test('opening the panel puts the hints away, and closing it does not do so again', () => {
+  const control = renderControl();
+  control.press('canvas-zoom');
+  expect(control.onOpen).toHaveBeenCalledTimes(1);
+
+  control.press('canvas-zoom');
+  expect(control.onOpen).toHaveBeenCalledTimes(1);
+
+  control.press('canvas-zoom');
+  expect(control.onOpen).toHaveBeenCalledTimes(2);
 });

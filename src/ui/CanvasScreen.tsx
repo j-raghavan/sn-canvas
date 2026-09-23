@@ -229,7 +229,7 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           onNoteCanvases={showNoteCanvases}
           onMenuOpen={() => setShowHints(false)}
         />
-        <ZoomControl ui={ui} onCommand={command => runCommand(command)} />
+        <ZoomControl ui={ui} onCommand={command => runCommand(command)} onOpen={() => setShowHints(false)} />
         {/* Over the action bar, which is always there and sits across the middle tools: the eraser's hint has to
             cross it to reach the eraser, and only its arrow does. Still under the style panel and the toolbar,
             and the ⋮ menu dismisses the hints as it opens, so nothing a tap opens is ever drawn over. */}

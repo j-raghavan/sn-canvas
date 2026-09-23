@@ -33,10 +33,22 @@ const PRESETS: readonly Preset[] = [
 type Props = {
   ui: CanvasUiState;
   onCommand: (command: CanvasCommand) => void;
+  /** The panel is opening: the hints go, or the one pointing here would sit over it. */
+  onOpen: () => void;
 };
 
-export default function ZoomControl({ui, onCommand}: Props): React.JSX.Element {
+export default function ZoomControl({ui, onCommand, onOpen}: Props): React.JSX.Element {
   const [isOpen, setOpen] = useState(false);
+
+  const toggle = () => {
+    setOpen(open => {
+      // Closing is not an opening, so the hints are not put away twice.
+      if (!open) {
+        onOpen();
+      }
+      return !open;
+    });
+  };
 
   const run = (command: CanvasCommand) => {
     setOpen(false);
@@ -64,7 +76,7 @@ export default function ZoomControl({ui, onCommand}: Props): React.JSX.Element {
         testID="canvas-zoom"
         accessibilityLabel={`Zoom, ${ui.zoomPercent}%`}
         style={styles.button}
-        onPress={() => setOpen(open => !open)}>
+        onPress={toggle}>
         <Text style={styles.buttonText}>{ui.zoomPercent}%</Text>
         {/* The same chevron the style button uses: without it the pill reads as a readout, not a control. */}
         <Image source={isOpen ? CHEVRON_UP : CHEVRON_DOWN} style={styles.chevron} />
