@@ -44,6 +44,17 @@ class TableElementsTest {
         assertEquals(WorldRect(1.0, 2.0, 4.0, 6.0), TableElements.cellRect(rect, 0, fakeMeasurer))
     }
 
+    // The view draws and hit-tests against a live frame, so the index it holds can be an edit out of
+    // date. A cell the table has not got falls back to the whole element, the way a non-table does,
+    // rather than throwing on the row lookup part way through the draw (#53).
+    @Test
+    fun `a cell the table has not got gives the whole element back, and does not throw`() {
+        val whole = WorldRect(0.0, 0.0, 320.0, tallFirstCell.height)
+        assertEquals(whole, TableElements.cellRect(tallFirstCell, 4, fakeMeasurer))
+        assertEquals(whole, TableElements.cellRect(tallFirstCell, 99, fakeMeasurer))
+        assertEquals(whole, TableElements.cellRect(tallFirstCell, -1, fakeMeasurer))
+    }
+
     @Test
     fun `cellAt finds the cell under a point, and nothing outside the table`() {
         assertEquals(3, TableElements.cellAt(tallFirstCell, Point(170.0, 110.0), fakeMeasurer))
@@ -83,12 +94,78 @@ class TableElementsTest {
         assertEquals(full.table, stillFull.elements.single().table)
     }
 
+    // #53: the row or column the current cell is in goes, not always the last one, so a row in the
+    // middle can be taken out without retyping everything after it.
     @Test
-    fun `removing a row or a column drops the last one, and always leaves one`() {
-        val fewer = TableEdits.removeColumn(TableEdits.removeRow(stateOf(tallFirstCell), "tb", fakeMeasurer), "tb", fakeMeasurer)
+    fun `removing takes out the row or column it is given, cells and heights together`() {
+        // Three rows of two, named by where they are, and a middle row made taller than the rest.
+        val grid = TableData(3, 2, listOf("a1", "a2", "b1", "b2", "c1", "c2"), listOf(48.0, 90.0, 48.0))
+        val three = stateOf(table2x2.copy(table = grid))
+        // The cell "b2" is index 3, which is row 1.
+        val withoutMiddle =
+            TableEdits
+                .removeRow(three, "tb", 1, fakeMeasurer)
+                .elements
+                .single()
+                .table
+        assertEquals(listOf("a1", "a2", "c1", "c2"), withoutMiddle?.cells)
+        assertEquals(listOf(48.0, 48.0), withoutMiddle?.rowMinHeights)
+        // The first row goes as readily as one in the middle.
+        val withoutFirst =
+            TableEdits
+                .removeRow(three, "tb", 0, fakeMeasurer)
+                .elements
+                .single()
+                .table
+        assertEquals(listOf("b1", "b2", "c1", "c2"), withoutFirst?.cells)
+        assertEquals(listOf(90.0, 48.0), withoutFirst?.rowMinHeights)
+        // The cell "b1" is index 2, which is column 0.
+        val withoutFirstColumn =
+            TableEdits
+                .removeColumn(three, "tb", 0, fakeMeasurer)
+                .elements
+                .single()
+                .table
+        assertEquals(listOf("a2", "b2", "c2"), withoutFirstColumn?.cells)
+        assertEquals(listOf(48.0, 90.0, 48.0), withoutFirstColumn?.rowMinHeights)
+    }
+
+    // A destructive edit given a row the table has not got leaves it alone rather than taking out a
+    // different one, which is the convention this file states for input it cannot honour.
+    @Test
+    fun `a row or column the table has not got is left alone`() {
+        val grid = TableData(2, 2, listOf("a1", "a2", "b1", "b2"), listOf(48.0, 48.0))
+        val two = stateOf(table2x2.copy(table = grid))
+        // Both ways out of range, for rows and for columns: past the end, and before the start.
+        for (row in listOf(9, -1)) {
+            assertEquals(
+                grid,
+                TableEdits
+                    .removeRow(two, "tb", row, fakeMeasurer)
+                    .elements
+                    .single()
+                    .table,
+            )
+        }
+        for (col in listOf(-1, 9)) {
+            assertEquals(
+                grid,
+                TableEdits
+                    .removeColumn(two, "tb", col, fakeMeasurer)
+                    .elements
+                    .single()
+                    .table,
+            )
+        }
+    }
+
+    @Test
+    fun `removing rows and columns always leaves one of each`() {
+        val withoutRow = TableEdits.removeRow(stateOf(tallFirstCell), "tb", 1, fakeMeasurer)
+        val fewer = TableEdits.removeColumn(withoutRow, "tb", 1, fakeMeasurer)
         assertEquals(TableData(1, 1, listOf("x".repeat(64))), fewer.elements.single().table)
         assertEquals(160.0, fewer.elements.single().width, 1e-9)
-        val single = TableEdits.removeColumn(TableEdits.removeRow(fewer, "tb", fakeMeasurer), "tb", fakeMeasurer)
+        val single = TableEdits.removeColumn(TableEdits.removeRow(fewer, "tb", 0, fakeMeasurer), "tb", 0, fakeMeasurer)
         assertEquals(TableData(1, 1, listOf("x".repeat(64))), single.elements.single().table)
     }
 

@@ -1,7 +1,9 @@
 package com.sncanvas.canvas
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Value-type invariants and frame conversions of the canvas model (CanvasModel.kt). */
@@ -151,6 +153,16 @@ class CanvasModelTest {
     fun `a table holds exactly rows times cols cells, read by row and column`() {
         val table = TableData(2, 3, listOf("a", "b", "c", "d", "e", "f"))
         assertEquals("f", table.cell(1, 2))
+        // Row by row, so (0,1) and (1,0) are different cells; column-major would swap them.
+        assertEquals(1, table.indexOf(0, 1))
+        assertEquals("b", table.cell(0, 1))
+        assertEquals("d", table.cell(1, 0))
+        // A cell it has, and one off each end in either direction.
+        assertTrue(table.holds(1, 2))
+        assertFalse(table.holds(2, 0))
+        assertFalse(table.holds(0, 3))
+        assertFalse(table.holds(-1, 0))
+        assertFalse(table.holds(0, -1))
         assertEquals(TableData(2, 2, listOf("", "", "", "")), TableData.empty(2, 2))
         assertThrows(IllegalArgumentException::class.java) { TableData(0, 2, emptyList()) }
         assertThrows(IllegalArgumentException::class.java) { TableData(2, 0, emptyList()) }

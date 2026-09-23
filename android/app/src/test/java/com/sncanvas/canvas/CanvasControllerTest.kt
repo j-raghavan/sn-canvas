@@ -230,21 +230,6 @@ class CanvasControllerTest {
     }
 
     @Test
-    fun `editing a table cell sets that cell`() {
-        controller.load(listOf(table))
-        controller.beginEdit(CanvasController.EditTarget("tb", 1))
-        controller.finishEdit("B")
-        assertEquals(
-            listOf("", "B", "", ""),
-            controller.state.elements
-                .single()
-                .table
-                ?.cells,
-        )
-        assertTrue(ui.canUndo)
-    }
-
-    @Test
     fun `erase removes several elements in one step and clears an erased selection`() {
         controller.load(listOf(box, box.copy(id = "b2"), box.copy(id = "b3")))
         controller.select("b2")
@@ -260,27 +245,6 @@ class CanvasControllerTest {
         controller.load(listOf(box))
         controller.erase(emptySet())
         assertFalse(ui.canUndo)
-    }
-
-    @Test
-    fun `row and column commands act on the selected table`() {
-        controller.load(listOf(table))
-        controller.select("tb")
-        controller.addTableRow()
-        controller.addTableColumn()
-        val grown =
-            controller.state.elements
-                .single()
-                .table
-        assertEquals(listOf(3, 3), listOf(grown?.rows, grown?.cols))
-        controller.removeTableRow()
-        controller.removeTableColumn()
-        assertEquals(
-            TableData.empty(2, 2),
-            controller.state.elements
-                .single()
-                .table,
-        )
     }
 
     @Test
@@ -320,6 +284,27 @@ class CanvasControllerTest {
         assertEquals(sent + 1, recorder.uiStates.size)
     }
 
+    // show() promises a step leaves nothing selected, and nothing held it to that: with the selection
+    // left in place, an element an undo has just taken away stays selected and the action bar goes on
+    // offering to act on it.
+    @Test
+    fun `an undo or a redo leaves nothing selected`() {
+        controller.load(listOf(box))
+        controller.select("box")
+        controller.setStyle("color", "red")
+        assertEquals(setOf("box"), controller.selectedIds)
+
+        controller.undo()
+        assertEquals(emptySet<String>(), controller.selectedIds)
+        assertFalse(ui.hasSelection)
+        assertEquals(0, ui.selectionCount)
+
+        controller.select("box")
+        controller.redo()
+        assertEquals(emptySet<String>(), controller.selectedIds)
+        assertFalse(ui.hasSelection)
+    }
+
     @Test
     fun `undo and redo with nothing to step to do nothing`() {
         controller.undo()
@@ -346,6 +331,14 @@ class CanvasControllerTest {
         controller.select("b2")
         assertEquals("b2", controller.selected?.id)
         assertEquals(1, ui.selectionCount)
+    }
+
+    @Test
+    fun `moveSelected with nothing selected moves nothing`() {
+        controller.load(listOf(box))
+        controller.select(null)
+        controller.moveSelected(5.0, -3.0)
+        assertEquals(box, controller.state.elements.single())
     }
 
     @Test
@@ -502,6 +495,10 @@ class CanvasControllerTest {
         controller.linkSelected(ElementLink(ElementLink.KIND_NOTE, "/n.note"))
         assertFalse(ui.canUndo)
         controller.select("box")
+        controller.unlinkSelected()
+        assertFalse(ui.canUndo)
+        // And with nothing selected at all there is nothing to take a link off.
+        controller.select(null)
         controller.unlinkSelected()
         assertFalse(ui.canUndo)
     }

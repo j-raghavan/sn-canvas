@@ -86,11 +86,13 @@ class TableRowHeightsTest {
     fun `adding and removing rows or columns keeps the other rows' heights`() {
         val tall = stateOf(withHeights(100.0, 60.0))
         val added = TableEdits.addRow(tall, "tb", fakeMeasurer)
-        assertEquals(listOf(100.0, 60.0, 48.0), added.table().table?.rowMinHeights)
+        // #53: the row added takes the height the table is already using, not the smallest allowed,
+        // or it comes in short and the table stops looking like one table.
+        assertEquals(listOf(100.0, 60.0, 60.0), added.table().table?.rowMinHeights)
         assertEquals(
             listOf(100.0, 60.0),
             TableEdits
-                .removeRow(added, "tb", fakeMeasurer)
+                .removeRow(added, "tb", 2, fakeMeasurer)
                 .table()
                 .table
                 ?.rowMinHeights,
@@ -103,6 +105,24 @@ class TableRowHeightsTest {
                 .table
                 ?.rowMinHeights,
         )
+    }
+
+    // #53, reported after 1.0.2: a row added to a table whose rows had been made taller came in at
+    // the minimum height and sat short of the others.
+    @Test
+    fun `a row added matches the rows already there, however tall they were made`() {
+        val stretched = stateOf(withHeights(120.0, 120.0))
+        val added = TableEdits.addRow(stretched, "tb", fakeMeasurer).table()
+        assertEquals(listOf(120.0, 120.0, 120.0), added.table?.rowMinHeights)
+        assertEquals(listOf(120.0, 120.0, 120.0), TableElements.rowHeights(added, fakeMeasurer))
+        // And the element grows by that row rather than by the minimum.
+        assertEquals(360.0, added.height, 1e-9)
+    }
+
+    @Test
+    fun `a row added to a table still at the minimum is still at the minimum`() {
+        val added = TableEdits.addRow(stateOf(table), "tb", fakeMeasurer).table()
+        assertEquals(listOf(48.0, 48.0, 48.0), added.table?.rowMinHeights)
     }
 
     @Test

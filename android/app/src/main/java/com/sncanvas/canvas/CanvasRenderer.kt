@@ -28,7 +28,7 @@ import kotlin.math.abs
  */
 @Suppress("TooManyFunctions") // one draw entry per thing the canvas shows, by design
 internal class CanvasRenderer(
-    measurer: TextMeasurer = AndroidTextMeasurer(),
+    private val measurer: TextMeasurer = AndroidTextMeasurer(),
     images: ImageSource = ImageSource.NONE,
 ) {
     private val painter = ElementPainter(measurer, images)
@@ -86,6 +86,17 @@ internal class CanvasRenderer(
         Paint().apply {
             style = Paint.Style.STROKE
             strokeWidth = 2f
+            color = Color.BLACK
+            isAntiAlias = true
+        }
+
+    // The cell last tapped in a table (FR24, #53). Thicker than the selection frame and the grid
+    // lines it sits between, so the bracket reads as a marker rather than as another rule.
+    private val cellMarkerPaint =
+        Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 5f
+            strokeCap = Paint.Cap.ROUND
             color = Color.BLACK
             isAntiAlias = true
         }
@@ -174,6 +185,43 @@ internal class CanvasRenderer(
         } else {
             for (corner in CanvasCore.cornerPoints(element)) drawHandle(canvas, screenPoint(corner, transform))
             drawRotateHandle(canvas, element, transform)
+        }
+    }
+
+    /**
+     * The table cell last tapped (FR24, #53): the one **Remove this row** and
+     * **Remove this column** take out. Brackets at its four corners rather than
+     * an outline, so it cannot be read as another grid line, and clear of the
+     * cell's text. Nothing is drawn for a table [cell] is no longer inside.
+     */
+    fun drawCurrentCell(
+        canvas: Canvas,
+        elements: List<Element>,
+        cell: TableCell,
+        transform: ViewTransform,
+    ) {
+        val element = elements.find { it.id == cell.elementId } ?: return
+        // The elements drawn are the live frame's, not the controller's, so check the cell against the
+        // grid in hand: for one it has not got, draw nothing rather than the brackets that cellRect's
+        // fall back to the whole element would put right round the table.
+        val table = element.table?.takeIf { it.holds(cell.row, cell.column) } ?: return
+        val rect = TableElements.cellRect(element, table.indexOf(cell.row, cell.column), measurer)
+        val bounds =
+            RectF(
+                transform.screenX(rect.left).toFloat(),
+                transform.screenY(rect.top).toFloat(),
+                transform.screenX(rect.right).toFloat(),
+                transform.screenY(rect.bottom).toFloat(),
+            )
+        // Never more than a third of the cell, so the brackets stay brackets on a small cell or far out.
+        val arm = minOf(CELL_BRACKET_PX, bounds.width() / 3f, bounds.height() / 3f)
+        withRotation(canvas, element, screenBounds(element, transform)) {
+            for ((x, dx) in listOf(bounds.left to arm, bounds.right to -arm)) {
+                for ((y, dy) in listOf(bounds.top to arm, bounds.bottom to -arm)) {
+                    canvas.drawLine(x, y, x + dx, y, cellMarkerPaint)
+                    canvas.drawLine(x, y, x, y + dy, cellMarkerPaint)
+                }
+            }
         }
     }
 
@@ -380,6 +428,9 @@ internal class CanvasRenderer(
         const val LINK_GLYPH_RADIUS_PX = 28f
         val LINK_GLYPH_BOLT =
             listOf(4f to -17f, -10f to 3f, -1f to 3f, -4f to 17f, 10f to -3f, 1f to -3f)
+
+        // How far each corner bracket reaches along the current cell's edges (#53).
+        const val CELL_BRACKET_PX = 20f
 
         const val HANDLE_DRAW_SIZE_PX = 24f
         const val ROTATE_HANDLE_RADIUS_PX = 22f

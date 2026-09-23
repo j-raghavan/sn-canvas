@@ -54,6 +54,9 @@ export type CanvasUiState = {
   canUngroup: boolean;
   /** Whether the one selected element links somewhere, so the link can be taken off it. */
   hasLink: boolean;
+  /** Whether a cell of the selected table was tapped, so Remove row and Remove column know which one (#53). */
+  canRemoveTableRow: boolean;
+  canRemoveTableColumn: boolean;
   /** The selected element's type (such as 'table'), or null with nothing selected. */
   selectedType: string | null;
   style: CanvasStyle;
@@ -67,6 +70,8 @@ export const INITIAL_UI_STATE: CanvasUiState = {
   selectionCount: 0,
   canUngroup: false,
   hasLink: false,
+  canRemoveTableRow: false,
+  canRemoveTableColumn: false,
   selectedType: null,
   style: DEFAULT_STYLE,
 };
@@ -90,6 +95,8 @@ export function parseUiState(payload: unknown): CanvasUiState {
     selectionCount: Number.isInteger(body.selectionCount) ? (body.selectionCount as number) : 0,
     canUngroup: body.canUngroup === true,
     hasLink: body.hasLink === true,
+    canRemoveTableRow: body.canRemoveTableRow === true,
+    canRemoveTableColumn: body.canRemoveTableColumn === true,
     selectedType: typeof body.selectedType === 'string' && body.selectedType !== '' ? body.selectedType : null,
     style: {
       color: oneOf(COLOR_IDS, style.color, DEFAULT_STYLE.color),

@@ -28,22 +28,32 @@ object TableEdits {
                 t.copy(
                     rows = t.rows + 1,
                     cells = t.cells + List(t.cols) { "" },
-                    rowMinHeights =
-                        t.rowMinHeights + TableElements.MIN_ROW_HEIGHT,
+                    // As tall as the row it follows, not as short as a row may be: rows get taller by being
+                    // dragged and by the table being resized, and one added at the minimum sits short of the
+                    // rest and stops the table looking like one table (#53). There is always a row to follow:
+                    // a table has at least one, and one height per row.
+                    rowMinHeights = t.rowMinHeights + t.rowMinHeights[t.rows - 1],
                 )
             }
         }
 
+    /** Table [id] without row [row], the row the current cell is in (#53). A row it has not got is left alone. */
     fun removeRow(
         state: CanvasState,
         id: String,
+        row: Int,
         measurer: TextMeasurer,
     ): CanvasState =
         update(state, id, measurer) { t ->
-            if (t.rows <= 1) {
+            val at = row
+            if (t.rows <= 1 || at !in 0 until t.rows) {
                 t
             } else {
-                t.copy(rows = t.rows - 1, cells = t.cells.dropLast(t.cols), rowMinHeights = t.rowMinHeights.dropLast(1))
+                t.copy(
+                    rows = t.rows - 1,
+                    cells = t.cells.filterIndexed { i, _ -> i / t.cols != at },
+                    rowMinHeights = t.rowMinHeights.filterIndexed { i, _ -> i != at },
+                )
             }
         }
 
@@ -56,13 +66,20 @@ object TableEdits {
             if (t.cols >= TableElements.MAX_COLS) t else t.copy(cols = t.cols + 1, cells = t.cells.chunked(t.cols).flatMap { it + "" })
         }
 
+    /** Table [id] without column [col], the column the current cell is in (#53). A column it has not got is left alone. */
     fun removeColumn(
         state: CanvasState,
         id: String,
+        col: Int,
         measurer: TextMeasurer,
     ): CanvasState =
         update(state, id, measurer) { t ->
-            if (t.cols <= 1) t else t.copy(cols = t.cols - 1, cells = t.cells.chunked(t.cols).flatMap { it.dropLast(1) })
+            val at = col
+            if (t.cols <= 1 || at !in 0 until t.cols) {
+                t
+            } else {
+                t.copy(cols = t.cols - 1, cells = t.cells.chunked(t.cols).flatMap { row -> row.filterIndexed { i, _ -> i != at } })
+            }
         }
 
     /** Row [row] of table [id] made [height] world units tall, within the row limits; its text may still need more. */

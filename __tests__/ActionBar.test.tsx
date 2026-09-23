@@ -96,6 +96,37 @@ test('row and column actions are listed only while a table is selected', () => {
   expect(table.onCommand).toHaveBeenCalledWith('tableAddColumn');
 });
 
+// #53: removing takes out the row or column you are in, so it waits until a cell has been tapped.
+test('removing a row or column waits until a cell says which one', () => {
+  const noCell = renderBar({hasSelection: true, selectedType: 'table'});
+  noCell.press('canvas-more');
+  expect([noCell.isDisabled('canvas-menu-tableRemoveRow'), noCell.isDisabled('canvas-menu-tableRemoveColumn')]).toEqual([true, true]);
+  // Adding never needed one, and still does not.
+  expect(noCell.isDisabled('canvas-menu-tableAddRow')).toBe(false);
+
+  const withCell = renderBar({
+    hasSelection: true,
+    selectedType: 'table',
+    canRemoveTableRow: true,
+    canRemoveTableColumn: true,
+  });
+  withCell.press('canvas-more');
+  expect([withCell.isDisabled('canvas-menu-tableRemoveRow'), withCell.isDisabled('canvas-menu-tableRemoveColumn')]).toEqual([
+    false,
+    false,
+  ]);
+  withCell.press('canvas-menu-tableRemoveRow');
+  expect(withCell.onCommand).toHaveBeenCalledWith('tableRemoveRow');
+
+  // The two are gated apart: a table down to one row can still lose a column.
+  const lastRow = renderBar({hasSelection: true, selectedType: 'table', canRemoveTableColumn: true});
+  lastRow.press('canvas-more');
+  expect([lastRow.isDisabled('canvas-menu-tableRemoveRow'), lastRow.isDisabled('canvas-menu-tableRemoveColumn')]).toEqual([
+    true,
+    false,
+  ]);
+});
+
 test('Group and Ungroup sit in the bar beside delete and duplicate, greyed out until they apply', () => {
   // On the bar itself, not behind the ⋮ menu: an action that has to be found is an action nobody uses.
   const one = renderBar({hasSelection: true, selectionCount: 1});

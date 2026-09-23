@@ -479,6 +479,7 @@ class CanvasView(
         val elements = frame.elements(gesture, toWorld(dragCurrent.x, dragCurrent.y))
         renderer.drawElements(canvas, elements, transform, StylePalette.EINK, frame.hiddenText())
         renderer.drawSelection(canvas, elements, controller.selectedIds, transform)
+        controller.currentCell?.let { renderer.drawCurrentCell(canvas, elements, it, transform) }
         renderer.drawLinkGlyphs(canvas, elements, transform)
         if (gesture == CanvasGesture.DrawShape) renderer.drawDragPreview(canvas, toolMode, downTouch, dragCurrent, transform.zoom)
         if (gesture == CanvasGesture.Marquee) renderer.drawMarquee(canvas, downTouch, dragCurrent)

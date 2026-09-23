@@ -118,7 +118,19 @@ data class TableData(
     fun cell(
         row: Int,
         col: Int,
-    ): String = cells[row * cols + col]
+    ): String = cells[indexOf(row, col)]
+
+    /** Where ([row], [col]) sits in [cells], which runs row by row. The one place that layout is spelled out. */
+    fun indexOf(
+        row: Int,
+        col: Int,
+    ): Int = row * cols + col
+
+    /** Whether ([row], [col]) is a cell this grid has. */
+    fun holds(
+        row: Int,
+        col: Int,
+    ): Boolean = row in 0 until rows && col in 0 until cols
 
     companion object {
         fun empty(
@@ -127,6 +139,17 @@ data class TableData(
         ): TableData = TableData(rows, cols, List(rows * cols) { "" })
     }
 }
+
+/**
+ * One cell of one table (FR24): which element, and where in its grid. A row and
+ * a column rather than a place in [TableData.cells], because a column added or
+ * taken out would turn the same place into a different row (#53).
+ */
+data class TableCell(
+    val elementId: String,
+    val row: Int,
+    val column: Int,
+)
 
 /**
  * Where an element links to (FR7): a note, by its path, opened at [page] (-1
