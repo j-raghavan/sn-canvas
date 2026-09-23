@@ -22,11 +22,25 @@ enum class StylePalette {
 
     fun solidFill(color: StyleColor): Int = mixWithWhite(stroke(color), SOLID_WHITENESS)
 
+    /**
+     * The two ends of [fill]'s ramp for [color], or null for a fill that is one flat colour (#59).
+     *
+     * A gradient runs from the solid fill to that same colour with its alpha cleared, so it fades to
+     * nothing rather than to white and comes out the same over the page, over an image and in a PDF.
+     */
+    fun gradientEnds(
+        fill: FillStyle,
+        color: StyleColor,
+    ): Pair<Int, Int>? = if (fill == FillStyle.GRADIENT) solidFill(color) to (solidFill(color) and NO_ALPHA) else null
+
     /** The hatch lines of a pattern fill, drawn over [semiFill]. */
     fun patternLine(color: StyleColor): Int = mixWithWhite(stroke(color), PATTERN_WHITENESS)
 
     companion object {
         private const val OPAQUE = 0xFF shl 24
+
+        /** A colour with its alpha cleared; the colour itself is untouched. */
+        private const val NO_ALPHA = 0x00FFFFFF
         private const val DARKEST_GRAY = 0x00
 
         // Light enough to separate 12 levels, dark enough that a thin light stroke still shows on white.

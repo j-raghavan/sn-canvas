@@ -5,7 +5,7 @@
 import React from 'react';
 import {StyleSheet} from 'react-native';
 import ReactTestRenderer, {act} from 'react-test-renderer';
-import {COLORS, DEFAULT_STYLE, type CanvasStyle} from '../src/domain/styles';
+import {COLORS, DEFAULT_STYLE, FILLS, type CanvasStyle} from '../src/domain/styles';
 import StylePanel from '../src/ui/StylePanel';
 
 const renderPanel = (style: CanvasStyle = DEFAULT_STYLE, open = true) => {
@@ -131,4 +131,17 @@ test('opening the panel puts the hints away, and closing it does not do so again
   expect(panel.onOpen).toHaveBeenCalledTimes(1);
   panel.tap('style-toggle');
   expect(panel.onOpen).toHaveBeenCalledTimes(2);
+});
+
+// #59: the fifth fill. The panel offers one button per fill in the catalog, so a fill added to the
+// catalog and nowhere else would leave a style the canvas can hold and the panel cannot choose.
+test('every fill in the catalog has a button, gradient included', () => {
+  const {isSelected} = renderPanel({...DEFAULT_STYLE, fill: 'gradient'});
+  expect(FILLS.map(fill => isSelected(`style-fill-${fill}`))).toEqual(FILLS.map(fill => fill === 'gradient'));
+});
+
+test('choosing the gradient sends it as a style change', () => {
+  const {tap, onChange} = renderPanel();
+  tap('style-fill-gradient');
+  expect(onChange).toHaveBeenCalledWith('fill', 'gradient');
 });

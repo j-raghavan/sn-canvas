@@ -38,6 +38,7 @@ const FILL_OPTIONS: Record<FillId, {label: string; icon: ImageSourcePropType}> =
   semi: {label: 'Semi fill', icon: require('../../assets/icons/fill-semi.png')},
   solid: {label: 'Solid fill', icon: require('../../assets/icons/fill-solid.png')},
   pattern: {label: 'Pattern fill', icon: require('../../assets/icons/fill-pattern.png')},
+  gradient: {label: 'Gradient fill', icon: require('../../assets/icons/fill-gradient.png')},
 };
 
 const DASH_OPTIONS: Record<DashId, {label: string; icon: ImageSourcePropType}> = {

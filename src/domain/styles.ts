@@ -19,7 +19,7 @@ export const COLORS = [
 
 export type ColorId = (typeof COLORS)[number]['id'];
 
-export const FILLS = ['none', 'semi', 'solid', 'pattern'] as const;
+export const FILLS = ['none', 'semi', 'solid', 'pattern', 'gradient'] as const;
 export type FillId = (typeof FILLS)[number];
 
 export const DASHES = ['draw', 'dashed', 'dotted', 'solid'] as const;

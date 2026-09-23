@@ -1,29 +1,122 @@
 {
   "_comment": "The style panel's catalog (FR19), the single source both src/domain/styles.ts and CanvasStyle.kt assert their own copy against in tests, so the two can't silently drift apart. Not read at runtime by either side.",
   "colors": [
-    {"id": "black", "name": "Black", "hex": "#1d1d1d"},
-    {"id": "grey", "name": "Grey", "hex": "#9fa8b2"},
-    {"id": "light-violet", "name": "Light violet", "hex": "#e085f4"},
-    {"id": "violet", "name": "Violet", "hex": "#ae3ec9"},
-    {"id": "blue", "name": "Blue", "hex": "#4465e9"},
-    {"id": "light-blue", "name": "Light blue", "hex": "#4ba1f1"},
-    {"id": "yellow", "name": "Yellow", "hex": "#f1ac4b"},
-    {"id": "orange", "name": "Orange", "hex": "#e16919"},
-    {"id": "green", "name": "Green", "hex": "#099268"},
-    {"id": "light-green", "name": "Light green", "hex": "#4cb05e"},
-    {"id": "light-red", "name": "Light red", "hex": "#f87777"},
-    {"id": "red", "name": "Red", "hex": "#e03131"}
+    {
+      "id": "black",
+      "name": "Black",
+      "hex": "#1d1d1d"
+    },
+    {
+      "id": "grey",
+      "name": "Grey",
+      "hex": "#9fa8b2"
+    },
+    {
+      "id": "light-violet",
+      "name": "Light violet",
+      "hex": "#e085f4"
+    },
+    {
+      "id": "violet",
+      "name": "Violet",
+      "hex": "#ae3ec9"
+    },
+    {
+      "id": "blue",
+      "name": "Blue",
+      "hex": "#4465e9"
+    },
+    {
+      "id": "light-blue",
+      "name": "Light blue",
+      "hex": "#4ba1f1"
+    },
+    {
+      "id": "yellow",
+      "name": "Yellow",
+      "hex": "#f1ac4b"
+    },
+    {
+      "id": "orange",
+      "name": "Orange",
+      "hex": "#e16919"
+    },
+    {
+      "id": "green",
+      "name": "Green",
+      "hex": "#099268"
+    },
+    {
+      "id": "light-green",
+      "name": "Light green",
+      "hex": "#4cb05e"
+    },
+    {
+      "id": "light-red",
+      "name": "Light red",
+      "hex": "#f87777"
+    },
+    {
+      "id": "red",
+      "name": "Red",
+      "hex": "#e03131"
+    }
   ],
-  "fills": ["none", "semi", "solid", "pattern"],
-  "dashes": ["draw", "dashed", "dotted", "solid"],
-  "imageDashes": ["draw", "dashed", "dotted", "solid", "none"],
+  "fills": [
+    "none",
+    "semi",
+    "solid",
+    "pattern",
+    "gradient"
+  ],
+  "dashes": [
+    "draw",
+    "dashed",
+    "dotted",
+    "solid"
+  ],
+  "imageDashes": [
+    "draw",
+    "dashed",
+    "dotted",
+    "solid",
+    "none"
+  ],
   "sizes": [
-    {"id": "s", "strokeWidth": 2.0, "fontSize": 18.0},
-    {"id": "m", "strokeWidth": 3.5, "fontSize": 24.0},
-    {"id": "l", "strokeWidth": 5.0, "fontSize": 36.0},
-    {"id": "xl", "strokeWidth": 10.0, "fontSize": 44.0}
+    {
+      "id": "s",
+      "strokeWidth": 2.0,
+      "fontSize": 18.0
+    },
+    {
+      "id": "m",
+      "strokeWidth": 3.5,
+      "fontSize": 24.0
+    },
+    {
+      "id": "l",
+      "strokeWidth": 5.0,
+      "fontSize": 36.0
+    },
+    {
+      "id": "xl",
+      "strokeWidth": 10.0,
+      "fontSize": 44.0
+    }
   ],
-  "opacitySteps": [0.1, 0.25, 0.5, 0.75, 1],
+  "opacitySteps": [
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1
+  ],
   "minOpacity": 0.1,
-  "defaultStyle": {"color": "black", "opacity": 1, "fill": "none", "dash": "draw", "size": "m"}
+  "defaultStyle": {
+    "color": "black",
+    "opacity": 1,
+    "fill": "none",
+    "dash": "draw",
+    "size": "m"
+  }
 }

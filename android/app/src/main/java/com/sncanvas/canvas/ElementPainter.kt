@@ -3,9 +3,11 @@ package com.sncanvas.canvas
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Shader
 
 /**
  * Paints one element in its style (FR19): shapes and connectors with colour
@@ -48,6 +50,9 @@ internal class ElementPainter(
             strokeJoin = Paint.Join.ROUND
             isAntiAlias = true
         }
+
+    /** The gradient fill's own paint (#59): see [drawFill] for why it is not [fillPaint]. */
+    private val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
     private val fillPaint =
         Paint().apply {
@@ -205,14 +210,23 @@ internal class ElementPainter(
         style: ShapeStyle,
         palette: StylePalette,
     ) {
-        fillPaint.color =
+        val ends = palette.gradientEnds(style.fill, style.color)
+        // A paint of its own for the gradient, because fillPaint is shared with the missing-image
+        // fill, which sets no shader: one left on it would tint whatever was drawn next (#59).
+        val paint = if (ends == null) fillPaint else gradientPaint
+        paint.color =
             when (style.fill) {
                 FillStyle.NONE -> return
                 FillStyle.SEMI, FillStyle.PATTERN -> palette.semiFill(style.color)
-                FillStyle.SOLID -> palette.solidFill(style.color)
+                FillStyle.SOLID, FillStyle.GRADIENT -> palette.solidFill(style.color)
             }
-        fillPaint.alpha = style.alpha
-        canvas.drawPath(outline, fillPaint)
+        // Drawn down the shape in the canvas's own space, so it turns with a rotated shape rather
+        // than staying upright against it.
+        if (ends != null) {
+            paint.shader = LinearGradient(0f, bounds.top, 0f, bounds.bottom, ends.first, ends.second, Shader.TileMode.CLAMP)
+        }
+        paint.alpha = style.alpha
+        canvas.drawPath(outline, paint)
         if (style.fill == FillStyle.PATTERN) hatch(canvas, outline, bounds, palette.patternLine(style.color), style.alpha)
     }
 

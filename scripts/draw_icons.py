@@ -93,9 +93,21 @@ def action_more():
 SQUARE = (26, 26, 102, 102)
 
 
-def fill_icon(name, interior_alpha=0, hatched=False):
-    """A square in each fill style (FR19): outline only, a light interior, a solid one, or hatched."""
+def fill_icon(name, interior_alpha=0, hatched=False, gradient=False):
+    """A square in each fill style (FR19): outline only, a light interior, a solid one, hatched, or
+    fading down the square (#59)."""
     image, draw = new_canvas()
+    if gradient:
+        # A column of rows, each a little fainter than the last, kept inside the square.
+        ramp = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        ramp_draw = ImageDraw.Draw(ramp)
+        top, bottom = SQUARE[1], SQUARE[3]
+        for y in range(top, bottom):
+            fade = 1 - (y - top) / (bottom - top)
+            ramp_draw.line(scaled((SQUARE[0], y, SQUARE[2], y)), fill=(0, 0, 0, round(215 * fade)), width=SCALE)
+        mask = Image.new("L", image.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle(scaled(SQUARE), radius=10 * SCALE, fill=255)
+        image.paste(ramp, (0, 0), Image.composite(ramp, Image.new("RGBA", image.size), mask))
     if interior_alpha:
         draw.rounded_rectangle(scaled(SQUARE), radius=10 * SCALE, fill=(0, 0, 0, interior_alpha))
     if hatched:
@@ -270,6 +282,7 @@ ICONS = [
     lambda: fill_icon("fill-semi", interior_alpha=80),
     lambda: fill_icon("fill-solid", interior_alpha=255),
     lambda: fill_icon("fill-pattern", hatched=True),
+    lambda: fill_icon("fill-gradient", gradient=True),
     lambda: dash_icon("dash-draw", "draw"),
     lambda: dash_icon("dash-dashed", "dashed"),
     lambda: dash_icon("dash-dotted", "dotted"),

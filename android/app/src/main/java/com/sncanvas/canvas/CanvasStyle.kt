@@ -42,6 +42,9 @@ enum class FillStyle(
     SEMI("semi"),
     SOLID("solid"),
     PATTERN("pattern"),
+
+    /** The shape's colour, solid at the top and fading to nothing at the bottom (#59). */
+    GRADIENT("gradient"),
 }
 
 enum class DashStyle(
