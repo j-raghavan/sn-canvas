@@ -162,6 +162,10 @@ test('every row spans the panel and spreads its own options across it', () => {
   // One absolute, because the line above moves with whatever the cell is: without this, a cell
   // shrunk to fit a sixth fill would keep the panel honest and the icons unreadable. 44 is the cell
   // the icons were drawn for, so a change here is a decision, not a side effect.
+  //
+  // Deliberately the number and not OPTION_WIDTH, which is why that constant stays unexported while
+  // COLORS_PER_ROW is exported: this assertion's whole job is to be the one thing here that does not
+  // derive. Reading the same constant on both sides would assert nothing at all.
   expect(look('style-fill-none').width).toBe(44);
   // Every row, not just the colours: each row had to be named for this to mean what it says, since
   // a row centred on its own would leave the others flush and nothing would have caught it.
