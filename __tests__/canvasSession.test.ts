@@ -977,11 +977,28 @@ describe('links to notes', () => {
       expect(logger.lines).toContain('warn [SNCANVAS][LINK] could not switch to canvas=c-other');
     });
 
-    test('a link to the canvas already shown goes nowhere, and leaves no step to come back along', async () => {
-      const {session} = await twoCanvases();
+    // Taps queue and the screen is slow, so tapping a glyph twice is ordinary. The second is nothing
+    // to do, not a failure: saying the canvas has gone about one on screen would be a lie.
+    test('a link to the canvas already shown does nothing, and is not reported as a failure', async () => {
+      const {session, logger} = await twoCanvases();
       const here = session.currentCanvasId();
-      expect(await session.followLink({kind: 'canvas', target: here, page: -1})).toBe(false);
+      expect(await session.followLink({kind: 'canvas', target: here, page: -1})).toBe(true);
       expect(session.currentCanvasId()).toBe(here);
+      expect(session.backTo()).toBeNull();
+      expect(logger.lines).toContain(`log [SNCANVAS][LINK] canvas=${here} is the one shown; nothing to switch to`);
+      expect(logger.lines.some(line => line.includes('could not switch to'))).toBe(false);
+    });
+
+    test('tapping the same link twice switches once and leaves one step, not two', async () => {
+      const {session} = await twoCanvases();
+      const from = session.currentCanvasId();
+      const toOther = {kind: 'canvas', target: 'c-other', page: -1} as const;
+      expect(await session.followLink(toOther)).toBe(true);
+      expect(await session.followLink(toOther)).toBe(true);
+      expect(session.currentCanvasId()).toBe('c-other');
+      expect(session.backTo()).toEqual({notePath: '/note.note', page: 0, kind: 'canvas', canvasId: from});
+      await session.goBack();
+      expect(session.currentCanvasId()).toBe(from);
       expect(session.backTo()).toBeNull();
     });
   });

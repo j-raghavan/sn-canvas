@@ -79,14 +79,18 @@ export function createLinkNavigation({
    * make it the note's own, losing the place the note had.
    */
   const followToCanvas = async (link: ElementLink): Promise<boolean> => {
+    // Being on it already is not a failure: taps queue, and the e-ink screen is slow enough that a
+    // second tap on a glyph is ordinary. Saying the canvas has gone about one on screen is not (#2).
     let switched = false;
+    let alreadyHere = false;
     await serially(async () => {
       const dir = await canvasDir();
       if (dir === null) {
         return;
       }
       const from = shown.id();
-      if (link.target === from || !(await canvasExists(dir, link.target))) {
+      alreadyHere = link.target === from;
+      if (alreadyHere || !(await canvasExists(dir, link.target))) {
         return;
       }
       const at = await host.currentPage();
@@ -96,6 +100,10 @@ export function createLinkNavigation({
         trail = withStep(trail, {...at, kind: 'canvas', canvasId: from});
       }
     });
+    if (alreadyHere) {
+      logger.log(`${TAG}[LINK] canvas=${link.target} is the one shown; nothing to switch to`);
+      return true;
+    }
     report(switched, `${TAG}[LINK] ${switched ? 'switched to' : 'could not switch to'} canvas=${link.target}`);
     return switched;
   };
