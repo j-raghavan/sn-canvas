@@ -346,6 +346,38 @@ describe('each note has its own canvas', () => {
     expect([...later.store.files.values()]).toContain('drawn with no note known');
   });
 
+  // #49: an index naming a canvas shown with no note known is not one an older build wrote, whatever
+  // else it says. The app never writes this pair, but a half-written or hand-edited links.json can
+  // hold it, and the guess it would otherwise fall into hands over the drawing.
+  test('an index that says a canvas is nobody s is not mistaken for an older build s', async () => {
+    const {store, host, session} = setup({
+      [canvasFile('c-9')]: 'drawn with no note known',
+      [INDEX]: JSON.stringify({lastCanvasId: null, lastByNote: {}, canvasesByNote: {}, shownWithoutANote: ['c-9']}),
+    });
+    host.page = {notePath: '/b.note', page: 0};
+    await session.open(500);
+    expect(store.shown).not.toBe('drawn with no note known');
+  });
+
+  // #49: once the scratch canvas has been drawn on with no note known it is nobody's, and every
+  // note gets one of its own from then on. That is a quiet change in behaviour, so the log says why
+  // rather than leaving a device log showing only that notes stopped being given it.
+  test('the scratch canvas being nobody s is said out loud, not just acted on', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = null;
+    await session.open(500);
+    store.shown = 'drawn with no note known';
+    await session.close();
+
+    const later = setup(Object.fromEntries(store.files));
+    later.host.page = {notePath: '/a.note', page: 0};
+    await later.session.open(500);
+    expect(later.session.currentCanvasId()).not.toBe('default');
+    expect(later.logger.lines).toContain(
+      "log [SNCANVAS] the scratch canvas was drawn with no note known, so it stays nobody's",
+    );
+  });
+
   // The upgrade this cannot break: an index from a build before #49 has a last canvas and no note
   // records, which is what a canvas nobody owns also looks like on disk. That one must still be
   // adopted, or everyone upgrading loses whatever was in it.

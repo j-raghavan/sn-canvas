@@ -249,8 +249,15 @@ export function createCanvasSession({
     // The scratch canvas goes to the first note to ask for it and stays that note's, even once it has moved on
     // to another canvas, because its file still holds what was drawn on it (#46). It is free again only once
     // Save to Note has given it an id of its own and deleted the file, which retires the id it had.
-    if (isScratchCanvasFree(await loadIndex(dir))) {
+    const current = await loadIndex(dir);
+    if (isScratchCanvasFree(current)) {
       return DEFAULT_CANVAS_ID;
+    }
+    if (current.shownWithoutANote.includes(DEFAULT_CANVAS_ID)) {
+      // Worth saying out loud: it was drawn on once when nothing could say which note was open, so
+      // it is nobody's and no note is given it again. Every note gets one of its own from then on,
+      // and without this line the log shows only that, with nothing about why (#49).
+      logger.log(`${TAG} the scratch canvas was drawn with no note known, so it stays nobody's`);
     }
     logger.log(`${TAG} no canvas for this note yet: a new one`);
     return newCanvasId();
