@@ -280,7 +280,13 @@ class CanvasModule(
     }
 }
 
-/** Writes [elements] to [path] as canvas JSON, making its folder as needed; true once written. */
+/**
+ * Writes [elements] to [path] as canvas JSON, making its folder as needed; true once written.
+ *
+ * Never returns false: it writes or it throws. [saveCanvasAs] puts the view's binding back only on
+ * the throwing path, so a write that failed quietly would leave the view bound to a file it never
+ * wrote, and the session would go on saving somewhere the drawing is not (#51).
+ */
 private fun writeCanvas(
     path: String,
     elements: List<Element>,

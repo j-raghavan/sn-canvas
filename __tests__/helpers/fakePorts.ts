@@ -12,6 +12,14 @@ export type FakeStore = CanvasStorePort & {
   files: Map<string, string>;
   shown: string;
   failing: Set<keyof CanvasStorePort>;
+  /**
+   * Paths a saveAs is set to fail for, when one save of several has to fail and the rest go through:
+   * putting the scratch canvas back after the note refused its thumbnail is the second saveAs of a
+   * save to note, and it is the one that strands the drawing (#51).
+   */
+  failSaveAsTo: Set<string>;
+  /** Paths a remove is set to fail for, when one file of several will not go (#51). */
+  failRemoveOf: Set<string>;
   /** The note's pen the canvas would set back. */
   notePen: NotePen | null;
   /** The images folder of the canvas shown. */
@@ -31,6 +39,8 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
   let held: string | null = null;
   const files = new Map(Object.entries(initial));
   const failing = new Set<keyof CanvasStorePort>();
+  const failSaveAsTo = new Set<string>();
+  const failRemoveOf = new Set<string>();
   const write = (path: string, content: string) => {
     files.delete(path);
     files.set(path, content);
@@ -38,6 +48,8 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
   const store: FakeStore = {
     files,
     failing,
+    failSaveAsTo,
+    failRemoveOf,
     shown: '',
     notePen: null,
     imageDir: null,
@@ -87,7 +99,7 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       return true;
     },
     async saveAs(path) {
-      if (failing.has('saveAs')) {
+      if (failing.has('saveAs') || failSaveAsTo.has(path)) {
         return false;
       }
       write(path, store.shown);
@@ -100,7 +112,7 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
     async remove(path) {
       // As the device reports it (CanvasModule.deleteCanvas is `delete() || !exists()`): a file that was
       // never there is already gone. Only a delete that leaves the file behind answers false.
-      if (failing.has('remove')) {
+      if (failing.has('remove') || failRemoveOf.has(path)) {
         return false;
       }
       files.delete(path);
