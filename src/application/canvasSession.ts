@@ -30,6 +30,8 @@ import {
   parseCanvasIndex,
   serializeCanvasIndex,
   lastCanvasFor,
+  mayNoteHave,
+  withCanvasShownWithoutANote,
   withLastCanvas,
   type CanvasIndex,
   type NotePage,
@@ -237,7 +239,9 @@ export function createCanvasSession({
       Object.keys(saved.lastByNote).length === 0 &&
       Object.keys(saved.canvasesByNote).length === 0;
     if (at === null || nothingRecorded) {
-      const newest = await newestCanvas(store, dir);
+      // Only one this note may be shown: the newest file on disk may be another note's, or one
+      // drawn when nothing knew whose it was (#46, #49).
+      const newest = await newestCanvas(store, dir, id => mayNoteHave(saved, at?.notePath ?? null, id));
       if (newest !== null || at === null) {
         return newest ?? DEFAULT_CANVAS_ID;
       }
@@ -245,8 +249,15 @@ export function createCanvasSession({
     // The scratch canvas goes to the first note to ask for it and stays that note's, even once it has moved on
     // to another canvas, because its file still holds what was drawn on it (#46). It is free again only once
     // Save to Note has given it an id of its own and deleted the file, which retires the id it had.
-    if (isScratchCanvasFree(await loadIndex(dir))) {
+    const current = await loadIndex(dir);
+    if (isScratchCanvasFree(current)) {
       return DEFAULT_CANVAS_ID;
+    }
+    if (current.shownWithoutANote.includes(DEFAULT_CANVAS_ID)) {
+      // Worth saying out loud: it was drawn on once when nothing could say which note was open, so
+      // it is nobody's and no note is given it again. Every note gets one of its own from then on,
+      // and without this line the log shows only that, with nothing about why (#49).
+      logger.log(`${TAG} the scratch canvas was drawn with no note known, so it stays nobody's`);
     }
     logger.log(`${TAG} no canvas for this note yet: a new one`);
     return newCanvasId();
@@ -331,7 +342,11 @@ export function createCanvasSession({
     canvasId = target;
     hasOpened = true;
     await store.load(canvasFilePath(dir, canvasId), imagesPath(dir));
-    await updateIndex(dir, current => withLastCanvas(current, canvasId, at?.notePath ?? null));
+    // Shown with no note to go by is the one case nothing knows the owner of, so it is written down
+    // as such and no later note is handed it (#49).
+    await updateIndex(dir, current =>
+      at === null ? withCanvasShownWithoutANote(current, canvasId) : withLastCanvas(current, canvasId, at.notePath),
+    );
   };
 
   /**

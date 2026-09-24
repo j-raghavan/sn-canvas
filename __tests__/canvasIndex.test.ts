@@ -12,11 +12,13 @@ import {
   withoutCanvas,
   lastCanvasFor,
   elementSummary,
+  isFreeToAdopt,
   notePageOf,
   numberOf,
   parseCanvasIndex,
   pictureNumbersOf,
   serializeCanvasIndex,
+  withCanvasShownWithoutANote,
   withLastCanvas,
   withPending,
   pendingOn,
@@ -345,6 +347,54 @@ describe('which canvases a note has claimed (#46)', () => {
 
   test('a canvas shown with no note to go by is claimed by nobody', () => {
     expect(belongsToANote(withLastCanvas(EMPTY_INDEX, 'c-1', null), 'c-1')).toBe(false);
+  });
+
+  // #49: belonging to no note and being free for a note to take are different questions. A canvas
+  // drawn when nothing knew which note was open belongs to nobody and stays nobody's, or the next
+  // note to ask is shown a drawing it never made and loses it the moment it saves.
+  test('a canvas nobody owns is not free for a note to take', () => {
+    const nobodys = withCanvasShownWithoutANote(EMPTY_INDEX, 'c-1');
+    expect(belongsToANote(nobodys, 'c-1')).toBe(false);
+    expect(isFreeToAdopt(nobodys, 'c-1')).toBe(false);
+    expect(lastCanvasFor(nobodys, '/other.note')).toBeNull();
+  });
+
+  // The upgrade case, and the reason this is written down rather than worked out when it is read.
+  // An index from a build before #49 holds a last canvas and no note records at all, which is what a
+  // canvas nobody owns also looks like. That one has to stay adoptable or the drawing in it is
+  // orphaned; it is told apart by the older build having had nowhere to write the canvas down.
+  test("an older build's last canvas is still adopted by the first note to ask", () => {
+    const upgraded = parseCanvasIndex(JSON.stringify({lastCanvasId: 'default', lastByNote: {}, canvasesByNote: {}}));
+    expect(upgraded.shownWithoutANote).toEqual([]);
+    expect(isFreeToAdopt(upgraded, 'default')).toBe(true);
+    expect(lastCanvasFor(upgraded, '/note.note')).toBe('default');
+  });
+
+  // Every open and every switch writes this, not once a session, so without the dedupe a sitting
+  // that switches between two canvases with no note known adds an entry per switch, for good.
+  test('a canvas shown without a note twice is written down once', () => {
+    const once = withCanvasShownWithoutANote(EMPTY_INDEX, 'default');
+    expect(withCanvasShownWithoutANote(once, 'default').shownWithoutANote).toEqual(['default']);
+  });
+
+  test('a note taking a canvas nobody owned makes it that note s, and no longer nobody s', () => {
+    const nobodys = withCanvasShownWithoutANote(EMPTY_INDEX, 'c-1');
+    const claimed = withLastCanvas(nobodys, 'c-1', '/note.note');
+    expect(claimed.shownWithoutANote).toEqual([]);
+    expect(belongsToANote(claimed, 'c-1')).toBe(true);
+  });
+
+  test('a retired id belongs to nobody either, so the next note may have it', () => {
+    const nobodys = withCanvasShownWithoutANote(EMPTY_INDEX, 'default');
+    expect(withoutCanvas(nobodys, 'default').shownWithoutANote).toEqual([]);
+    expect(isFreeToAdopt(withoutCanvas(nobodys, 'default'), 'default')).toBe(true);
+  });
+
+  test('what nobody owns survives a save and load, and rubbish in it is dropped', () => {
+    const saved = serializeCanvasIndex(withCanvasShownWithoutANote(EMPTY_INDEX, 'c-1'));
+    expect(parseCanvasIndex(saved).shownWithoutANote).toEqual(['c-1']);
+    expect(parseCanvasIndex(JSON.stringify({shownWithoutANote: ['c-1', 'not a canvas', 7, null]})).shownWithoutANote).toEqual(['c-1']);
+    expect(parseCanvasIndex(JSON.stringify({shownWithoutANote: 'nope'})).shownWithoutANote).toEqual([]);
   });
 
   test('retiring an id takes it out of every note that showed it, and off the plain last canvas', () => {

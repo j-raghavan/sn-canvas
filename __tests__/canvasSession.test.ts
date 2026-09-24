@@ -39,7 +39,12 @@ const setup = (files: Record<string, string> = {}, {installedJustNow = false} = 
     badge,
     logger,
     newCanvasId: () => {
-      minted += 1;
+      // Never onto a file already saved, as the real mint cannot be: ids carry the clock. The
+      // counter restarts with each setup, so a second session in one test would otherwise mint c-1
+      // again and quietly open the first session's canvas instead of a new one.
+      do {
+        minted += 1;
+      } while (store.files.has(canvasFile(`c-${minted}`)));
       return `c-${minted}`;
     },
   });
@@ -299,6 +304,91 @@ describe('each note has its own canvas', () => {
     host.lassoed = [];
     await session.open(500);
     expect(store.shown).toBe('nine');
+  });
+
+  // #49, the reproduction from the issue. Drawing with no note known used to leave the canvas
+  // recorded as last open and against nobody, so the next note to ask was handed it, shown the
+  // drawing, and took it over: saving to that note deleted the file the drawing was in.
+  test('a canvas drawn when no note is known is not handed to the next note', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = null;
+    await session.open(500);
+    store.shown = 'drawn with no note known';
+    await session.close();
+
+    const later = setup(Object.fromEntries(store.files));
+    later.host.page = {notePath: '/b.note', page: 0};
+    await later.session.open(500);
+    expect(later.store.shown).not.toBe('drawn with no note known');
+    // And it is still on disk: refused to the wrong note, not thrown away.
+    expect([...later.store.files.values()]).toContain('drawn with no note known');
+  });
+
+  // #49: Open Canvas on a thumbnail nothing names falls back to the newest canvas saved. That guess
+  // has to be one this note may be shown, or it hands over a drawing nobody knew the owner of, and
+  // recording it against the note that was handed it erases the very mark that should have refused.
+  test('the newest canvas is only guessed at when this note may be shown it', async () => {
+    // A canvas shown with no note to go by, drawn on and left: nothing knows whose it is.
+    const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
+    host.page = null;
+    await session.open(500);
+    store.shown = 'drawn with no note known';
+    await session.close();
+
+    // Another note lassoes a picture nothing identifies: no tag, no pending link waiting.
+    const later = setup(Object.fromEntries(store.files));
+    later.host.page = {notePath: '/a.note', page: 0};
+    later.host.lassoed = [lassoedPicture(7)];
+    await later.session.open(501);
+    expect(later.store.shown).not.toBe('drawn with no note known');
+    await later.session.close();
+    // And the drawing is still there, with nobody's mark on it rather than that note's.
+    expect([...later.store.files.values()]).toContain('drawn with no note known');
+  });
+
+  // #49: an index naming a canvas shown with no note known is not one an older build wrote, whatever
+  // else it says. The app never writes this pair, but a half-written or hand-edited links.json can
+  // hold it, and the guess it would otherwise fall into hands over the drawing.
+  test('an index that says a canvas is nobody s is not mistaken for an older build s', async () => {
+    const {store, host, session} = setup({
+      [canvasFile('c-9')]: 'drawn with no note known',
+      [INDEX]: JSON.stringify({lastCanvasId: null, lastByNote: {}, canvasesByNote: {}, shownWithoutANote: ['c-9']}),
+    });
+    host.page = {notePath: '/b.note', page: 0};
+    await session.open(500);
+    expect(store.shown).not.toBe('drawn with no note known');
+  });
+
+  // #49: once the scratch canvas has been drawn on with no note known it is nobody's, and every
+  // note gets one of its own from then on. That is a quiet change in behaviour, so the log says why
+  // rather than leaving a device log showing only that notes stopped being given it.
+  test('the scratch canvas being nobody s is said out loud, not just acted on', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = null;
+    await session.open(500);
+    store.shown = 'drawn with no note known';
+    await session.close();
+
+    const later = setup(Object.fromEntries(store.files));
+    later.host.page = {notePath: '/a.note', page: 0};
+    await later.session.open(500);
+    expect(later.session.currentCanvasId()).not.toBe('default');
+    expect(later.logger.lines).toContain(
+      "log [SNCANVAS] the scratch canvas was drawn with no note known, so it stays nobody's",
+    );
+  });
+
+  // The upgrade this cannot break: an index from a build before #49 has a last canvas and no note
+  // records, which is what a canvas nobody owns also looks like on disk. That one must still be
+  // adopted, or everyone upgrading loses whatever was in it.
+  test("a canvas an older build left as its last is still the first asking note's", async () => {
+    const {store, host, session} = setup({
+      [SCRATCH]: 'drawn before the upgrade',
+      [INDEX]: JSON.stringify({lastCanvasId: 'default', pending: []}),
+    });
+    host.page = {notePath: '/b.note', page: 0};
+    await session.open(500);
+    expect(store.shown).toBe('drawn before the upgrade');
   });
 });
 
@@ -633,8 +723,18 @@ describe('links back to a canvas', () => {
     await session.open(null);
     expect(await session.saveToNote()).toBe('inserted');
     await session.close();
-    // With no note to go by, nothing is recorded against one either.
-    expect(savedIndex(store)).toEqual({canvasesByNote: {}, lastByNote: {}, lastCanvasId: 'c-1', pending: []});
+    // With no note to go by, nothing is recorded against one either. The canvas is written down as
+    // nobody's instead, so no later note is handed it (#49); the retired scratch id is not, because
+    // a retired id belongs to no one at all.
+    expect(savedIndex(store)).toEqual({
+      canvasesByNote: {},
+      lastByNote: {},
+      lastCanvasId: 'c-1',
+      // Not marked as shown without a note: the thumbnail did go into a note, so that note owns it
+      // and must be able to reopen it, even though the page could not be read to say which (#49).
+      shownWithoutANote: [],
+      pending: [],
+    });
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] no note page; Open Canvas on this thumbnail will show the newest canvas',
     );
@@ -671,6 +771,7 @@ describe('links back to a canvas', () => {
       canvasesByNote: {'/note.note': ['default']},
       lastByNote: {'/note.note': 'default'},
       lastCanvasId: 'default',
+      shownWithoutANote: [],
       pending: [],
     });
   });
@@ -820,9 +921,9 @@ describe('saveToNote', () => {
     );
   });
 
-  // #51 meeting #49: with no note to record the rescued canvas against, it is left out of the index
-  // rather than recorded against nobody. A canvas belonging to no note is handed to the first note
-  // that asks, which would show it this drawing and write over it the moment it saved.
+  // #51 meeting #49: with no note to record the rescued canvas against, it is written down as shown
+  // without one. That is what keeps the next note that asks from being handed it, which would show
+  // that note this drawing and write over it the moment it saved.
   test('a rescued drawing with no note to name is not left for another note to take', async () => {
     const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
     host.page = null;
@@ -835,6 +936,9 @@ describe('saveToNote', () => {
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] no note to record canvas=c-1 against; it is saveable but nothing reopens it',
     );
+    // Written down as nobody's rather than left out of the index: that is what keeps another note
+    // from being handed it, and it means the index knows the drawing is there (#49).
+    expect(savedIndex(store).shownWithoutANote).toContain('c-1');
     // And the log still says the canvas changed, because it did: unrecorded is not unchanged.
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] save to note failed; default could not be put back, so the drawing is canvas=c-1',
