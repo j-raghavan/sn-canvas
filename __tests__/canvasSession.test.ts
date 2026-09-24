@@ -878,6 +878,9 @@ describe('saveToNote', () => {
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] no note to record canvas=c-1 against; it is saveable but nothing reopens it',
     );
+    // Written down as nobody's rather than left out of the index: that is what keeps another note
+    // from being handed it, and it means the index knows the drawing is there (#49).
+    expect(savedIndex(store).unowned).toContain('c-1');
     // And the log still says the canvas changed, because it did: unrecorded is not unchanged.
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] save to note failed; default could not be put back, so the drawing is canvas=c-1',

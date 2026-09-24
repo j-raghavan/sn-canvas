@@ -177,17 +177,14 @@ export function createNoteThumbnails({
     // The thumbnail stays: the drawing is this canvas now, so the picture rendered of it is a true
     // one, and it is what the note's canvas list draws until the next save renders another.
     shown.rename(linkedId);
+    // Recorded either way: against the note when there is one, and as nobody's when there is not,
+    // which keeps it from being handed to the next note that asks (#49). Nothing reopens a canvas
+    // nobody owns, but the drawing is safe in it and the index knows it is there.
     const into = at ?? (await host.currentPage());
     if (into === null) {
-      // Nothing to record it against, and recording it against nobody is worse than not recording
-      // it: withLastCanvas with no note sets only lastCanvasId, which leaves the canvas belonging to
-      // no one, and a canvas belonging to no one is handed to the first note that asks (#49). That
-      // note would then show this drawing and write over it. The session can still save to it, so
-      // the drawing is safe where it is; it is reaching it again that is lost.
       logger.warn(`${TAG}[LINK] no note to record canvas=${linkedId} against; it is saveable but nothing reopens it`);
-      return linkedId;
     }
-    await index.update(dir, current => withLastCanvas(current, linkedId, into.notePath));
+    await index.update(dir, current => withLastCanvas(current, linkedId, into?.notePath ?? null));
     return linkedId;
   };
 
