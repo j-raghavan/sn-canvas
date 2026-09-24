@@ -27,12 +27,15 @@ const lassoedPicture = (num: number, userData?: string) => ({
 const indexWith = (index: {lastCanvasId?: string}) => JSON.stringify({lastCanvasId: null, pending: [], ...index});
 const savedIndex = (store: {files: Map<string, string>}) => JSON.parse(String(store.files.get(INDEX)));
 
-const setup = (files: Record<string, string> = {}, {installedJustNow = false} = {}) => {
+// mintFrom gives a second session in one test an id space of its own: the counter restarts with each
+// setup, so two sessions would otherwise both mint c-1 and a fresh canvas would land on the earlier
+// one's file. Real ids come from the clock and a random suffix, so they do not collide.
+const setup = (files: Record<string, string> = {}, {installedJustNow = false, mintFrom = 0} = {}) => {
   const store = createFakeStore(installedJustNow ? files : {[MARKER]: 'opened', ...files});
   const host = createFakeHost();
   const badge = createFakeBadge();
   const logger = createRecordingLogger();
-  let minted = 0;
+  let minted = mintFrom;
   const session = createCanvasSession({
     store,
     host,
@@ -299,6 +302,37 @@ describe('each note has its own canvas', () => {
     host.lassoed = [];
     await session.open(500);
     expect(store.shown).toBe('nine');
+  });
+
+  // #49, the reproduction from the issue. Drawing with no note known used to leave the canvas
+  // recorded as last open and against nobody, so the next note to ask was handed it, shown the
+  // drawing, and took it over: saving to that note deleted the file the drawing was in.
+  test('a canvas drawn when no note is known is not handed to the next note', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = null;
+    await session.open(500);
+    store.shown = 'drawn with no note known';
+    await session.close();
+
+    const later = setup(Object.fromEntries(store.files), {mintFrom: 50});
+    later.host.page = {notePath: '/b.note', page: 0};
+    await later.session.open(500);
+    expect(later.store.shown).not.toBe('drawn with no note known');
+    // And it is still on disk: refused to the wrong note, not thrown away.
+    expect([...later.store.files.values()]).toContain('drawn with no note known');
+  });
+
+  // The upgrade this cannot break: an index from a build before #49 has a last canvas and no note
+  // records, which is what a canvas nobody owns also looks like on disk. That one must still be
+  // adopted, or everyone upgrading loses whatever was in it.
+  test("a canvas an older build left as its last is still the first asking note's", async () => {
+    const {store, host, session} = setup({
+      [SCRATCH]: 'drawn before the upgrade',
+      [INDEX]: JSON.stringify({lastCanvasId: 'default', pending: []}),
+    });
+    host.page = {notePath: '/b.note', page: 0};
+    await session.open(500);
+    expect(store.shown).toBe('drawn before the upgrade');
   });
 });
 
@@ -633,8 +667,16 @@ describe('links back to a canvas', () => {
     await session.open(null);
     expect(await session.saveToNote()).toBe('inserted');
     await session.close();
-    // With no note to go by, nothing is recorded against one either.
-    expect(savedIndex(store)).toEqual({canvasesByNote: {}, lastByNote: {}, lastCanvasId: 'c-1', pending: []});
+    // With no note to go by, nothing is recorded against one either. The canvas is written down as
+    // nobody's instead, so no later note is handed it (#49); the retired scratch id is not, because
+    // a retired id belongs to no one at all.
+    expect(savedIndex(store)).toEqual({
+      canvasesByNote: {},
+      lastByNote: {},
+      lastCanvasId: 'c-1',
+      unowned: ['c-1'],
+      pending: [],
+    });
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] no note page; Open Canvas on this thumbnail will show the newest canvas',
     );
@@ -671,6 +713,7 @@ describe('links back to a canvas', () => {
       canvasesByNote: {'/note.note': ['default']},
       lastByNote: {'/note.note': 'default'},
       lastCanvasId: 'default',
+      unowned: [],
       pending: [],
     });
   });
@@ -842,7 +885,7 @@ describe('saveToNote', () => {
     await session.close();
 
     // Another note opens Canvas: it must get one of its own, not the drawing it never made.
-    const next = setup(Object.fromEntries(store.files));
+    const next = setup(Object.fromEntries(store.files), {mintFrom: 50});
     next.host.page = {notePath: '/other.note', page: 0};
     await next.session.open(500);
     expect(next.session.currentCanvasId()).not.toBe('c-1');

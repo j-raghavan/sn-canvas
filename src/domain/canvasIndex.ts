@@ -43,6 +43,18 @@ export type CanvasIndex = {
    * cannot say which note is open.
    */
   readonly lastCanvasId: string | null;
+  /**
+   * Canvases shown when the host could not say which note was open, so nothing
+   * knows whose they are (#49). They belong to nobody and go on belonging to
+   * nobody: a canvas the next note to ask was handed would show that note
+   * another note's drawing, and lose it the moment that note saved.
+   *
+   * This is also what tells those apart from what an older build left behind.
+   * Both come out as a last canvas with no note records at all, and the old one
+   * has to stay adoptable or an upgrade orphans the drawing in it. A build that
+   * knew about this wrote the canvas down here; a build that did not, could not.
+   */
+  readonly unowned: readonly string[];
   /** Oldest first. */
   readonly pending: readonly PendingLink[];
 };
@@ -50,7 +62,7 @@ export type CanvasIndex = {
 /** A pending link a lassoed picture claims: the index without it, its canvas, and the picture to tag with it. */
 export type Claim = {readonly index: CanvasIndex; readonly canvasId: string; readonly picture: unknown};
 
-export const EMPTY_INDEX: CanvasIndex = {canvasesByNote: {}, lastByNote: {}, lastCanvasId: null, pending: []};
+export const EMPTY_INDEX: CanvasIndex = {canvasesByNote: {}, lastByNote: {}, lastCanvasId: null, unowned: [], pending: []};
 
 /** Pending links kept, the newest: one for a thumbnail deleted before it was ever opened would otherwise wait for good. */
 export const MAX_PENDING = 20;
@@ -93,7 +105,13 @@ export function parseCanvasIndex(json: string | null): CanvasIndex {
   } catch {
     return EMPTY_INDEX;
   }
-  const saved = (raw ?? {}) as {canvasesByNote?: unknown; lastByNote?: unknown; lastCanvasId?: unknown; pending?: unknown};
+  const saved = (raw ?? {}) as {
+    canvasesByNote?: unknown;
+    lastByNote?: unknown;
+    lastCanvasId?: unknown;
+    unowned?: unknown;
+    pending?: unknown;
+  };
   const pending = Array.isArray(saved.pending)
     ? saved.pending
         .map(pendingLinkOf)
@@ -106,6 +124,9 @@ export function parseCanvasIndex(json: string | null): CanvasIndex {
       saved.canvasesByNote === undefined ? canvasesKnownFrom(lastByNote, pending) : canvasesByNoteOf(saved.canvasesByNote),
     lastByNote,
     lastCanvasId: isCanvasId(saved.lastCanvasId) ? saved.lastCanvasId : null,
+    // Absent is empty, which is what an older build's index reads as, and is the whole point: an
+    // index with nothing here is one whose last canvas may still be adopted (#49).
+    unowned: Array.isArray(saved.unowned) ? saved.unowned.filter(isCanvasId) : [],
     pending,
   };
 }
@@ -157,7 +178,13 @@ export function serializeCanvasIndex(index: CanvasIndex): string {
  */
 export function withLastCanvas(index: CanvasIndex, canvasId: string, notePath: string | null): CanvasIndex {
   if (notePath === null) {
-    return {...index, lastCanvasId: canvasId};
+    // Nobody's, and written down as nobody's (#49). Left as only the last canvas it would be handed
+    // to the next note that asked, which would show that note this drawing and lose it on its save.
+    return {
+      ...index,
+      lastCanvasId: canvasId,
+      unowned: index.unowned.includes(canvasId) ? index.unowned : [...index.unowned, canvasId],
+    };
   }
   const others = (index.canvasesByNote[notePath] ?? []).filter(id => id !== canvasId);
   return {
@@ -165,6 +192,9 @@ export function withLastCanvas(index: CanvasIndex, canvasId: string, notePath: s
     canvasesByNote: {...index.canvasesByNote, [notePath]: [canvasId, ...others]},
     lastByNote: {...index.lastByNote, [notePath]: canvasId},
     lastCanvasId: canvasId,
+    // A note has it now, so it is no longer nobody's: the note's own records say whose it is from
+    // here, and leaving it listed as unowned as well would be two answers to one question.
+    unowned: index.unowned.filter(id => id !== canvasId),
   };
 }
 
@@ -190,9 +220,22 @@ export function belongsToANote(index: CanvasIndex, canvasId: string): boolean {
   );
 }
 
+/**
+ * Whether a note asking for a canvas may be given [canvasId]: no note has been shown it, and it is
+ * not one nobody owns (#49). The two are different questions, which is why they are asked
+ * separately: a canvas shown with no note known belongs to no note, and is still not going spare.
+ *
+ * A canvas an older build left as its last is free, and has to stay free, or upgrading orphans
+ * whatever was drawn in it. That one is not written down as nobody's, because that build had
+ * nowhere to write it.
+ */
+export function isFreeToAdopt(index: CanvasIndex, canvasId: string): boolean {
+  return !belongsToANote(index, canvasId) && !index.unowned.includes(canvasId);
+}
+
 /** Whether the scratch canvas is nobody's, so the next note to ask may be given it (#46). */
 export function isScratchCanvasFree(index: CanvasIndex): boolean {
-  return !belongsToANote(index, DEFAULT_CANVAS_ID);
+  return isFreeToAdopt(index, DEFAULT_CANVAS_ID);
 }
 
 /**
@@ -227,6 +270,9 @@ export function withoutCanvas(index: CanvasIndex, canvasId: string): CanvasIndex
     canvasesByNote,
     lastByNote,
     lastCanvasId: index.lastCanvasId === canvasId ? null : index.lastCanvasId,
+    // Out of here too: a retired id means nothing to anyone, nobody included. Left behind it would
+    // go on refusing the id to the next note that could have had it (#49).
+    unowned: index.unowned.filter(id => id !== canvasId),
   };
 }
 
@@ -251,7 +297,7 @@ export function lastCanvasFor(index: CanvasIndex, notePath: string | null): stri
   // The canvas last open goes to the first note to ask for it and stays with it. One this note has already
   // been shown is its own to reopen, whatever it reopens by default; one another note has been shown is not
   // on offer, or a canvas whose file still holds that note's drawing would be handed over (#46).
-  return canvasesIn(index, notePath).includes(last) || !belongsToANote(index, last) ? last : null;
+  return canvasesIn(index, notePath).includes(last) || isFreeToAdopt(index, last) ? last : null;
 }
 
 /** The links waiting on page [at], oldest first. */
