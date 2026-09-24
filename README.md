@@ -105,6 +105,7 @@ Canvas asks for all three when it starts, so the dialogs come together rather th
 
 - **Typed text only.** Text boxes, sticky notes and table cells use the on-screen keyboard. Supernote's handwriting recognition only reads the note's own ink, not strokes drawn inside a canvas.
 - **Light colours look pale on screen.** Each colour gets its own gray so they stay distinguishable on e-ink, which makes yellow and the light colours quite light. The PDF and the note thumbnail use true colour.
+- **Mirroring shows the grays, not the colours.** Mirroring sends what is on the screen, and what is on the screen is drawn in e-ink grays so the colours stay apart on the device. Export to PDF, or save a thumbnail to the note, to get the true colours.
 - **Some e-ink ghosting while panning.** A faint trace of the previous frame can linger until the screen refreshes.
 - **PDF export covers the whole canvas.** Exporting only part of a canvas is not supported yet.
 
