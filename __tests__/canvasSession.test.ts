@@ -820,6 +820,35 @@ describe('saveToNote', () => {
     );
   });
 
+  // #51 meeting #49: with no note to record the rescued canvas against, it is left out of the index
+  // rather than recorded against nobody. A canvas belonging to no note is handed to the first note
+  // that asks, which would show it this drawing and write over it the moment it saved.
+  test('a rescued drawing with no note to name is not left for another note to take', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = null;
+    await session.open(null);
+    store.shown = 'drawn since the last save';
+    host.insertSucceeds = false;
+    store.failSaveAsTo.add(SCRATCH);
+    await session.saveToNote();
+    expect(store.files.get(canvasFile('c-1'))).toBe('drawn since the last save');
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] no note to record canvas=c-1 against; it is saveable but nothing reopens it',
+    );
+    // And the log still says the canvas changed, because it did: unrecorded is not unchanged.
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] save to note failed; default could not be put back, so the drawing is canvas=c-1',
+    );
+    await session.close();
+
+    // Another note opens Canvas: it must get one of its own, not the drawing it never made.
+    const next = setup(Object.fromEntries(store.files));
+    next.host.page = {notePath: '/other.note', page: 0};
+    await next.session.open(500);
+    expect(next.session.currentCanvasId()).not.toBe('c-1');
+    expect(next.store.shown).not.toBe('drawn since the last save');
+  });
+
   // #51: what the user does next after the save failed. The canvas is the new one now, so a second
   // try is an ordinary re-link rather than another scratch save: it writes where the view already
   // is, the thumbnail goes in, and the note reopens the drawing from then on.
