@@ -4,6 +4,8 @@ import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 /**
@@ -74,6 +76,16 @@ object ShapeOutline {
         result += Point(last.x + normal.x * offset, last.y + normal.y * offset)
         return result
     }
+
+    /**
+     * The line a ramp fill runs along, as x0, y0, x1, y1 (#59): straight down the shape, from its
+     * higher edge to its lower one whichever order the two come in, so a ramp always fades downward
+     * and a bounds given bottom-first, or with no height at all, still gets a sane line.
+     */
+    fun rampLine(
+        edge: Float,
+        otherEdge: Float,
+    ): FloatArray = floatArrayOf(0f, min(edge, otherEdge), 0f, max(edge, otherEdge))
 
     /** A smooth value in -1..1 along the outline. */
     private fun wobble(

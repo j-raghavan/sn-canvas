@@ -14,7 +14,7 @@
     {"id": "light-red", "name": "Light red", "hex": "#f87777"},
     {"id": "red", "name": "Red", "hex": "#e03131"}
   ],
-  "fills": ["none", "semi", "solid", "pattern"],
+  "fills": ["none", "semi", "solid", "pattern", "gradient"],
   "dashes": ["draw", "dashed", "dotted", "solid"],
   "imageDashes": ["draw", "dashed", "dotted", "solid", "none"],
   "sizes": [

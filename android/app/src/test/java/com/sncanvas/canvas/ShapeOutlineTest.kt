@@ -1,5 +1,6 @@
 package com.sncanvas.canvas
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -61,5 +62,25 @@ class ShapeOutlineTest {
         val point = box.copy(width = 0.0, height = 0.0)
         assertEquals(5, ShapeOutline.handDrawn(ShapeOutline.of(point), closed = true, seed = 3, amplitude = 2.0).size)
         assertEquals(listOf(Point(1.0, 1.0)), ShapeOutline.handDrawn(listOf(Point(1.0, 1.0)), closed = true, seed = 3, amplitude = 2.0))
+    }
+
+    // #59: the ramp a gradient fill runs along. Its whole job is to be vertical and to go downward,
+    // and neither is visible from the painter, which no test reaches.
+    @Test
+    fun `a ramp runs straight down the shape, whichever edge is given first`() {
+        val line = ShapeOutline.rampLine(20f, 90f)
+        assertArrayEquals(floatArrayOf(0f, 20f, 0f, 90f), line, 0f)
+        // Vertical: both ends share an x, so the ramp is never sideways.
+        assertEquals(line[0], line[2], 0f)
+        // Downward: solid at the top, faded at the bottom, never the other way up.
+        assertTrue(line[3] > line[1])
+        // Given bottom first it is the same line, so the ramp cannot be flipped by argument order.
+        // Stated intent rather than a guard against anything reachable: both call sites pass
+        // top then bottom, an element's height is never negative and zoom is always positive, so
+        // today the edges cannot arrive the other way round.
+        assertArrayEquals(line, ShapeOutline.rampLine(90f, 20f), 0f)
+        // Equal edges give an equal-ended line. What happens to a gradient drawn along one is
+        // Skia's business and no test here reaches it; this pins the line, not the painting.
+        assertArrayEquals(floatArrayOf(0f, 5f, 0f, 5f), ShapeOutline.rampLine(5f, 5f), 0f)
     }
 }

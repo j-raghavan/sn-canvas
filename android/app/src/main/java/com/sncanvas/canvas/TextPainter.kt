@@ -29,8 +29,19 @@ internal class TextPainter(
         withRotation(canvas, element, bounds) {
             if (isNote) {
                 val tone = element.style.color
-                val tint = if (element.style.fill == FillStyle.SOLID) context.palette.solidFill(tone) else context.palette.semiFill(tone)
-                notePaint.color = withAlpha(tint, element.style.alpha)
+                val fill = element.style.fill
+                // The same tint decision the shape painter's fill makes, made in the one place a
+                // test can reach it (#59). Only the tint: a note takes no hatching from PATTERN.
+                val tint = context.palette.fillTint(fill, tone)
+                notePaint.color = tint
+                // From the tint itself rather than read back off the paint, which would read the
+                // alpha back with it and apply the opacity twice, as this line once did.
+                // Set every time, not only for a ramp: left on, a shader would tint the next note drawn.
+                notePaint.shader = if (fill.ramps) rampShader(bounds, tint) else null
+                // After the colour, which carries its own alpha and would undo this. Order against
+                // the shader no longer matters, now that the shader is built from the tint: alpha
+                // modulates whatever is under it, whenever it is set.
+                notePaint.alpha = element.style.alpha
                 canvas.drawRect(bounds, notePaint)
             }
             if (context.editing?.elementId != element.id) {

@@ -5,8 +5,8 @@
 import React from 'react';
 import {StyleSheet} from 'react-native';
 import ReactTestRenderer, {act} from 'react-test-renderer';
-import {COLORS, DEFAULT_STYLE, type CanvasStyle} from '../src/domain/styles';
-import StylePanel from '../src/ui/StylePanel';
+import {COLORS, DEFAULT_STYLE, FILLS, SIZES, type CanvasStyle} from '../src/domain/styles';
+import StylePanel, {COLORS_PER_ROW} from '../src/ui/StylePanel';
 
 const renderPanel = (style: CanvasStyle = DEFAULT_STYLE, open = true) => {
   const onChange = jest.fn();
@@ -80,6 +80,7 @@ test.each([
   ['style-color-red', 'color', 'red'],
   ['style-opacity-0.25', 'opacity', '0.25'],
   ['style-fill-pattern', 'fill', 'pattern'],
+  ['style-fill-gradient', 'fill', 'gradient'],
   ['style-dash-dashed', 'dash', 'dashed'],
   ['style-size-xl', 'size', 'xl'],
 ])('tapping %s sends %s = %s', (testID, property, value) => {
@@ -131,4 +132,61 @@ test('opening the panel puts the hints away, and closing it does not do so again
   expect(panel.onOpen).toHaveBeenCalledTimes(1);
   panel.tap('style-toggle');
   expect(panel.onOpen).toHaveBeenCalledTimes(2);
+});
+
+// #59: the fifth fill. The panel offers one button per fill in the catalog, so a fill added to the
+// catalog and nowhere else would leave a style the canvas can hold and the panel cannot choose.
+test('every fill in the catalog has a button, gradient included', () => {
+  const {isSelected} = renderPanel({...DEFAULT_STYLE, fill: 'gradient'});
+  expect(FILLS.map(fill => isSelected(`style-fill-${fill}`))).toEqual(FILLS.map(fill => fill === 'gradient'));
+});
+
+// Asked for on the device: a colour should line up with the outline and the size under it, so every
+// row of four is laid out the same way rather than the colours using cells of their own (#59).
+test('a colour takes the same cell as an outline and a size, so the columns line up', () => {
+  const {look} = renderPanel();
+  const colour = look('style-color-black').width;
+  expect(colour).toBe(look('style-size-m').width);
+  expect(colour).toBe(look('style-dash-draw').width);
+  // And the same as a fill, so the five fills span exactly what four colours do.
+  expect(colour).toBe(look('style-fill-none').width);
+});
+
+test('every row spans the panel and spreads its own options across it', () => {
+  const {look} = renderPanel();
+  const panel = look('style-panel');
+  // Wide enough for every fill at full size, counted from FILLS rather than written in: pinned to a
+  // number, the panel kept the width it had when there were four fills and the gradient fell off the
+  // edge of the screen. The padding is read back from the panel for the same reason.
+  expect(panel.width).toBe(look('style-fill-none').width * FILLS.length + panel.padding * 2);
+  // One absolute, because the line above moves with whatever the cell is: without this, a cell
+  // shrunk to fit a sixth fill would keep the panel honest and the icons unreadable. 44 is the cell
+  // the icons were drawn for, so a change here is a decision, not a side effect.
+  //
+  // Deliberately the number and not OPTION_WIDTH, which is why that constant stays unexported while
+  // COLORS_PER_ROW is exported: this assertion's whole job is to be the one thing here that does not
+  // derive. Reading the same constant on both sides would assert nothing at all.
+  expect(look('style-fill-none').width).toBe(44);
+  // Every row, not just the colours: each row had to be named for this to mean what it says, since
+  // a row centred on its own would leave the others flush and nothing would have caught it.
+  const rows = ['style-colors-0', 'style-colors-1', 'style-colors-2', 'style-fills', 'style-dashes', 'style-sizes'];
+  expect(rows.map(row => look(row).justifyContent)).toEqual(rows.map(() => 'space-between'));
+});
+
+// Counted from COLORS and COLORS_PER_ROW rather than written out as [4, 4, 4]: what matters is that
+// the rows carve up the colours evenly and drop none of them, and that holds at twelve colours or
+// sixteen. Written as literals, this test would have had to be edited to add a colour, and editing
+// a test to make it pass again is how a test stops meaning what it says.
+test('the colours are carved into full rows, every colour placed once', () => {
+  const {host} = renderPanel();
+  // The anchor, and the reason the number is four: a colour sits above an outline and a size, so the
+  // row holds as many as those rows do. Without this the test reads COLORS_PER_ROW on both sides and
+  // any value would satisfy it, which is the same identity the panel width nearly shipped with.
+  expect(COLORS_PER_ROW).toBe(SIZES.length);
+  const rowCount = Math.ceil(COLORS.length / COLORS_PER_ROW);
+  const counts = Array.from({length: rowCount}, (_, row) => host(`style-colors-${row}`).props.children.length);
+  expect(counts.reduce((total, count) => total + count, 0)).toBe(COLORS.length);
+  // Full except the last, which is short only when the colours do not divide evenly.
+  expect(counts.slice(0, -1)).toEqual(counts.slice(0, -1).map(() => COLORS_PER_ROW));
+  expect(counts.at(-1)).toBeLessThanOrEqual(COLORS_PER_ROW);
 });

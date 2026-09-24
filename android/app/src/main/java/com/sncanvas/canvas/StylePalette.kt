@@ -25,8 +25,29 @@ enum class StylePalette {
     /** The hatch lines of a pattern fill, drawn over [semiFill]. */
     fun patternLine(color: StyleColor): Int = mixWithWhite(stroke(color), PATTERN_WHITENESS)
 
+    /**
+     * The flat colour a [fill] of [color] is painted in: the solid tint for the fills that read as
+     * solid, the semi one for the rest. A ramp takes the solid tint, since that is the end it starts
+     * from (#59); NONE paints nothing on a shape, and tints a sticky note as a semi fill does.
+     *
+     * One home for that decision, because a shape's fill and a sticky note's tint are painted in
+     * different files, neither of which a test can reach: two hand-kept copies would be free to drift.
+     * Exhaustive, so a fill added later is a compile error here rather than quietly reading as semi.
+     */
+    fun fillTint(
+        fill: FillStyle,
+        color: StyleColor,
+    ): Int =
+        when (fill) {
+            FillStyle.SOLID, FillStyle.GRADIENT -> solidFill(color)
+            FillStyle.NONE, FillStyle.SEMI, FillStyle.PATTERN -> semiFill(color)
+        }
+
     companion object {
         private const val OPAQUE = 0xFF shl 24
+
+        /** A colour with its alpha cleared; the colour itself is untouched. */
+        private const val NO_ALPHA = 0x00FFFFFF
         private const val DARKEST_GRAY = 0x00
 
         // Light enough to separate 12 levels, dark enough that a thin light stroke still shows on white.
@@ -46,6 +67,13 @@ enum class StylePalette {
 
         /** Relative luminance (Rec. 709) of a 0xRRGGBB colour, on a 0..255 scale. */
         fun luminance(rgb: Int): Double = 0.2126 * (rgb shr 16 and 0xFF) + 0.7152 * (rgb shr 8 and 0xFF) + 0.0722 * (rgb and 0xFF)
+
+        /**
+         * [argb] with its alpha cleared: the same colour faded to nothing rather than to white, which
+         * is the far end of a gradient fill and comes out the same over the page, over an image and
+         * in a PDF (#59).
+         */
+        fun fadeToNothing(argb: Int): Int = argb and NO_ALPHA
 
         /** [argb] moved [whiteness] (0..1) of the way to white, alpha unchanged. */
         fun mixWithWhite(

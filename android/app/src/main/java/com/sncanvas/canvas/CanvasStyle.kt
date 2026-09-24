@@ -37,11 +37,16 @@ enum class StyleColor(
 
 enum class FillStyle(
     override val id: String,
+    /** Whether the fill is a ramp between two colours rather than one flat one (#59). */
+    val ramps: Boolean = false,
 ) : StyleOption {
     NONE("none"),
     SEMI("semi"),
     SOLID("solid"),
     PATTERN("pattern"),
+
+    /** The shape's colour, solid at the top and fading to nothing at the bottom (#59). */
+    GRADIENT("gradient", ramps = true),
 }
 
 enum class DashStyle(
