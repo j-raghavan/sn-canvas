@@ -54,7 +54,7 @@ export type CanvasIndex = {
    * has to stay adoptable or an upgrade orphans the drawing in it. A build that
    * knew about this wrote the canvas down here; a build that did not, could not.
    */
-  readonly unowned: readonly string[];
+  readonly shownWithoutANote: readonly string[];
   /** Oldest first. */
   readonly pending: readonly PendingLink[];
 };
@@ -62,7 +62,7 @@ export type CanvasIndex = {
 /** A pending link a lassoed picture claims: the index without it, its canvas, and the picture to tag with it. */
 export type Claim = {readonly index: CanvasIndex; readonly canvasId: string; readonly picture: unknown};
 
-export const EMPTY_INDEX: CanvasIndex = {canvasesByNote: {}, lastByNote: {}, lastCanvasId: null, unowned: [], pending: []};
+export const EMPTY_INDEX: CanvasIndex = {canvasesByNote: {}, lastByNote: {}, lastCanvasId: null, shownWithoutANote: [], pending: []};
 
 /** Pending links kept, the newest: one for a thumbnail deleted before it was ever opened would otherwise wait for good. */
 export const MAX_PENDING = 20;
@@ -109,7 +109,7 @@ export function parseCanvasIndex(json: string | null): CanvasIndex {
     canvasesByNote?: unknown;
     lastByNote?: unknown;
     lastCanvasId?: unknown;
-    unowned?: unknown;
+    shownWithoutANote?: unknown;
     pending?: unknown;
   };
   const pending = Array.isArray(saved.pending)
@@ -126,7 +126,7 @@ export function parseCanvasIndex(json: string | null): CanvasIndex {
     lastCanvasId: isCanvasId(saved.lastCanvasId) ? saved.lastCanvasId : null,
     // Absent is empty, which is what an older build's index reads as, and is the whole point: an
     // index with nothing here is one whose last canvas may still be adopted (#49).
-    unowned: Array.isArray(saved.unowned) ? saved.unowned.filter(isCanvasId) : [],
+    shownWithoutANote: Array.isArray(saved.shownWithoutANote) ? saved.shownWithoutANote.filter(isCanvasId) : [],
     pending,
   };
 }
@@ -178,13 +178,7 @@ export function serializeCanvasIndex(index: CanvasIndex): string {
  */
 export function withLastCanvas(index: CanvasIndex, canvasId: string, notePath: string | null): CanvasIndex {
   if (notePath === null) {
-    // Nobody's, and written down as nobody's (#49). Left as only the last canvas it would be handed
-    // to the next note that asked, which would show that note this drawing and lose it on its save.
-    return {
-      ...index,
-      lastCanvasId: canvasId,
-      unowned: index.unowned.includes(canvasId) ? index.unowned : [...index.unowned, canvasId],
-    };
+    return {...index, lastCanvasId: canvasId};
   }
   const others = (index.canvasesByNote[notePath] ?? []).filter(id => id !== canvasId);
   return {
@@ -192,9 +186,28 @@ export function withLastCanvas(index: CanvasIndex, canvasId: string, notePath: s
     canvasesByNote: {...index.canvasesByNote, [notePath]: [canvasId, ...others]},
     lastByNote: {...index.lastByNote, [notePath]: canvasId},
     lastCanvasId: canvasId,
-    // A note has it now, so it is no longer nobody's: the note's own records say whose it is from
-    // here, and leaving it listed as unowned as well would be two answers to one question.
-    unowned: index.unowned.filter(id => id !== canvasId),
+    // A note has it now, so which note is known: the note's own records say so from here, and being
+    // listed as shown without one as well would be two answers to one question.
+    shownWithoutANote: index.shownWithoutANote.filter(id => id !== canvasId),
+  };
+}
+
+/**
+ * [index] with [canvasId] the last canvas, and marked as shown when nothing could say which note was
+ * open (#49). No note is given it afterwards: it may hold that unknown note's drawing, and a note
+ * handed it would show that drawing and lose it on its first save.
+ *
+ * Only for a canvas nothing was recorded about. A canvas whose thumbnail did go into a note is that
+ * note's even when the page could not be read, so it stays adoptable and is written with
+ * [withLastCanvas] instead: marking it here would stop the note that has the thumbnail reopening it.
+ */
+export function withCanvasShownWithoutANote(index: CanvasIndex, canvasId: string): CanvasIndex {
+  return {
+    ...index,
+    lastCanvasId: canvasId,
+    shownWithoutANote: index.shownWithoutANote.includes(canvasId)
+      ? index.shownWithoutANote
+      : [...index.shownWithoutANote, canvasId],
   };
 }
 
@@ -214,23 +227,48 @@ export function canvasesIn(index: CanvasIndex, notePath: string | null): readonl
  * half-written index can have the two disagree and this is read back defensively.
  */
 export function belongsToANote(index: CanvasIndex, canvasId: string): boolean {
-  return (
-    Object.values(index.lastByNote).includes(canvasId) ||
-    Object.values(index.canvasesByNote).some(ids => ids.includes(canvasId))
-  );
+  return ownerOf(index, canvasId)?.kind === 'note';
 }
 
 /**
- * Whether a note asking for a canvas may be given [canvasId]: no note has been shown it, and it is
- * not one nobody owns (#49). The two are different questions, which is why they are asked
- * separately: a canvas shown with no note known belongs to no note, and is still not going spare.
+ * Who a canvas is for: a note, nobody, or no one at all. The third is not the same as the second.
+ * Nobody's is a canvas that was drawn when nothing could say which note was open, and it stays
+ * nobody's (#49); no one at all is a canvas going spare, which an asking note may be given.
+ */
+export type CanvasOwner = {readonly kind: 'note'; readonly notePath: string} | {readonly kind: 'nobody'} | null;
+
+/**
+ * Who [canvasId] is for. One answer rather than a pair of booleans, because the three cases are one
+ * question, and because a refusal can then say which of them it was: a log reading owner=nobody and
+ * one reading owner=/a.note are different problems, where a bare false is neither.
+ */
+export function ownerOf(index: CanvasIndex, canvasId: string): CanvasOwner {
+  const note =
+    Object.entries(index.lastByNote).find(([, id]) => id === canvasId)?.[0] ??
+    Object.entries(index.canvasesByNote).find(([, ids]) => ids.includes(canvasId))?.[0];
+  if (note !== undefined) {
+    return {kind: 'note', notePath: note};
+  }
+  return index.shownWithoutANote.includes(canvasId) ? {kind: 'nobody'} : null;
+}
+
+/**
+ * Whether [canvasId] is going spare, so an asking note may be given it.
  *
- * A canvas an older build left as its last is free, and has to stay free, or upgrading orphans
- * whatever was drawn in it. That one is not written down as nobody's, because that build had
- * nowhere to write it.
+ * A canvas an older build left as its last is spare, and has to stay spare, or upgrading orphans
+ * whatever was drawn in it. Nothing lists it as nobody's, because that build had nowhere to say so.
  */
 export function isFreeToAdopt(index: CanvasIndex, canvasId: string): boolean {
-  return !belongsToANote(index, canvasId) && !index.unowned.includes(canvasId);
+  return ownerOf(index, canvasId) === null;
+}
+
+/**
+ * Whether the note at [notePath] may be shown [canvasId]: already one of its own, or going spare.
+ * The question every guess at which canvas to show has to ask, so that a guess never lands on
+ * another note's drawing (#46) or on one nothing knows the owner of (#49).
+ */
+export function mayNoteHave(index: CanvasIndex, notePath: string | null, canvasId: string): boolean {
+  return isFreeToAdopt(index, canvasId) || canvasesIn(index, notePath).includes(canvasId);
 }
 
 /** Whether the scratch canvas is nobody's, so the next note to ask may be given it (#46). */
@@ -272,7 +310,7 @@ export function withoutCanvas(index: CanvasIndex, canvasId: string): CanvasIndex
     lastCanvasId: index.lastCanvasId === canvasId ? null : index.lastCanvasId,
     // Out of here too: a retired id means nothing to anyone, nobody included. Left behind it would
     // go on refusing the id to the next note that could have had it (#49).
-    unowned: index.unowned.filter(id => id !== canvasId),
+    shownWithoutANote: index.shownWithoutANote.filter(id => id !== canvasId),
   };
 }
 

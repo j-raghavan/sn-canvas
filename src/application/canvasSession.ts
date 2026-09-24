@@ -30,6 +30,8 @@ import {
   parseCanvasIndex,
   serializeCanvasIndex,
   lastCanvasFor,
+  mayNoteHave,
+  withCanvasShownWithoutANote,
   withLastCanvas,
   type CanvasIndex,
   type NotePage,
@@ -237,7 +239,9 @@ export function createCanvasSession({
       Object.keys(saved.lastByNote).length === 0 &&
       Object.keys(saved.canvasesByNote).length === 0;
     if (at === null || nothingRecorded) {
-      const newest = await newestCanvas(store, dir);
+      // Only one this note may be shown: the newest file on disk may be another note's, or one
+      // drawn when nothing knew whose it was (#46, #49).
+      const newest = await newestCanvas(store, dir, id => mayNoteHave(saved, at?.notePath ?? null, id));
       if (newest !== null || at === null) {
         return newest ?? DEFAULT_CANVAS_ID;
       }
@@ -331,7 +335,11 @@ export function createCanvasSession({
     canvasId = target;
     hasOpened = true;
     await store.load(canvasFilePath(dir, canvasId), imagesPath(dir));
-    await updateIndex(dir, current => withLastCanvas(current, canvasId, at?.notePath ?? null));
+    // Shown with no note to go by is the one case nothing knows the owner of, so it is written down
+    // as such and no later note is handed it (#49).
+    await updateIndex(dir, current =>
+      at === null ? withCanvasShownWithoutANote(current, canvasId) : withLastCanvas(current, canvasId, at.notePath),
+    );
   };
 
   /**

@@ -322,6 +322,28 @@ describe('each note has its own canvas', () => {
     expect([...later.store.files.values()]).toContain('drawn with no note known');
   });
 
+  // #49: Open Canvas on a thumbnail nothing names falls back to the newest canvas saved. That guess
+  // has to be one this note may be shown, or it hands over a drawing nobody knew the owner of, and
+  // recording it against the note that was handed it erases the very mark that should have refused.
+  test('the newest canvas is only guessed at when this note may be shown it', async () => {
+    // A canvas shown with no note to go by, drawn on and left: nothing knows whose it is.
+    const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
+    host.page = null;
+    await session.open(500);
+    store.shown = 'drawn with no note known';
+    await session.close();
+
+    // Another note lassoes a picture nothing identifies: no tag, no pending link waiting.
+    const later = setup(Object.fromEntries(store.files), {mintFrom: 50});
+    later.host.page = {notePath: '/a.note', page: 0};
+    later.host.lassoed = [lassoedPicture(7)];
+    await later.session.open(501);
+    expect(later.store.shown).not.toBe('drawn with no note known');
+    await later.session.close();
+    // And the drawing is still there, with nobody's mark on it rather than that note's.
+    expect([...later.store.files.values()]).toContain('drawn with no note known');
+  });
+
   // The upgrade this cannot break: an index from a build before #49 has a last canvas and no note
   // records, which is what a canvas nobody owns also looks like on disk. That one must still be
   // adopted, or everyone upgrading loses whatever was in it.
@@ -674,7 +696,9 @@ describe('links back to a canvas', () => {
       canvasesByNote: {},
       lastByNote: {},
       lastCanvasId: 'c-1',
-      unowned: ['c-1'],
+      // Not marked as shown without a note: the thumbnail did go into a note, so that note owns it
+      // and must be able to reopen it, even though the page could not be read to say which (#49).
+      shownWithoutANote: [],
       pending: [],
     });
     expect(logger.lines).toContain(
@@ -713,7 +737,7 @@ describe('links back to a canvas', () => {
       canvasesByNote: {'/note.note': ['default']},
       lastByNote: {'/note.note': 'default'},
       lastCanvasId: 'default',
-      unowned: [],
+      shownWithoutANote: [],
       pending: [],
     });
   });
@@ -880,7 +904,7 @@ describe('saveToNote', () => {
     );
     // Written down as nobody's rather than left out of the index: that is what keeps another note
     // from being handed it, and it means the index knows the drawing is there (#49).
-    expect(savedIndex(store).unowned).toContain('c-1');
+    expect(savedIndex(store).shownWithoutANote).toContain('c-1');
     // And the log still says the canvas changed, because it did: unrecorded is not unchanged.
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] save to note failed; default could not be put back, so the drawing is canvas=c-1',

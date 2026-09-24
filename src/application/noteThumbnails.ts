@@ -15,6 +15,8 @@ import {
   pendingOn,
   pictureNumbersOf,
   picturesOf,
+  mayNoteHave,
+  withCanvasShownWithoutANote,
   withLastCanvas,
   withPending,
   withoutCanvas,
@@ -133,8 +135,19 @@ export function createNoteThumbnails({
     logger.log(
       `${TAG}[LINK] lassoed=${elements.length} elements=${JSON.stringify(elements.map(elementSummary))} canvas=${linkedId}`,
     );
-    // Nothing names it (a thumbnail from a build without links, say): the newest canvas is the best guess.
-    return linkedId ?? (await newestCanvas(store, dir)) ?? DEFAULT_CANVAS_ID;
+    if (linkedId !== null) {
+      return linkedId;
+    }
+    // Nothing names it (a thumbnail from a build without links, say): the newest canvas is the best
+    // guess, but only one this note may be shown. Taking the newest file whatever it is would hand
+    // over another note's drawing, or one drawn when nothing knew whose it was (#49).
+    const current = await index.load(dir);
+    const here = (await host.currentPage())?.notePath ?? null;
+    const guess = await newestCanvas(store, dir, id => mayNoteHave(current, here, id));
+    if (guess === null) {
+      logger.log(`${TAG}[LINK] nothing this note may be shown is saved; a canvas of its own`);
+    }
+    return guess ?? DEFAULT_CANVAS_ID;
   };
 
   /**
@@ -184,7 +197,9 @@ export function createNoteThumbnails({
     if (into === null) {
       logger.warn(`${TAG}[LINK] no note to record canvas=${linkedId} against; it is saveable but nothing reopens it`);
     }
-    await index.update(dir, current => withLastCanvas(current, linkedId, into?.notePath ?? null));
+    await index.update(dir, current =>
+      into === null ? withCanvasShownWithoutANote(current, linkedId) : withLastCanvas(current, linkedId, into.notePath),
+    );
     return linkedId;
   };
 
