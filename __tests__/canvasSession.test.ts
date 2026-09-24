@@ -738,6 +738,25 @@ describe('saveToNote', () => {
     expect(logger.lines).toContain('warn [SNCANVAS][LINK] save to note failed; canvas=default unchanged');
   });
 
+  // #51: the note refuses the thumbnail and putting the scratch canvas back fails too. The view is
+  // left holding the new id's file, since the native side puts its binding back where it was and the
+  // first save had bound it there. Deleting that file would leave the drawing with nowhere to go.
+  test('when the scratch canvas cannot be put back, the drawing keeps a file it can still be saved to', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    store.shown = 'drawn since the last save';
+    host.insertSucceeds = false;
+    store.failSaveAsTo.add(SCRATCH);
+    await session.saveToNote();
+    // The drawing has a file of its own straight away, rather than living in the view until something
+    // saves again: a close that never reaches a save, or a crash, would take it otherwise.
+    expect(store.files.get(canvasFile('c-1'))).toBe('drawn since the last save');
+    // Whatever the canvas is called now, the session and the view agree on it, so a later save lands.
+    await session.close();
+    expect(store.refused).toEqual([]);
+    expect([...store.files.values()]).toContain('drawn since the last save');
+  });
+
   test('a failed re-link of a linked canvas keeps its files', async () => {
     const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
     host.lassoed = [lassoedThumbnail('c-9')];

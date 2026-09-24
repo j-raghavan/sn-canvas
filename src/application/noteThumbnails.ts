@@ -159,10 +159,19 @@ export function createNoteThumbnails({
       logger.warn(`${TAG}[LINK] save to note failed; canvas=${shown.id()} unchanged`);
       if (fromScratch) {
         // Back to the scratch canvas it still is: the view keeps its file, and the new id's files go.
-        if (saved) {
-          await store.saveAs(canvasFilePath(dir, DEFAULT_CANVAS_ID));
+        const restored = saved && (await store.saveAs(canvasFilePath(dir, DEFAULT_CANVAS_ID)));
+        if (saved && !restored) {
+          // That write is the one thing standing between the drawing and nowhere to put it. saveAs
+          // rebinds the view to what it wrote, and on failure the native side puts the binding back
+          // where it was, which is the new file the first save bound it to. Removing it here would
+          // take away the only file the view can still write to, and every later save would go to
+          // the scratch canvas and be refused, since a canvas file only ever holds the canvas it was
+          // loaded from (#30). So the canvas becomes the new one and the session follows the view.
+          shown.rename(linkedId);
+          logger.warn(`${TAG}[LINK] could not put ${DEFAULT_CANVAS_ID} back; the drawing stays as canvas=${linkedId}`);
+        } else {
+          await store.remove(canvasFile);
         }
-        await store.remove(canvasFile);
         await store.remove(thumbnail);
       }
       return null;
