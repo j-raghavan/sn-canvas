@@ -27,22 +27,24 @@ const lassoedPicture = (num: number, userData?: string) => ({
 const indexWith = (index: {lastCanvasId?: string}) => JSON.stringify({lastCanvasId: null, pending: [], ...index});
 const savedIndex = (store: {files: Map<string, string>}) => JSON.parse(String(store.files.get(INDEX)));
 
-// mintFrom gives a second session in one test an id space of its own: the counter restarts with each
-// setup, so two sessions would otherwise both mint c-1 and a fresh canvas would land on the earlier
-// one's file. Real ids come from the clock and a random suffix, so they do not collide.
-const setup = (files: Record<string, string> = {}, {installedJustNow = false, mintFrom = 0} = {}) => {
+const setup = (files: Record<string, string> = {}, {installedJustNow = false} = {}) => {
   const store = createFakeStore(installedJustNow ? files : {[MARKER]: 'opened', ...files});
   const host = createFakeHost();
   const badge = createFakeBadge();
   const logger = createRecordingLogger();
-  let minted = mintFrom;
+  let minted = 0;
   const session = createCanvasSession({
     store,
     host,
     badge,
     logger,
     newCanvasId: () => {
-      minted += 1;
+      // Never onto a file already saved, as the real mint cannot be: ids carry the clock. The
+      // counter restarts with each setup, so a second session in one test would otherwise mint c-1
+      // again and quietly open the first session's canvas instead of a new one.
+      do {
+        minted += 1;
+      } while (store.files.has(canvasFile(`c-${minted}`)));
       return `c-${minted}`;
     },
   });
@@ -314,7 +316,7 @@ describe('each note has its own canvas', () => {
     store.shown = 'drawn with no note known';
     await session.close();
 
-    const later = setup(Object.fromEntries(store.files), {mintFrom: 50});
+    const later = setup(Object.fromEntries(store.files));
     later.host.page = {notePath: '/b.note', page: 0};
     await later.session.open(500);
     expect(later.store.shown).not.toBe('drawn with no note known');
@@ -334,7 +336,7 @@ describe('each note has its own canvas', () => {
     await session.close();
 
     // Another note lassoes a picture nothing identifies: no tag, no pending link waiting.
-    const later = setup(Object.fromEntries(store.files), {mintFrom: 50});
+    const later = setup(Object.fromEntries(store.files));
     later.host.page = {notePath: '/a.note', page: 0};
     later.host.lassoed = [lassoedPicture(7)];
     await later.session.open(501);
@@ -887,9 +889,9 @@ describe('saveToNote', () => {
     );
   });
 
-  // #51 meeting #49: with no note to record the rescued canvas against, it is left out of the index
-  // rather than recorded against nobody. A canvas belonging to no note is handed to the first note
-  // that asks, which would show it this drawing and write over it the moment it saved.
+  // #51 meeting #49: with no note to record the rescued canvas against, it is written down as shown
+  // without one. That is what keeps the next note that asks from being handed it, which would show
+  // that note this drawing and write over it the moment it saved.
   test('a rescued drawing with no note to name is not left for another note to take', async () => {
     const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
     host.page = null;
@@ -912,7 +914,7 @@ describe('saveToNote', () => {
     await session.close();
 
     // Another note opens Canvas: it must get one of its own, not the drawing it never made.
-    const next = setup(Object.fromEntries(store.files), {mintFrom: 50});
+    const next = setup(Object.fromEntries(store.files));
     next.host.page = {notePath: '/other.note', page: 0};
     await next.session.open(500);
     expect(next.session.currentCanvasId()).not.toBe('c-1');

@@ -51,8 +51,18 @@ export type CanvasIndex = {
    *
    * This is also what tells those apart from what an older build left behind.
    * Both come out as a last canvas with no note records at all, and the old one
-   * has to stay adoptable or an upgrade orphans the drawing in it. A build that
-   * knew about this wrote the canvas down here; a build that did not, could not.
+   * has to stay adoptable or an upgrade orphans the drawing in it. Nothing reads
+   * whether the field is there: an id listed here is refused and one that is not
+   * is offered, and an older build lists nothing. So a half-written or empty
+   * list decides nothing on its own, which is the point.
+   *
+   * Two things this does not survive. An older build installed over this one
+   * reads the index without this field and writes it back without it, so the
+   * marks are gone and every canvas here is adoptable again; nothing can be
+   * done about that from this side, since that build cannot be taught to keep a
+   * field it has never heard of. And the trick of letting absence mean "an older
+   * build" works once: a later field cannot use it, because builds will exist
+   * that write this one and not that one, so absent would mean two things.
    */
   readonly shownWithoutANote: readonly string[];
   /** Oldest first. */
