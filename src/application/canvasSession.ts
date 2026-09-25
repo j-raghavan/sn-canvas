@@ -45,6 +45,7 @@ import {
   imagesPath,
   indexPath,
   installMarkerPath,
+  tourOnOpenPath,
   pdfPath,
   privateCanvasDir,
   thumbnailPath,
@@ -130,6 +131,12 @@ export type CanvasSession = {
   /** Saves the canvas, then closes the plugin view whether or not the save worked. */
   close: () => Promise<void>;
   currentCanvasId: () => string;
+  /** Whether this session's open was the first since Canvas was installed: what offers the tour (#71). */
+  takeFirstOpenSinceInstall: () => boolean;
+  /** Whether the tour has been asked for on every open (#71). */
+  showsTourOnOpen: () => Promise<boolean>;
+  /** Remembers whether to bring the tour up on opening; false forgets it. */
+  setShowTourOnOpen: (on: boolean) => Promise<void>;
 };
 
 const TAG = '[SNCANVAS]';
@@ -147,6 +154,9 @@ export function createCanvasSession({
   let canvasDir: string | null = null;
   let pluginDirPath: string | null = null;
   let checkedInstall = false;
+  // Remembered, because the marker is consumed by the check that reads it: the screen asks later,
+  // to know whether to offer the tour, and by then asking again would say no (#71).
+  let wasFirstOpen = false;
   let index: CanvasIndex | null = null;
   // Each operation starts after the previous one settles, so a button press
   // can never switch canvases halfway through a save.
@@ -300,7 +310,7 @@ export function createCanvasSession({
    * installing replaces the plugin's own folder, and with it the marker left
    * there (canvasLink.installMarkerPath). Canvases in MyStyle are untouched.
    */
-  const isFirstOpenSinceInstall = async (): Promise<boolean> => {
+  const takeFirstOpenSinceInstall = async (): Promise<boolean> => {
     if (checkedInstall || pluginDirPath === null) {
       return false;
     }
@@ -310,6 +320,7 @@ export function createCanvasSession({
       return false;
     }
     await store.writeText(marker, 'opened');
+    wasFirstOpen = true;
     return true;
   };
 
@@ -319,7 +330,7 @@ export function createCanvasSession({
    * since an install for a note that has none yet.
    */
   const targetFor = async (dir: string, buttonId: number | null, at: NotePage | null): Promise<string> => {
-    const firstSinceInstall = await isFirstOpenSinceInstall();
+    const firstSinceInstall = await takeFirstOpenSinceInstall();
     if (buttonId === BUTTON_ID_OPEN_LINKED) {
       return thumbnails.lassoedCanvasId(dir);
     }
@@ -500,6 +511,24 @@ export function createCanvasSession({
 
   return {
     open,
+    // Answered once and then spent. The plugin runtime stays warm between opens, so the screen asks
+    // this after every button press; a latch that stays set brings the tour back on all of them.
+    takeFirstOpenSinceInstall: () => {
+      const was = wasFirstOpen;
+      wasFirstOpen = false;
+      return was;
+    },
+    showsTourOnOpen: async () => {
+      const dir = await resolveCanvasDir();
+      return dir !== null && (await store.readText(tourOnOpenPath(dir))) !== null;
+    },
+    setShowTourOnOpen: async (on: boolean) => {
+      const dir = await resolveCanvasDir();
+      if (dir === null) {
+        return;
+      }
+      await (on ? store.writeText(tourOnOpenPath(dir), '') : store.remove(tourOnOpenPath(dir)));
+    },
     newCanvas,
     clearCanvas,
     saveToNote: thumbnails.saveToNote,

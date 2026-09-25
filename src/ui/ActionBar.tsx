@@ -9,7 +9,7 @@ import type {CanvasUiState} from '../domain/styles';
 import type {CanvasCommand} from './nativeCanvasView';
 
 /** Actions the screen handles rather than the canvas: a session call, or a question asked first. */
-const SCREEN_ACTIONS = ['newCanvas', 'linkToNote', 'linkToCanvas', 'noteCanvases', 'clearCanvas'] as const;
+const SCREEN_ACTIONS = ['newCanvas', 'linkToNote', 'linkToCanvas', 'noteCanvases', 'clearCanvas', 'showTour'] as const;
 type ScreenAction = (typeof SCREEN_ACTIONS)[number];
 
 const isScreenAction = (action: CanvasCommand | ScreenAction): action is ScreenAction =>
@@ -126,9 +126,35 @@ const MENU: readonly MenuItem[] = [
   {action: 'clearCanvas', label: 'Clear canvas', needsContent: true},
   {action: 'noteCanvases', label: 'Canvases in this note…'},
   {action: 'newCanvas', label: 'New canvas'},
+  // Where the tour lives after the first open, and the last page says so, since someone who skips
+  // it otherwise never meets it again (#71).
+  {action: 'showTour', label: 'Take the tour'},
 ];
 
 const MORE_ICON = require('../../assets/icons/action-more.png');
+/** The ⋮ button, which sits after the actions and is what opens the menu above. */
+const MORE_ID = 'canvas-more';
+
+const BOTTOM = 92;
+const BUTTON_W = 40;
+const BUTTON_H = 36;
+const PADDING_H = 6;
+const PADDING_V = 4;
+const BORDER = 1;
+/** Every action, then the ⋮ after them. */
+const SLOTS = [...ACTIONS.map(action => action.testID), MORE_ID];
+const BAR_WIDTH = SLOTS.length * BUTTON_W + 2 * (PADDING_H + BORDER);
+
+/**
+ * Where the bar's buttons sit, in dp: its top above the canvas area's bottom, and button centres
+ * from the middle. Said here, where the bar is laid out, so that anything pointing at one of these
+ * buttons follows it when a button is added rather than drifting off it quietly (as TOOLBAR_GEOMETRY
+ * does for the pill).
+ */
+export const ACTION_BAR_GEOMETRY = {
+  top: BOTTOM + BUTTON_H + 2 * (PADDING_V + BORDER),
+  buttonCenterX: (testID: string) => -BAR_WIDTH / 2 + BORDER + PADDING_H + BUTTON_W * (SLOTS.indexOf(testID) + 0.5),
+};
 
 type Props = {
   ui: CanvasUiState;
@@ -143,6 +169,8 @@ type Props = {
   onLinkToCanvas: () => void;
   /** Lists the canvases made in the open note, to show another. */
   onNoteCanvases: () => void;
+  /** Opens the tour (#71); it is in the menu so someone who skipped it on the first open can find it. */
+  onShowTour: () => void;
   /** The ⋮ menu is opening: the screen puts the onboarding hints away, so neither is drawn over the other. */
   onMenuOpen: () => void;
 };
@@ -155,6 +183,7 @@ export default function ActionBar({
   onLinkToNote,
   onLinkToCanvas,
   onNoteCanvases,
+  onShowTour,
   onMenuOpen,
 }: Props): React.JSX.Element {
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -167,6 +196,7 @@ export default function ActionBar({
     linkToCanvas: onLinkToCanvas,
     noteCanvases: onNoteCanvases,
     clearCanvas: onClearCanvas,
+    showTour: onShowTour,
   };
 
   /** Runs [action] wherever it was tapped: the screen's own, or the canvas's. */
@@ -222,7 +252,7 @@ export default function ActionBar({
           );
         })}
         <Pressable
-          testID="canvas-more"
+          testID={MORE_ID}
           accessibilityLabel="More actions"
           style={styles.button}
           onPress={() => {
@@ -244,22 +274,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 92,
+    bottom: BOTTOM,
     alignItems: 'center',
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+    paddingHorizontal: PADDING_H,
+    paddingVertical: PADDING_V,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: BORDER,
     borderColor: '#cccccc',
     backgroundColor: '#ffffff',
   },
   button: {
-    width: 40,
-    height: 36,
+    width: BUTTON_W,
+    height: BUTTON_H,
     alignItems: 'center',
     justifyContent: 'center',
   },

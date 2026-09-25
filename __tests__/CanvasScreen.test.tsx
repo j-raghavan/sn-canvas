@@ -24,6 +24,8 @@ jest.mock('react-native', () => {
     Pressable: actual.Pressable,
     ScrollView: actual.ScrollView,
     StyleSheet: actual.StyleSheet,
+    // A Nomad's window; the tour fits its card to whatever it is given (#71).
+    useWindowDimensions: () => ({width: 1024, height: 1365, scale: 1.875, fontScale: 1}),
     requireNativeComponent: actual.requireNativeComponent,
     UIManager: {
       dispatchViewManagerCommand: (...args: [number, string, unknown[]]) => mockDispatchViewManagerCommand(...args),
@@ -52,6 +54,9 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   goBack: jest.fn().mockResolvedValue(undefined),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
   close: jest.fn().mockResolvedValue(undefined),
+  takeFirstOpenSinceInstall: jest.fn(() => false),
+  showsTourOnOpen: jest.fn().mockResolvedValue(false),
+  setShowTourOnOpen: jest.fn().mockResolvedValue(undefined),
   currentCanvasId: jest.fn(() => 'default'),
 });
 
@@ -398,6 +403,123 @@ describe('session', () => {
     await press('canvas-save-to-note');
     expect(shows('Could not add this to the note; nothing was changed')).toBe(false);
     expect(shows('Added to note: place it on the page before anything else')).toBe(false);
+  });
+
+  // #71: the tour comes up on its own the first time Canvas is opened after an install, and not
+  // again, because a tour that greets you every time is one you learn to dismiss without reading.
+  test('the tour comes up on a first open after an install, and not otherwise', async () => {
+    const first = createFakeSession();
+    first.takeFirstOpenSinceInstall.mockReturnValue(true);
+    const shown = await render(first);
+    expect(shown.has('tour')).toBe(true);
+
+    const later = createFakeSession();
+    later.takeFirstOpenSinceInstall.mockReturnValue(false);
+    const quiet = await render(later);
+    expect(quiet.has('tour')).toBe(false);
+  });
+
+  // #71: asked for, so it comes up every time rather than only on the first open after an install.
+  test('the tour comes up on every open once it has been asked for', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValue(false);
+    session.showsTourOnOpen.mockResolvedValue(true);
+    const {has} = await render(session);
+    expect(has('tour')).toBe(true);
+  });
+
+  // #71: reachable again afterwards, because the first open is the one time someone is least able to
+  // take any of it in.
+  test('Take the tour opens it again from the menu', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValue(false);
+    const {has, press} = await render(session);
+    expect(has('tour')).toBe(false);
+    await press('canvas-more');
+    await press('canvas-menu-showTour');
+    expect(has('tour')).toBe(true);
+  });
+
+  test('Skip closes it, and it stays closed', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValue(true);
+    const {has, press} = await render(session);
+    expect(has('tour')).toBe(true);
+    await press('tour-skip');
+    expect(has('tour')).toBe(false);
+  });
+
+  // #71: the box is the whole of how someone asks for the tour every time, so what it says has to
+  // reach the session. Ticked and forgotten, it is a control that does nothing.
+  test('asking for the tour every time is remembered, and the box shows what was remembered', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValue(true);
+    const {press, renderer} = await render(session);
+    const box = () => renderer.root.findByProps({testID: 'tour-every-time'}).props.accessibilityState.checked;
+    expect(box()).toBe(false);
+    await press('tour-every-time');
+    expect(session.setShowTourOnOpen).toHaveBeenCalledWith(true);
+    expect(box()).toBe(true);
+  });
+
+  test('a tour already asked for comes up with its box already ticked', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValue(false);
+    session.showsTourOnOpen.mockResolvedValue(true);
+    const {renderer} = await render(session);
+    expect(renderer.root.findByProps({testID: 'tour-every-time'}).props.accessibilityState.checked).toBe(true);
+  });
+
+  // #71: the tour dims the canvas and closes on a tap outside its card. A toolbar or style panel
+  // drawn after it sits crisp over the faded canvas and still takes those taps.
+  test('the tour covers the toolbar and the style panel rather than the other way round', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValue(true);
+    const {renderer} = await render(session);
+    const drawn = JSON.stringify(renderer.toJSON());
+    // Both have to be on screen for the order between them to mean anything.
+    for (const under of ['canvas-tool-draw', 'style-toggle']) {
+      expect(drawn).toContain(`"${under}"`);
+      expect(drawn.indexOf('"tour"')).toBeGreaterThan(drawn.indexOf(`"${under}"`));
+    }
+  });
+
+  // A first open after an install has an empty canvas, which is when the hints put themselves up, and
+  // is also the one time the tour comes up on its own. Both at once is two sets of arrows over one
+  // screen, and half of them under the tour's scrim.
+  test('the hints go away as the tour comes up', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValue(true);
+    const {has, press, emitCanvasLoaded} = await render(session);
+    // The canvas finishes loading after the tour is already up, and an empty one is what puts the
+    // hints there, so this is the order the device actually does it in.
+    await emitCanvasLoaded({hasContent: false});
+    expect(has('tour')).toBe(true);
+    expect(has('canvas-hints')).toBe(false);
+
+    // And they are waiting once it is closed, which is where the tour should leave someone.
+    await press('tour-skip');
+    expect(has('canvas-hints')).toBe(true);
+  });
+
+  // #71: the every-time flag lives in the canvas folder so it outlives an install, which is the very
+  // case where a fresh install is also being recorded. Answering on the flag alone leaves the other
+  // answer saved up, and it is spent on the next open: the tour comes back right after being
+  // turned off, which reads as the switch not having worked.
+  test('turning the tour off after an update does not bring it back on the next open', async () => {
+    const session = createFakeSession();
+    session.takeFirstOpenSinceInstall.mockReturnValueOnce(true).mockReturnValue(false);
+    session.showsTourOnOpen.mockResolvedValue(true);
+    const buttons = createFakeButtons();
+    const {has, press} = await render(session, buttons);
+    expect(has('tour')).toBe(true);
+
+    await press('tour-every-time');
+    session.showsTourOnOpen.mockResolvedValue(false);
+    await press('tour-skip');
+
+    await act(async () => buttons.press(500));
+    expect(has('tour')).toBe(false);
   });
 
   test('Close goes to the session', async () => {

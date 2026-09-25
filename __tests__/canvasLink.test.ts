@@ -20,6 +20,7 @@ import {
   picturePathOf,
   privateCanvasDir,
   thumbnailPath,
+  tourOnOpenPath,
 } from '../src/domain/canvasLink';
 import {BUTTON_ID_OPEN_LINKED, BUTTON_ID_SIDEBAR} from '../src/domain/entryPoints';
 
@@ -115,4 +116,13 @@ test('parseElementLink takes a link this build can follow, and nothing else', ()
 test('picturePathOf reads Element.picture.picturePath and tolerates anything else', () => {
   expect(picturePathOf({picture: {picturePath: '/a.png'}})).toBe('/a.png');
   expect(picturePathOf(undefined)).toBeUndefined();
+});
+
+// #71: it has to land inside the canvas folder. A path that climbs out of it lands in the plugin's
+// own folder, which an install replaces, and the tour would quietly stop being asked for after
+// every update. The fake store in the session tests holds whatever string it is given, so the one
+// place this can be checked is here, against the string itself.
+test('the tour-on-open marker sits in the canvas folder, not beside it', () => {
+  expect(tourOnOpenPath('/storage/emulated/0/MyStyle/Canvas')).toBe('/storage/emulated/0/MyStyle/Canvas/tour-on-open');
+  expect(tourOnOpenPath('/a/b')).not.toContain('..');
 });

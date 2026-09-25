@@ -1635,6 +1635,67 @@ describe("a note's canvases (#30)", () => {
 
 });
 
+describe('showing the tour on opening (#71)', () => {
+  test('it is off until asked for, remembered once it is, and forgotten again', async () => {
+    const {store, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    expect(await session.showsTourOnOpen()).toBe(false);
+
+    await session.setShowTourOnOpen(true);
+    expect(await session.showsTourOnOpen()).toBe(true);
+    // In the canvas folder, which outlives an update, rather than the plugin's own folder, which an
+    // install replaces along with the marker that says Canvas has never been opened.
+    expect([...store.files.keys()].some(path => path.startsWith('/plugin/Canvas/') && path.endsWith('tour-on-open'))).toBe(true);
+
+    await session.setShowTourOnOpen(false);
+    expect(await session.showsTourOnOpen()).toBe(false);
+  });
+
+  test('a session that survives a close still knows it was asked for', async () => {
+    const {store, session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    await session.setShowTourOnOpen(true);
+    await session.close();
+
+    const later = setup(Object.fromEntries(store.files));
+    await later.session.open(null);
+    expect(await later.session.showsTourOnOpen()).toBe(true);
+  });
+});
+
+// #71: the tour greets a new install once. What settles that is a marker in the plugin's own
+// folder, which an install replaces; the screen asks after the open, because the open is what reads
+// and writes it.
+describe('the first open since an install (#71)', () => {
+  test('it is the first open on a fresh install, and not on an open after that', async () => {
+    const {store, session} = setup({[SCRATCH]: 'scratch'}, {installedJustNow: true});
+    await session.open(null);
+    expect(session.takeFirstOpenSinceInstall()).toBe(true);
+
+    // The same files, opened again: the marker the first open wrote is among them now.
+    const again = setup(Object.fromEntries(store.files), {installedJustNow: true});
+    await again.session.open(null);
+    expect(again.session.takeFirstOpenSinceInstall()).toBe(false);
+  });
+
+  // The plugin runtime stays warm between opens, so one session answers this once per button press.
+  // Answering yes every time brings the tour back on every open for the rest of the session, which
+  // is the thing showing it once was meant to avoid.
+  test('it is the first open only once, however many times the same session is opened', async () => {
+    const {session} = setup({[SCRATCH]: 'scratch'}, {installedJustNow: true});
+    await session.open(null);
+    expect(session.takeFirstOpenSinceInstall()).toBe(true);
+    await session.open(null);
+    expect(session.takeFirstOpenSinceInstall()).toBe(false);
+  });
+
+  test('a plugin that has been opened before does not count as freshly installed', async () => {
+    const {session} = setup({[SCRATCH]: 'scratch'});
+    await session.open(null);
+    expect(session.takeFirstOpenSinceInstall()).toBe(false);
+  });
+});
+
 describe('saveToNote result', () => {
   test("is 'inserted' once the thumbnail is in the note, null when it is not", async () => {
     const {host, session} = setup({[SCRATCH]: 'scratch'});
