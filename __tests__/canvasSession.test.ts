@@ -982,11 +982,30 @@ describe('saveToNote', () => {
     expect(store.files.get(SCRATCH)).toBe('a real drawing');
     expect(store.files.has(canvasFile('c-1'))).toBe(false);
     expect(logger.lines).toContain(
-      'warn [SNCANVAS][LINK] the view is not holding default; nothing saved to the note',
+      'warn [SNCANVAS][LINK] the view is not holding canvas=default; nothing saved to the note',
     );
     // And it refused before reading the page, which takes seconds and saves the user's note to do
     // it. Nothing that is not going to happen should cost them their note being written first.
     expect(host.noteSaves).toBe(0);
+  });
+
+  // #68: a canvas that is already a note's would be refused by the save itself, but only after the
+  // page read has cost seconds and written the user's note. Asked the same way and as early as the
+  // scratch canvas, both refuse before any of that.
+  test('a canvas of the note s own is refused too when the view is not holding it', async () => {
+    const {store, host, logger, session} = setup({[canvasFile('c-9')]: 'nine'});
+    host.lassoed = [lassoedThumbnail('c-9')];
+    await session.open(501);
+    expect(session.currentCanvasId()).toBe('c-9');
+    store.emptyView();
+
+    expect(await session.saveToNote()).toBeNull();
+    expect(host.inserted).toEqual([]);
+    expect(store.files.get(canvasFile('c-9'))).toBe('nine');
+    expect(host.noteSaves).toBe(0);
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] the view is not holding canvas=c-9; nothing saved to the note',
+    );
   });
 
   test('a failed re-link of a linked canvas keeps its files', async () => {
