@@ -16,6 +16,7 @@ import ActionBar from './ActionBar';
 import CanvasList from './CanvasList';
 import ConfirmDialog from './ConfirmDialog';
 import HelpHints from './HelpHints';
+import HelpTour from './HelpTour';
 import StylePanel from './StylePanel';
 import TextEditor from './TextEditor';
 import Toolbar from './Toolbar';
@@ -74,6 +75,10 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   // The onboarding hints (HelpHints): on by default each time the plugin opens, off once the canvas is
   // touched (pen or finger) or a toolbar action is taken; the (?) button in Toolbar's dock brings them back.
   const [showHints, setShowHints] = useState(false);
+  // The tour (#71): on its own the first time Canvas is opened after an install, and from the ⋮
+  // menu after that. It says what things do, where the hints say which control is which.
+  const [showTour, setShowTour] = useState(false);
+  const [tourOnOpen, setTourOnOpen] = useState(false);
   // Clearing takes everything at once, so both ways in (the eraser's options, the ⋮ menu) ask here first.
   const [isConfirmingClear, setConfirmingClear] = useState(false);
   const canvasRef = useRef<CanvasViewRef>(null);
@@ -100,7 +105,21 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   // The plugin runtime stays warm between opens, so this screen can stay mounted across them: every press
   // re-resolves which canvas to show.
   useEffect(() => {
-    const openCanvas = (buttonId: number | null) => withTrail(() => session.open(buttonId));
+    const openCanvas = (buttonId: number | null) =>
+      withTrail(() => session.open(buttonId)).then(() => {
+        // Asked after the open, because the open is what settles it: the marker saying whether
+        // Canvas has ever been opened since it was installed is read and written in there (#71).
+        return session.showsTourOnOpen().then(everyTime => {
+          setTourOnOpen(everyTime);
+          // Read before it is needed, not inside the test: it is spent by being read, and an || that
+          // never reaches it leaves it set. Asked for every time and then turned off, that saved
+          // answer brings the tour back once more on the open straight after (#71).
+          const firstOpen = session.takeFirstOpenSinceInstall();
+          if (everyTime || firstOpen) {
+            setShowTour(true);
+          }
+        });
+      });
     openCanvas(buttonEvents.lastButtonId());
     return buttonEvents.onButton(openCanvas);
   }, [session, buttonEvents, withTrail]);
@@ -266,13 +285,20 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           onLinkToNote={linkToNote}
           onLinkToCanvas={linkToCanvas}
           onNoteCanvases={showNoteCanvases}
+          onShowTour={() => setShowTour(true)}
           onMenuOpen={() => setShowHints(false)}
         />
         <ZoomControl ui={ui} onCommand={command => runCommand(command)} onOpen={() => setShowHints(false)} />
         {/* Over the action bar, which is always there and sits across the middle tools: the eraser's hint has to
             cross it to reach the eraser, and only its arrow does. Still under the style panel and the toolbar,
             and the ⋮ menu dismisses the hints as it opens, so nothing a tap opens is ever drawn over. */}
-        {showHints && <HelpHints />}
+        {/* Not while the tour is up. A first open after an install has an empty canvas, which is when
+            the hints put themselves there, and is the one time the tour comes up on its own: both at
+            once is two sets of arrows over one screen, half of them under the scrim. Said here rather
+            than when the tour opens, because the canvas finishes loading after it and would put them
+            back. They are waiting once it is closed, which is where a tour of the plugin should leave
+            someone on an empty canvas. */}
+        {showHints && !showTour && <HelpHints />}
         <StylePanel
           style={ui.style}
           selectedType={ui.selectedType}
@@ -289,6 +315,19 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           onClearCanvas={() => setConfirmingClear(true)}
           canClearCanvas={ui.hasContent}
         />
+        {/* Over everything, unlike the hints: the tour puts a scrim down and closes on a tap outside
+            its card, so a toolbar or a style panel left on top of it would sit crisp over the faded
+            canvas and still take the taps meant to dismiss it (#71). */}
+        {showTour && (
+          <HelpTour
+            onClose={() => setShowTour(false)}
+            onOpenEveryTime={tourOnOpen}
+            onOpenEveryTimeChange={on => {
+              setTourOnOpen(on);
+              session.setShowTourOnOpen(on);
+            }}
+          />
+        )}
         {isConfirmingClear && (
           <ConfirmDialog
             testID="canvas-clear-confirm"

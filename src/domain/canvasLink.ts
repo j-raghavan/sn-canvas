@@ -94,6 +94,18 @@ export function indexPath(canvasDir: string): string {
   return `${canvasDir}/links.json`;
 }
 
+/**
+ * Asking for the tour every time Canvas opens (#71): the file is there when it has been asked for,
+ * and nothing is in it. A marker rather than a setting, because there is one thing to remember and
+ * a file that is either there or not cannot be half-written or read two ways.
+ *
+ * It sits in the canvas folder rather than the plugin's own, so it outlives an update: the plugin
+ * folder is replaced by an install, which is what makes the marker there mean "never opened yet".
+ */
+export function tourOnOpenPath(canvasDir: string): string {
+  return `${canvasDir}/tour-on-open`;
+}
+
 /** The canvas id a thumbnail path names, or null when [path] is not a Canvas thumbnail. */
 export function canvasIdFromThumbnailPath(path: unknown): string | null {
   if (typeof path !== 'string') {
