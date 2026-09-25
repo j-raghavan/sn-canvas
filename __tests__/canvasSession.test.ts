@@ -967,6 +967,25 @@ describe('saveToNote', () => {
     expect(store.files.get(SCRATCH)).toBe('my drawing');
   });
 
+  // #68: the view comes back without its canvas when Canvas has been away and the firmware took it
+  // (#30). Saving then would put an empty canvas in the note under a new id and give up the scratch
+  // canvas, whose file is where the drawing actually is.
+  test('a view that is not holding the canvas saves nothing to the note', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'a real drawing'});
+    host.page = {notePath: '/n.note', page: 0};
+    await session.open(null);
+    store.emptyView();
+
+    expect(await session.saveToNote()).toBeNull();
+    expect(host.inserted).toEqual([]);
+    // The drawing's file is untouched, and no canvas was made for what was not saved.
+    expect(store.files.get(SCRATCH)).toBe('a real drawing');
+    expect(store.files.has(canvasFile('c-1'))).toBe(false);
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] the view is not holding default; nothing saved to the note',
+    );
+  });
+
   test('a failed re-link of a linked canvas keeps its files', async () => {
     const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
     host.lassoed = [lassoedThumbnail('c-9')];

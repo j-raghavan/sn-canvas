@@ -362,13 +362,17 @@ describe('session', () => {
     }
   });
 
-  test('Save to Note shows nothing when no thumbnail was inserted', async () => {
+  // #68: a save that did not happen used to say nothing, which looks exactly like one that worked
+  // and put the thumbnail somewhere off screen. The canvas is then what the user goes on drawing on
+  // believing it is in the note.
+  test('Save to Note says so when no thumbnail was inserted', async () => {
     const session = createFakeSession();
     session.saveToNote.mockResolvedValue(null);
     const {press, shows, emitCanvasState} = await render(session);
     await emitCanvasState({hasContent: true});
     await press('canvas-save-to-note');
     expect(session.saveToNote).toHaveBeenCalledTimes(1);
+    expect(shows('Could not add this to the note; nothing was changed')).toBe(true);
     expect(shows('Added to note: place it on the page before anything else')).toBe(false);
   });
 
