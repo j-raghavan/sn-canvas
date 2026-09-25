@@ -3,9 +3,10 @@
  * applies, and the ⋮ menu's z-order, zoom and new-canvas choices.
  */
 import React from 'react';
+import {Pressable} from 'react-native';
 import ReactTestRenderer, {act} from 'react-test-renderer';
 import {INITIAL_UI_STATE, type CanvasUiState} from '../src/domain/styles';
-import ActionBar from '../src/ui/ActionBar';
+import ActionBar, {ACTION_BAR_GEOMETRY} from '../src/ui/ActionBar';
 
 const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onCommand = jest.fn();
@@ -15,6 +16,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const onLinkToCanvas = jest.fn();
   const onNoteCanvases = jest.fn();
   const onMenuOpen = jest.fn();
+  const onShowTour = jest.fn();
   let renderer!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
     renderer = ReactTestRenderer.create(
@@ -26,6 +28,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
         onLinkToNote={onLinkToNote}
         onLinkToCanvas={onLinkToCanvas}
         onNoteCanvases={onNoteCanvases}
+        onShowTour={onShowTour}
         onMenuOpen={onMenuOpen}
       />,
     );
@@ -37,7 +40,7 @@ const renderBar = (overrides: Partial<CanvasUiState> = {}) => {
   const isDisabled = (testID: string) => renderer.root.findByProps({testID}).props.disabled;
   const isListed = (testID: string) => renderer.root.findAllByProps({testID}).length > 0;
   const isMenuOpen = () => isListed('canvas-menu-zoomToFit');
-  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onLinkToCanvas, onNoteCanvases, onMenuOpen, press, isDisabled, isMenuOpen, isListed};
+  return {onCommand, onNewCanvas, onClearCanvas, onLinkToNote, onLinkToCanvas, onNoteCanvases, onShowTour, onMenuOpen, press, isDisabled, isMenuOpen, isListed, renderer};
 };
 
 const ACTIONS = ['canvas-undo', 'canvas-redo', 'canvas-delete', 'canvas-duplicate'];
@@ -209,6 +212,16 @@ test('Canvases in this note goes to the screen, which lists them, and is there w
 
 // #2: linking to another canvas is the same job as linking to a note, so it sits beside it on the bar
 // rather than behind the ⋮, which is where things go to be missed.
+// #71: where the tour lives once the first open is past. Someone who skipped it needs somewhere to
+// find it, and the menu is the one place in the app whose entries are words rather than icons.
+test('the menu offers the tour, and tapping it opens one', () => {
+  const {press, isListed, onShowTour} = renderBar();
+  press('canvas-more');
+  expect(isListed('canvas-menu-showTour')).toBe(true);
+  press('canvas-menu-showTour');
+  expect(onShowTour).toHaveBeenCalledTimes(1);
+});
+
 test('Link to canvas is on the bar beside Link to note, greyed out until something is selected', () => {
   expect(renderBar().isDisabled('canvas-link-canvas')).toBe(true);
   const selected = renderBar({hasSelection: true});
@@ -220,4 +233,40 @@ test('Link to canvas is on the bar beside Link to note, greyed out until somethi
   const bar = renderBar({hasSelection: true});
   bar.press('canvas-more');
   expect(bar.isListed('canvas-menu-linkToCanvas')).toBe(false);
+});
+
+// The tour's arrows are aimed with ACTION_BAR_GEOMETRY, so it has to describe the bar this file
+// actually lays out. Worked back from what is rendered rather than from the same constants the
+// geometry is built out of, or a wrong number would simply agree with itself.
+describe('the geometry it publishes', () => {
+  const laidOut = () => {
+    const {renderer} = renderBar();
+    const flat = (style: unknown) => Object.assign({}, ...[style].flat().filter(s => s && typeof s === 'object'));
+    const more = renderer.root.findByProps({testID: 'canvas-more'});
+    // The bar is the view the buttons are laid out in; the wrapper is the one that positions it, and
+    // is the only thing here that lets taps past it.
+    const bar = more.parent!;
+    const buttons = bar.findAllByType(Pressable).filter(node => typeof node.props.testID === 'string');
+    return {
+      wrapper: flat(renderer.root.findAllByProps({pointerEvents: 'box-none'})[0].props.style),
+      bar: flat(bar.props.style),
+      button: flat(more.props.style),
+      slots: buttons.length,
+    };
+  };
+
+  test('puts its top where the bar is actually drawn', () => {
+    const {wrapper, bar, button} = laidOut();
+    expect(ACTION_BAR_GEOMETRY.top).toBe(wrapper.bottom + button.height + 2 * (bar.paddingVertical + bar.borderWidth));
+  });
+
+  test('puts the ⋮ where the last button actually is', () => {
+    const {bar, button, slots} = laidOut();
+    expect(slots).toBeGreaterThan(1);
+    const width = slots * button.width + 2 * (bar.paddingHorizontal + bar.borderWidth);
+    // Last in the row, so its centre is half a button in from the bar's own right edge.
+    expect(ACTION_BAR_GEOMETRY.buttonCenterX('canvas-more')).toBe(width / 2 - bar.borderWidth - bar.paddingHorizontal - button.width / 2);
+    // And the first is the same distance in from the left.
+    expect(ACTION_BAR_GEOMETRY.buttonCenterX('canvas-undo')).toBe(-(width / 2 - bar.borderWidth - bar.paddingHorizontal - button.width / 2));
+  });
 });
