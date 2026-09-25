@@ -19,6 +19,7 @@ import {
   pictureNumbersOf,
   serializeCanvasIndex,
   withCanvasShownWithoutANote,
+  withoutMissingCanvases,
   withLastCanvas,
   withPending,
   pendingOn,
@@ -372,6 +373,22 @@ describe('which canvases a note has claimed (#46)', () => {
 
   // Every open and every switch writes this, not once a session, so without the dedupe a sitting
   // that switches between two canvases with no note known adds an entry per switch, for good.
+  // #64: a canvas deleted from outside Canvas leaves its record behind. For a minted id that costs
+  // nothing, since ids carry the clock and are never minted twice, but the scratch canvas's id is a
+  // fixed word, so left behind it refuses that canvas to every note from then on.
+  test('a canvas nobody owns whose file has gone stops being refused', () => {
+    const nobodys = withCanvasShownWithoutANote(withCanvasShownWithoutANote(EMPTY_INDEX, 'default'), 'c-1');
+    const swept = withoutMissingCanvases(nobodys, ['c-1']);
+    expect(swept.shownWithoutANote).toEqual(['c-1']);
+    expect(isFreeToAdopt(swept, 'default')).toBe(true);
+    expect(isFreeToAdopt(swept, 'c-1')).toBe(false);
+  });
+
+  test('sweeping keeps the note records, which are read past rather than pruned', () => {
+    const owned = withLastCanvas(EMPTY_INDEX, 'c-9', '/a.note');
+    expect(withoutMissingCanvases(owned, [])).toEqual(owned);
+  });
+
   test('a canvas shown without a note twice is written down once', () => {
     const once = withCanvasShownWithoutANote(EMPTY_INDEX, 'default');
     expect(withCanvasShownWithoutANote(once, 'default').shownWithoutANote).toEqual(['default']);
