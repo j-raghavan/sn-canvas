@@ -35,7 +35,7 @@ An infinite canvas inside your Supernote notes. Sketch diagrams, build tables an
 - **Group them:** with several selected, **Group** in the action bar makes them one. Tapping any member selects the whole group, and it moves, copies and deletes as one until you **Ungroup** it.
 - From the **⋮** menu: bring to front or send to back, zoom to fit or to 100%, table rows and columns, **Clear canvas** (also under the eraser) and **New canvas**.
 - **Style panel:** 12 colours, opacity, fill (none, semi, solid, hatched, gradient), outline (hand-drawn, dashed, dotted, solid; images can also have none) and four sizes (S, M, L, XL). Picking a style changes the selected item and becomes the default for new ones.
-- On screen, colours are drawn as distinct e-ink grays; the note thumbnail and the PDF keep the true colours.
+- On screen, colours are drawn as distinct e-ink grays. Export to PDF keeps the true colours; a thumbnail saved into a note is written in colour, but the note stores it in gray.
 
 ### Working with your notes
 - **Save to Note** drops a thumbnail of the canvas into the current page. Lasso the thumbnail and tap **Open Canvas** to reopen that canvas, framed to fit its content.
@@ -104,8 +104,9 @@ Canvas asks for all three when it starts, so the dialogs come together rather th
 ## Tips and known limitations
 
 - **Typed text only.** Text boxes, sticky notes and table cells use the on-screen keyboard. Supernote's handwriting recognition only reads the note's own ink, not strokes drawn inside a canvas.
-- **Light colours look pale on screen.** Each colour gets its own gray so they stay distinguishable on e-ink, which makes yellow and the light colours quite light. The PDF and the note thumbnail use true colour.
-- **Mirroring shows the grays, not the colours.** Mirroring sends what is on the screen, and what is on the screen is drawn in e-ink grays so the colours stay apart on the device. Export to PDF, or save a thumbnail to the note, to get the true colours.
+- **Light colours look pale on screen.** Each colour gets its own gray so they stay distinguishable on e-ink, which makes yellow and the light colours quite light. Export to PDF for the true colours.
+- **Mirroring shows the grays, not the colours.** Mirroring sends what is on the screen, and what is on the screen is drawn in e-ink grays so the colours stay apart on the device. Export to PDF for the true colours.
+- **A canvas in a note is gray, and exporting that note keeps it gray.** The thumbnail Canvas saves is a full-colour picture, but the note converts it to grayscale as it goes in, so exporting the note as a PDF has no colour left to find. Use Canvas's own Export to PDF for a coloured copy.
 - **Some e-ink ghosting while panning.** A faint trace of the previous frame can linger until the screen refreshes.
 - **PDF export covers the whole canvas.** Exporting only part of a canvas is not supported yet.
 
