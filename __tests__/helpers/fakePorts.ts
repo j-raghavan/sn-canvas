@@ -12,12 +12,8 @@ export type FakeStore = CanvasStorePort & {
   files: Map<string, string>;
   shown: string;
   failing: Set<keyof CanvasStorePort>;
-  /**
-   * Paths a saveAs is set to fail for, when one save of several has to fail and the rest go through:
-   * putting the scratch canvas back after the note refused its thumbnail is the second saveAs of a
-   * save to note, and it is the one that strands the drawing (#51).
-   */
-  failSaveAsTo: Set<string>;
+  /** Paths a bindTo is set to fail for, when the canvas cannot be taken up after its thumbnail went in (#62). */
+  failBindTo: Set<string>;
   /** Paths a remove is set to fail for, when one file of several will not go (#51). */
   failRemoveOf: Set<string>;
   /** The note's pen the canvas would set back. */
@@ -39,7 +35,7 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
   let held: string | null = null;
   const files = new Map(Object.entries(initial));
   const failing = new Set<keyof CanvasStorePort>();
-  const failSaveAsTo = new Set<string>();
+  const failBindTo = new Set<string>();
   const failRemoveOf = new Set<string>();
   const write = (path: string, content: string) => {
     files.delete(path);
@@ -48,7 +44,7 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
   const store: FakeStore = {
     files,
     failing,
-    failSaveAsTo,
+    failBindTo,
     failRemoveOf,
     shown: '',
     notePen: null,
@@ -98,11 +94,23 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       write(path, store.shown);
       return true;
     },
-    async saveAs(path) {
-      if (failing.has('saveAs') || failSaveAsTo.has(path)) {
+    async writeTo(path) {
+      // Only ever creates, as the device does: a path already holding a canvas is refused, because
+      // this writes what the view shows rather than what that file holds (#30, #62).
+      // Not counted as a refused save: `refused` is what the view would not let a save write, which
+      // is how the tests ask whether the session and the view still agree. A create that found a
+      // file there is a different answer to a different question, and its result is checked by the
+      // caller rather than inferred from that list.
+      if (failing.has('writeTo') || files.has(path)) {
         return false;
       }
       write(path, store.shown);
+      return true;
+    },
+    async bindTo(path) {
+      if (failing.has('bindTo') || failBindTo.has(path)) {
+        return false;
+      }
       held = path;
       return true;
     },

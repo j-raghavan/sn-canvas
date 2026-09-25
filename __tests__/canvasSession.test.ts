@@ -27,7 +27,10 @@ const lassoedPicture = (num: number, userData?: string) => ({
 const indexWith = (index: {lastCanvasId?: string}) => JSON.stringify({lastCanvasId: null, pending: [], ...index});
 const savedIndex = (store: {files: Map<string, string>}) => JSON.parse(String(store.files.get(INDEX)));
 
-const setup = (files: Record<string, string> = {}, {installedJustNow = false} = {}) => {
+// `mints` forces the ids a test gets. The default mint steps over ids whose file is already there,
+// as the real one does by carrying the clock, which means a collision cannot be reached by accident
+// and so cannot be tested by accident either: a test that wants one has to ask.
+const setup = (files: Record<string, string> = {}, {installedJustNow = false, mints}: {installedJustNow?: boolean; mints?: string} = {}) => {
   const store = createFakeStore(installedJustNow ? files : {[MARKER]: 'opened', ...files});
   const host = createFakeHost();
   const badge = createFakeBadge();
@@ -39,6 +42,9 @@ const setup = (files: Record<string, string> = {}, {installedJustNow = false} = 
     badge,
     logger,
     newCanvasId: () => {
+      if (mints !== undefined) {
+        return mints;
+      }
       // Never onto a file already saved, as the real mint cannot be: ids carry the clock. The
       // counter restarts with each setup, so a second session in one test would otherwise mint c-1
       // again and quietly open the first session's canvas instead of a new one.
@@ -817,21 +823,24 @@ describe('saveToNote', () => {
   });
 
   test.each([
-    ['saving the canvas under its new id', 'saveAs'],
+    ['writing the canvas under its new id', 'writeTo'],
     ['rendering the thumbnail', 'renderThumbnail'],
     ['inserting the image', 'insertImage'],
-  ])('when %s fails, the scratch canvas stays as it was and no new files are left behind', async (_step, failing) => {
+  ])('when %s fails, the canvas is the scratch one still and no new files are left behind', async (_step, failing) => {
     const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
     await session.open(null);
+    // Drawn on since it was last saved, so that what the scratch file holds afterwards says whether
+    // the work survived. Left clean, the file reads 'scratch' whether it was kept or dropped.
+    store.shown = 'drawn since the last save';
     if (failing === 'insertImage') {
       host.insertSucceeds = false;
     } else {
-      store.failing.add(failing as 'saveAs' | 'renderThumbnail');
+      store.failing.add(failing as 'writeTo' | 'renderThumbnail');
     }
     await session.saveToNote();
     expect(session.currentCanvasId()).toBe('default');
     expect([...store.files.keys()].sort()).toEqual([INDEX, MARKER, SCRATCH].sort());
-    expect(store.files.get(SCRATCH)).toBe('scratch');
+    expect(store.files.get(SCRATCH)).toBe('drawn since the last save');
     // And the view keeps the scratch canvas's file: a later save goes there.
     await session.close();
     expect(store.refused).toEqual([]);
@@ -839,66 +848,19 @@ describe('saveToNote', () => {
     expect(logger.lines).toContain('warn [SNCANVAS][LINK] save to note failed; canvas=default unchanged');
   });
 
-  // #51: the note refuses the thumbnail and putting the scratch canvas back fails too. The view is
-  // left holding the new id's file, since the native side puts its binding back where it was and the
-  // first save had bound it there. Deleting that file would leave the drawing with nowhere to go.
-  test('when the scratch canvas cannot be put back, the drawing keeps a file it can still be saved to', async () => {
-    const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
-    await session.open(null);
-    store.shown = 'drawn since the last save';
-    host.insertSucceeds = false;
-    store.failSaveAsTo.add(SCRATCH);
-    await session.saveToNote();
-    // The drawing has a file of its own straight away, rather than living in the view until something
-    // saves again: a close that never reaches a save, or a crash, would take it otherwise.
-    expect(store.files.get(canvasFile('c-1'))).toBe('drawn since the last save');
-    // The drawing is this canvas now, so it keeps the picture rendered of it: that is what the
-    // note'''s canvas list draws. Nothing else is left behind.
-    expect([...store.files.keys()].sort()).toEqual([INDEX, MARKER, SCRATCH, canvasFile('c-1'), thumbnail('c-1')].sort());
-    expect(logger.lines).toContain(
-      'warn [SNCANVAS][LINK] save to note failed; default could not be put back, so the drawing is canvas=c-1',
-    );
-    // Whatever the canvas is called now, the session and the view agree on it, so a later save lands.
-    await session.close();
-    expect(store.refused).toEqual([]);
-    // And the scratch file keeps what it had, rather than the drawing being written over it as well.
-    expect(store.files.get(SCRATCH)).toBe('scratch');
-  });
-
-  // #51: there is nothing to put back when the drawing was never written under its new id, so the
-  // unwind does not write at all. Without that guard a save that just failed is followed straight
-  // away by another write to a different file, which is the last thing to do when writing is what
-  // is going wrong.
-  test('a save to note that never wrote the drawing leaves the scratch file alone', async () => {
+  // #62: a refused save to note keeps what was drawn. Nothing else writes the scratch canvas until
+  // it closes or is switched away from, so without this the strokes since the last save live only in
+  // the view, and a save to note that has just failed is when someone gives up and leaves.
+  test('a refused save to note keeps what was drawn in the scratch canvas', async () => {
     const {store, host, session} = setup({[SCRATCH]: 'scratch'});
     await session.open(null);
     store.shown = 'drawn since the last save';
     host.insertSucceeds = false;
-    store.failSaveAsTo.add(canvasFile('c-1'));
     await session.saveToNote();
-    expect(store.files.get(SCRATCH)).toBe('scratch');
+    expect(store.files.get(SCRATCH)).toBe('drawn since the last save');
     expect(session.currentCanvasId()).toBe('default');
-  });
-
-  // #51: keeping the file is not enough on its own. The note reopens whatever the index says it
-  // reopens, and the canvas list is built from the index too, so a drawing in a file no record
-  // names is one the user cannot get back to: the loss is quieter than the one this fixed, not gone.
-  test('the note reopens the drawing that could not go back, and lists it', async () => {
-    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
-    host.page = {notePath: '/n.note', page: 0};
-    await session.open(null);
-    store.shown = 'drawn since the last save';
-    host.insertSucceeds = false;
-    store.failSaveAsTo.add(SCRATCH);
-    await session.saveToNote();
-    expect((await session.canvasesHere()).map(c => c.canvasId)).toContain('c-1');
-    await session.close();
-
-    const reopened = setup(Object.fromEntries(store.files));
-    reopened.host.page = {notePath: '/n.note', page: 0};
-    await reopened.session.open(null);
-    expect(reopened.session.currentCanvasId()).toBe('c-1');
-    expect(reopened.store.shown).toBe('drawn since the last save');
+    // And the copy that was going to be the new canvas is gone, since it never became one.
+    expect(store.files.has(canvasFile('c-1'))).toBe(false);
   });
 
   // #51: the canvas went back to being the scratch one, but its short-lived files would not go. They
@@ -921,59 +883,88 @@ describe('saveToNote', () => {
     );
   });
 
-  // #51 meeting #49: with no note to record the rescued canvas against, it is written down as shown
-  // without one. That is what keeps the next note that asks from being handed it, which would show
-  // that note this drawing and write over it the moment it saved.
-  test('a rescued drawing with no note to name is not left for another note to take', async () => {
+  // #62: the copy is written and the note takes it, and only then does the canvas try to become the
+  // new one. If that last step fails the thumbnail is already in the note, so the canvas is recorded
+  // all the same; what does not happen is the scratch canvas being given up while the view holds it.
+  test('a canvas that goes into the note but cannot be taken up is still the note s', async () => {
     const {store, host, logger, session} = setup({[SCRATCH]: 'scratch'});
-    host.page = null;
+    host.page = {notePath: '/n.note', page: 0};
     await session.open(null);
-    store.shown = 'drawn since the last save';
-    host.insertSucceeds = false;
-    store.failSaveAsTo.add(SCRATCH);
-    await session.saveToNote();
-    expect(store.files.get(canvasFile('c-1'))).toBe('drawn since the last save');
-    expect(logger.lines).toContain(
-      'warn [SNCANVAS][LINK] no note to record canvas=c-1 against; it is saveable but nothing reopens it',
-    );
-    // Written down as nobody's rather than left out of the index: that is what keeps another note
-    // from being handed it, and it means the index knows the drawing is there (#49).
-    expect(savedIndex(store).shownWithoutANote).toContain('c-1');
-    // And the log still says the canvas changed, because it did: unrecorded is not unchanged.
-    expect(logger.lines).toContain(
-      'warn [SNCANVAS][LINK] save to note failed; default could not be put back, so the drawing is canvas=c-1',
-    );
-    await session.close();
+    store.shown = 'drawn on the scratch canvas';
+    store.failBindTo.add(canvasFile('c-1'));
+    expect(await session.saveToNote()).toBe('inserted');
 
-    // Another note opens Canvas: it must get one of its own, not the drawing it never made.
-    const next = setup(Object.fromEntries(store.files));
-    next.host.page = {notePath: '/other.note', page: 0};
-    await next.session.open(500);
-    expect(next.session.currentCanvasId()).not.toBe('c-1');
-    expect(next.store.shown).not.toBe('drawn since the last save');
+    expect(host.inserted).toEqual([thumbnail('c-1')]);
+    expect(store.files.get(canvasFile('c-1'))).toBe('drawn on the scratch canvas');
+    // The view never moved, so the scratch canvas keeps its file and the session keeps its name.
+    expect(session.currentCanvasId()).toBe('default');
+    expect(store.files.get(SCRATCH)).toBe('scratch');
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] canvas=c-1 is in the note, but the canvas shown is default still',
+    );
+    // A later save still lands, because what the session says and what the view holds agree.
+    await session.close();
+    expect(store.refused).toEqual([]);
   });
 
-  // #51: what the user does next after the save failed. The canvas is the new one now, so a second
-  // try is an ordinary re-link rather than another scratch save: it writes where the view already
-  // is, the thumbnail goes in, and the note reopens the drawing from then on.
-  test('trying the save again once it has been rescued puts the drawing in the note', async () => {
+  // #62: the thumbnail is in the note, so the note has to be able to get back to the drawing. The
+  // index is the only thing that reopens a canvas or lists it, so a canvas in the note but not in
+  // the index is the quiet loss all over again.
+  test('a canvas in the note that could not be taken up is still reopened and listed by that note', async () => {
     const {store, host, session} = setup({[SCRATCH]: 'scratch'});
     host.page = {notePath: '/n.note', page: 0};
     await session.open(null);
-    store.shown = 'drawn since the last save';
-    host.insertSucceeds = false;
-    store.failSaveAsTo.add(SCRATCH);
-    await session.saveToNote();
-
-    host.insertSucceeds = true;
+    store.shown = 'drawn on the scratch canvas';
+    store.failBindTo.add(canvasFile('c-1'));
     expect(await session.saveToNote()).toBe('inserted');
-    expect(host.inserted).toEqual([thumbnail('c-1')]);
+    expect(savedIndex(store).lastByNote['/n.note']).toBe('c-1');
+    expect((await session.canvasesHere()).map(c => c.canvasId)).toContain('c-1');
     await session.close();
 
     const reopened = setup(Object.fromEntries(store.files));
     reopened.host.page = {notePath: '/n.note', page: 0};
-    await reopened.session.open(null);
-    expect(reopened.store.shown).toBe('drawn since the last save');
+    await reopened.session.open(500);
+    expect(reopened.session.currentCanvasId()).toBe('c-1');
+    expect(reopened.store.shown).toBe('drawn on the scratch canvas');
+  });
+
+  // #62: and trying again gets a canvas of its own rather than being refused for good. The first
+  // attempt left c-1 on disk, and a copy is only ever written to a file that is not there, so a mint
+  // that handed back an id already saved would fail every retry from then on.
+  test('trying the save again after the canvas could not be taken up puts it in the note', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = {notePath: '/n.note', page: 0};
+    await session.open(null);
+    store.shown = 'drawn on the scratch canvas';
+    store.failBindTo.add(canvasFile('c-1'));
+    await session.saveToNote();
+
+    expect(await session.saveToNote()).toBe('inserted');
+    expect(session.currentCanvasId()).toBe('c-2');
+    expect(store.files.get(canvasFile('c-2'))).toBe('drawn on the scratch canvas');
+  });
+
+  // #62: a minted id landing on a canvas that already exists. Writing the copy is refused rather
+  // than writing over somebody's drawing, and then the clearing up has to leave that file alone:
+  // answering a refusal to overwrite by deleting instead would be worse than the overwrite.
+  test('a new id that lands on an existing canvas leaves it and its thumbnail alone', async () => {
+    const {store, host, session} = setup(
+      {
+        [SCRATCH]: 'scratch',
+        [canvasFile('c-1')]: "another note's drawing",
+        [thumbnail('c-1')]: 'png:another note',
+        [INDEX]: JSON.stringify({canvasesByNote: {'/other.note': ['c-1']}, lastByNote: {'/other.note': 'c-1'}, lastCanvasId: 'c-1', pending: []}),
+      },
+      {mints: 'c-1'},
+    );
+    host.page = {notePath: '/n.note', page: 0};
+    await session.open(null);
+    store.shown = 'my drawing';
+    expect(await session.saveToNote()).toBeNull();
+    expect(store.files.get(canvasFile('c-1'))).toBe("another note's drawing");
+    expect(store.files.get(thumbnail('c-1'))).toBe('png:another note');
+    // And my own work is still kept, in the canvas it was drawn on.
+    expect(store.files.get(SCRATCH)).toBe('my drawing');
   });
 
   test('a failed re-link of a linked canvas keeps its files', async () => {

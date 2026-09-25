@@ -9,7 +9,8 @@ import {createRecordingLogger} from './helpers/fakePorts';
 const createNative = (): jest.Mocked<NativeCanvasModule> => ({
   loadCanvas: jest.fn().mockResolvedValue(true),
   saveCanvas: jest.fn().mockResolvedValue(true),
-  saveCanvasAs: jest.fn().mockResolvedValue(true),
+  bindCanvas: jest.fn().mockResolvedValue(true),
+  writeCanvasTo: jest.fn().mockResolvedValue(true),
   holdsCanvas: jest.fn().mockResolvedValue(true),
   deleteCanvas: jest.fn().mockResolvedValue(true),
   generateThumbnail: jest.fn().mockResolvedValue(true),
@@ -54,13 +55,15 @@ test('each port call reaches its native method with the path', async () => {
   const store = createNativeCanvasStore(createRecordingLogger(), native);
   expect(await store.load('/a.json', '/images')).toBe(true);
   expect(await store.save('/b.json')).toBe(true);
-  expect(await store.saveAs('/n.json')).toBe(true);
+  expect(await store.bindTo('/n.json')).toBe(true);
+  expect(await store.writeTo('/w.json')).toBe(true);
   expect(await store.holds('/h.json')).toBe(true);
   expect(await store.remove('/c.json')).toBe(true);
   expect(await store.renderThumbnail('/d.png')).toBe(true);
   expect(native.loadCanvas).toHaveBeenCalledWith('/a.json', '/images');
   expect(native.saveCanvas).toHaveBeenCalledWith('/b.json');
-  expect(native.saveCanvasAs).toHaveBeenCalledWith('/n.json');
+  expect(native.bindCanvas).toHaveBeenCalledWith('/n.json');
+  expect(native.writeCanvasTo).toHaveBeenCalledWith('/w.json');
   expect(native.holdsCanvas).toHaveBeenCalledWith('/h.json');
   expect(native.deleteCanvas).toHaveBeenCalledWith('/c.json');
   expect(native.generateThumbnail).toHaveBeenCalledWith('/d.png');

@@ -1,6 +1,7 @@
 package com.sncanvas.canvas
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -9,6 +10,9 @@ import com.facebook.react.bridge.ReactMethod
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.StandardOpenOption
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -64,31 +68,45 @@ class CanvasModule(
     }
 
     /**
-     * Writes the live canvas to [path], a file it was not loaded from, and
-     * keeps it there from now on: the scratch canvas, given its own id as it
-     * goes into a note. Should the write fail, the view keeps the file it held.
+     * Writes the live canvas to [path] and leaves the view where it is: a copy of what is shown,
+     * taken for a file the canvas has not become yet (#62). Save to Note takes one under a new id
+     * before asking the note to place a thumbnail, so that a note which refuses leaves nothing to
+     * put back.
+     *
+     * Only ever creates: it will not write over a file, whoever's canvas that file holds. That is a
+     * narrower rule than [saveCanvas]'s, which is that the view only ever writes the canvas it is
+     * holding (#30). This says nothing about what the view holds, only that nothing already written
+     * is lost.
      */
     @ReactMethod
-    fun saveCanvasAs(
+    fun writeCanvasTo(
         path: String,
         promise: Promise,
     ) {
         val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to save from")
         view.post {
-            val held = view.heldPath
             val elements = view.getState().elements
+            // Off the view's thread, and by creating rather than looking first: a check taken a
+            // thread-hop before the write is one something can slip between.
+            inBackground(promise) { createCanvas(path, elements) }
+        }
+    }
+
+    /**
+     * Makes [path] the file the live view holds, writing nothing: the canvas becomes the one already
+     * written there. Save to Note takes its copy up this way once the note has placed the thumbnail,
+     * so becoming a canvas cannot fail on a write it does not need, and the file is written once
+     * rather than twice (#62). Nothing to put back should it fail, because nothing was written.
+     */
+    @ReactMethod
+    fun bindCanvas(
+        path: String,
+        promise: Promise,
+    ) {
+        val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to bind")
+        view.post {
             view.rebind(path)
-            Thread {
-                try {
-                    promise.resolve(writeCanvas(path, elements))
-                } catch (e: IOException) {
-                    view.post { view.rebind(held) }
-                    promise.reject(ERR_IO, e.message, e)
-                } catch (e: SecurityException) {
-                    view.post { view.rebind(held) }
-                    promise.reject(ERR_DENIED, e.message, e)
-                }
-            }.start()
+            promise.resolve(true)
         }
     }
 
@@ -281,11 +299,37 @@ class CanvasModule(
 }
 
 /**
+ * Writes [elements] to [path] only if nothing is there; false when a file already holds that path.
+ * Creating rather than checking first is what makes "only ever creates" true rather than likely:
+ * CREATE_NEW asks the filesystem to test and write as one step (#62).
+ *
+ * It will not write over a file, whoever's canvas that file holds. Narrower than the rule
+ * [saveCanvas] keeps, which is that the view only ever writes the canvas it holds (#30): this says
+ * nothing about what the view holds, only that nothing already written is lost.
+ */
+private fun createCanvas(
+    path: String,
+    elements: List<Element>,
+): Boolean {
+    val file = File(path)
+    file.parentFile?.mkdirs()
+    return try {
+        Files.newOutputStream(file.toPath(), StandardOpenOption.CREATE_NEW).use { out ->
+            out.write(CanvasJson.serializeElements(elements).toByteArray())
+        }
+        true
+    } catch (e: FileAlreadyExistsException) {
+        Log.w(CanvasModule.NAME, "$path already holds a canvas; not written", e)
+        false
+    }
+}
+
+/**
  * Writes [elements] to [path] as canvas JSON, making its folder as needed; true once written.
  *
- * Never returns false: it writes or it throws. [saveCanvasAs] puts the view's binding back only on
- * the throwing path, so a write that failed quietly would leave the view bound to a file it never
- * wrote, and the session would go on saving somewhere the drawing is not (#51).
+ * Never returns false: it writes or it throws. Its caller reports a write that did not happen, and
+ * a quiet false would be read as one that did, leaving the session saving somewhere the drawing is
+ * not (#51).
  */
 private fun writeCanvas(
     path: String,
