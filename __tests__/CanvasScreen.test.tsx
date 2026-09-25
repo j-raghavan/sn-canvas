@@ -376,6 +376,19 @@ describe('session', () => {
     expect(shows('Added to note: place it on the page before anything else')).toBe(false);
   });
 
+  // #68: the second tap of a double tap resolves at once while the first save is still running and
+  // about to work. Telling the user it failed would be telling them something untrue, and it is the
+  // message they would be looking at while it succeeded.
+  test('Save to Note says nothing for a tap ignored while one is already running', async () => {
+    const session = createFakeSession();
+    session.saveToNote.mockResolvedValue('ignored');
+    const {press, shows, emitCanvasState} = await render(session);
+    await emitCanvasState({hasContent: true});
+    await press('canvas-save-to-note');
+    expect(shows('Could not add this to the note; nothing was changed')).toBe(false);
+    expect(shows('Added to note: place it on the page before anything else')).toBe(false);
+  });
+
   test('Close goes to the session', async () => {
     const {session, press} = await render();
     await press('canvas-close');

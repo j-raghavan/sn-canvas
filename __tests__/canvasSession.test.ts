@@ -984,6 +984,9 @@ describe('saveToNote', () => {
     expect(logger.lines).toContain(
       'warn [SNCANVAS][LINK] the view is not holding default; nothing saved to the note',
     );
+    // And it refused before reading the page, which takes seconds and saves the user's note to do
+    // it. Nothing that is not going to happen should cost them their note being written first.
+    expect(host.noteSaves).toBe(0);
   });
 
   test('a failed re-link of a linked canvas keeps its files', async () => {
@@ -1606,10 +1609,13 @@ describe('saveToNote result', () => {
     expect(await session.saveToNote()).toBeNull();
   });
 
-  test('is null for a tap ignored while one runs, and without a plugin directory', async () => {
+  // #68: a tap thrown away while a save runs is told apart from a save that tried and did not, so
+  // the screen can stay quiet about the first. Saying it failed would be untrue of the save that is
+  // still running, and that is the message the user would be looking at while it worked.
+  test('says a tap was ignored while one runs, and null when there is nowhere to save', async () => {
     const {session} = setup({[SCRATCH]: 'scratch'});
     await session.open(null);
-    expect(await Promise.all([session.saveToNote(), session.saveToNote()])).toEqual(['inserted', null]);
+    expect(await Promise.all([session.saveToNote(), session.saveToNote()])).toEqual(['inserted', 'ignored']);
     const {session: noDirSession, host: noDirHost} = setup();
     noDirHost.dir = null;
     expect(await noDirSession.saveToNote()).toBeNull();

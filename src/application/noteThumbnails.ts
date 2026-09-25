@@ -157,21 +157,23 @@ export function createNoteThumbnails({
     }
     // The scratch canvas gets an id of its own; a linked canvas re-links under the id it has.
     const fromScratch = shown.id() === DEFAULT_CANVAS_ID;
+    // Asked before anything else is done. A view comes back empty when Canvas has been away and the
+    // firmware took it (#30), and the copy is written to a file the view does not hold by design
+    // (#62), so nothing further down would refuse it: an empty canvas would go into the note under a
+    // new id and the real drawing's file be deleted as the scratch canvas was given up. A linked
+    // canvas is refused by the save itself. First, because reading the page below takes seconds and
+    // saves the user's note to do it, and because an id minted for a save that will not happen is an
+    // id spent on nothing.
+    if (fromScratch && !(await store.holds(canvasFilePath(dir, DEFAULT_CANVAS_ID)))) {
+      logger.warn(`${TAG}[LINK] the view is not holding ${DEFAULT_CANVAS_ID}; nothing saved to the note`);
+      return null;
+    }
     const linkedId = fromScratch ? newCanvasId() : shown.id();
     const canvasFile = canvasFilePath(dir, linkedId);
     const thumbnail = thumbnailPath(dir, linkedId);
     // The page as it is before the thumbnail goes in: the new picture is the one that was not there (leavePendingLink).
     const at = await host.currentPage();
     const already = at === null ? null : {at, pictures: await picturesOn(at, dir)};
-    // Only from a view that is holding the canvas it is being asked to save. A view comes back
-    // empty when Canvas has been away and the firmware took it (#30), and the copy is written to a
-    // file the view does not hold by design (#62), so nothing else here would refuse it: an empty
-    // canvas would go into the note under a new id and the real drawing's file be deleted as the
-    // scratch canvas was given up. A linked canvas is refused by the save itself (#68).
-    if (fromScratch && !(await store.holds(canvasFilePath(dir, DEFAULT_CANVAS_ID)))) {
-      logger.warn(`${TAG}[LINK] the view is not holding ${DEFAULT_CANVAS_ID}; nothing saved to the note`);
-      return null;
-    }
     // A copy under the new id, taken without moving the view off the scratch canvas: the canvas only
     // becomes the new one once the note has actually taken the thumbnail, so a note that refuses
     // leaves nothing to put back (#62). Any other canvas is saved to the file it was loaded from.
@@ -250,7 +252,7 @@ export function createNoteThumbnails({
   const saveToNote = (): Promise<SaveToNoteResult> => {
     if (saveToNotePending) {
       logger.log(`${TAG}[LINK] save to note already running; tap ignored`);
-      return Promise.resolve(null);
+      return Promise.resolve('ignored');
     }
     saveToNotePending = true;
     let linked: NoteLink | null = null;
