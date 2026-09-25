@@ -11,8 +11,13 @@ import type {NotePage} from '../domain/canvasIndex';
 /** The pen the note writes with, in the SDK's codes (sn-plugin-lib's PenInfo). */
 export type NotePen = {type: number; width: number; color: number};
 
-/** What "Save to Note" did: put a thumbnail of the canvas into the note, or nothing. */
-export type SaveToNoteResult = 'inserted' | null;
+/**
+ * What "Save to Note" did: put a thumbnail of the canvas into the note, threw the tap away because
+ * one was already running, or tried and did not. The middle one is told apart from the last because
+ * a tap nobody acted on is not a save that failed, and saying so would be saying something untrue
+ * while the save that is running is still going to work (#68).
+ */
+export type SaveToNoteResult = 'inserted' | 'ignored' | null;
 
 // Where an element links to lives in the domain, since a canvas file holds it; re-exported so the
 // session and its adapters take everything they speak in from one place.

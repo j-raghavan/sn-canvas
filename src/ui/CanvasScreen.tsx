@@ -59,6 +59,7 @@ const BACK_ARROW_ICON = require('../../assets/icons/badge-back-arrow.png');
  * something else is done first (#30).
  */
 const ADDED_TO_NOTE = 'Added to note: place it on the page before anything else';
+const COULD_NOT_ADD = 'Could not add this to the note; nothing was changed';
 
 /** How long the "Added to note" confirmation stays up. */
 export const NOTICE_MS = 2500;
@@ -193,9 +194,15 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
   // refresh of the one already on the page doesn't look like nothing happened.
   const saveToNote = async () => {
     const saved = await session.saveToNote();
-    if (saved !== null) {
-      setNotice(ADDED_TO_NOTE);
+    if (saved === 'ignored') {
+      // A second tap while the first is still going. Saying anything here would be saying it of a
+      // save that is still running and about to work.
+      return;
     }
+    // Said either way otherwise. A save that did not happen used to say nothing at all, which reads
+    // exactly like one that did nothing visible, and the canvas is what the user would have gone on
+    // drawing on believing it was in the note (#68).
+    setNotice(saved !== null ? ADDED_TO_NOTE : COULD_NOT_ADD);
   };
 
   return (

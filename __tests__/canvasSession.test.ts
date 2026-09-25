@@ -967,6 +967,63 @@ describe('saveToNote', () => {
     expect(store.files.get(SCRATCH)).toBe('my drawing');
   });
 
+  // #68: the view comes back without its canvas when Canvas has been away and the firmware took it
+  // (#30). Saving then would put an empty canvas in the note under a new id and give up the scratch
+  // canvas, whose file is where the drawing actually is.
+  test('a view that is not holding the canvas saves nothing to the note', async () => {
+    const {store, host, logger, session} = setup({[SCRATCH]: 'a real drawing'});
+    host.page = {notePath: '/n.note', page: 0};
+    await session.open(null);
+    store.emptyView();
+
+    expect(await session.saveToNote()).toBeNull();
+    expect(host.inserted).toEqual([]);
+    // The drawing's file is untouched, and no canvas was made for what was not saved.
+    expect(store.files.get(SCRATCH)).toBe('a real drawing');
+    expect(store.files.has(canvasFile('c-1'))).toBe(false);
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] the view is not holding canvas=default; nothing saved to the note',
+    );
+    // And it refused before reading the page, which takes seconds and saves the user's note to do
+    // it. Nothing that is not going to happen should cost them their note being written first.
+    expect(host.noteSaves).toBe(0);
+  });
+
+  // #68: a canvas that is already a note's would be refused by the save itself, but only after the
+  // page read has cost seconds and written the user's note. Asked the same way and as early as the
+  // scratch canvas, both refuse before any of that.
+  test('a canvas of the note s own is refused too when the view is not holding it', async () => {
+    const {store, host, logger, session} = setup({[canvasFile('c-9')]: 'nine'});
+    host.lassoed = [lassoedThumbnail('c-9')];
+    await session.open(501);
+    expect(session.currentCanvasId()).toBe('c-9');
+    store.emptyView();
+
+    expect(await session.saveToNote()).toBeNull();
+    expect(host.inserted).toEqual([]);
+    expect(store.files.get(canvasFile('c-9'))).toBe('nine');
+    expect(host.noteSaves).toBe(0);
+    expect(logger.lines).toContain(
+      'warn [SNCANVAS][LINK] the view is not holding canvas=c-9; nothing saved to the note',
+    );
+  });
+
+  // #68: the first Save to Note anyone ever does. The scratch canvas has no file yet, so a guard
+  // that asked whether one was on disk rather than what the view is holding would refuse the very
+  // first save, which is the commonest thing this button is used for.
+  test('the first save to note of a scratch canvas never yet written goes in', async () => {
+    const {store, host, session} = setup({}, {installedJustNow: true});
+    host.page = {notePath: '/n.note', page: 0};
+    await session.open(null);
+    expect(store.files.has(SCRATCH)).toBe(false);
+    store.shown = 'the first thing ever drawn';
+
+    expect(await session.saveToNote()).toBe('inserted');
+    expect(host.inserted).toEqual([thumbnail('c-1')]);
+    expect(store.files.get(canvasFile('c-1'))).toBe('the first thing ever drawn');
+    expect(session.currentCanvasId()).toBe('c-1');
+  });
+
   test('a failed re-link of a linked canvas keeps its files', async () => {
     const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
     host.lassoed = [lassoedThumbnail('c-9')];
@@ -1587,10 +1644,13 @@ describe('saveToNote result', () => {
     expect(await session.saveToNote()).toBeNull();
   });
 
-  test('is null for a tap ignored while one runs, and without a plugin directory', async () => {
+  // #68: a tap thrown away while a save runs is told apart from a save that tried and did not, so
+  // the screen can stay quiet about the first. Saying it failed would be untrue of the save that is
+  // still running, and that is the message the user would be looking at while it worked.
+  test('says a tap was ignored while one runs, and null when there is nowhere to save', async () => {
     const {session} = setup({[SCRATCH]: 'scratch'});
     await session.open(null);
-    expect(await Promise.all([session.saveToNote(), session.saveToNote()])).toEqual(['inserted', null]);
+    expect(await Promise.all([session.saveToNote(), session.saveToNote()])).toEqual(['inserted', 'ignored']);
     const {session: noDirSession, host: noDirHost} = setup();
     noDirHost.dir = null;
     expect(await noDirSession.saveToNote()).toBeNull();

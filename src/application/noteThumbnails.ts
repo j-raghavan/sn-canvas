@@ -157,6 +157,21 @@ export function createNoteThumbnails({
     }
     // The scratch canvas gets an id of its own; a linked canvas re-links under the id it has.
     const fromScratch = shown.id() === DEFAULT_CANVAS_ID;
+    // One rule, asked of every canvas before anything else is done: the view has to be holding the
+    // one being saved. It comes back holding nothing when Canvas has been away and the firmware took
+    // it (#30), and the scratch canvas's copy is written to a file the view does not hold by design
+    // (#62), so nothing further down would refuse that one: an empty canvas would go into the note
+    // under a new id and the real drawing's file be deleted as the scratch canvas was given up.
+    //
+    // A canvas that is already a note's would be refused anyway, by the save itself. Asking here as
+    // well costs one call and means both go the same way, rather than one being safe because of a
+    // rejection three layers down that a reader has to go and check. It is asked first because the
+    // page read below takes seconds and saves the user's note to do it, and because an id minted
+    // for a save that will not happen is an id spent on nothing.
+    if (!(await store.holds(canvasFilePath(dir, shown.id())))) {
+      logger.warn(`${TAG}[LINK] the view is not holding canvas=${shown.id()}; nothing saved to the note`);
+      return null;
+    }
     const linkedId = fromScratch ? newCanvasId() : shown.id();
     const canvasFile = canvasFilePath(dir, linkedId);
     const thumbnail = thumbnailPath(dir, linkedId);
@@ -241,7 +256,7 @@ export function createNoteThumbnails({
   const saveToNote = (): Promise<SaveToNoteResult> => {
     if (saveToNotePending) {
       logger.log(`${TAG}[LINK] save to note already running; tap ignored`);
-      return Promise.resolve(null);
+      return Promise.resolve('ignored');
     }
     saveToNotePending = true;
     let linked: NoteLink | null = null;

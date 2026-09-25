@@ -5,7 +5,15 @@
 type ButtonListenerShape = {onButtonPress: (event: {id: number}) => void};
 
 const mockListeners: ButtonListenerShape[] = [];
-const mockLoadCanvas = jest.fn().mockResolvedValue(true);
+let mockHeldByView: string | null = null;
+const mockLoadCanvas = jest.fn().mockImplementation((path: string) => {
+  mockHeldByView = path;
+  return Promise.resolve(true);
+});
+const mockBindCanvas = jest.fn().mockImplementation((path: string) => {
+  mockHeldByView = path;
+  return Promise.resolve(true);
+});
 const mockGenerateThumbnail = jest.fn().mockResolvedValue(true);
 const mockInsertImage = jest.fn().mockResolvedValue({success: true, result: true});
 
@@ -14,6 +22,12 @@ jest.mock('react-native', () => ({
     CanvasModule: {
       loadCanvas: (path: string) => mockLoadCanvas(path),
       saveCanvas: jest.fn().mockResolvedValue(true),
+      // The live view holds whatever was last loaded or bound, as the real one does: a canvas is
+      // only saved to a note from the view holding it (#68), and the copy taken under a new id is
+      // written without moving that binding (#62).
+      writeCanvasTo: jest.fn().mockResolvedValue(true),
+      bindCanvas: (path: string) => mockBindCanvas(path),
+      holdsCanvas: (path: string) => Promise.resolve(path === mockHeldByView),
       deleteCanvas: jest.fn().mockResolvedValue(true),
       generateThumbnail: (path: string) => mockGenerateThumbnail(path),
       readText: jest.fn().mockResolvedValue(null),

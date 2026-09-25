@@ -362,13 +362,41 @@ describe('session', () => {
     }
   });
 
-  test('Save to Note shows nothing when no thumbnail was inserted', async () => {
+  // #68: a save that did not happen used to say nothing, which looks exactly like one that worked
+  // and put the thumbnail somewhere off screen. The canvas is then what the user goes on drawing on
+  // believing it is in the note.
+  test('Save to Note says so when no thumbnail was inserted, and the notice then clears', async () => {
+    jest.useFakeTimers();
+    try {
+      const session = createFakeSession();
+      session.saveToNote.mockResolvedValue(null);
+      const {press, shows, emitCanvasState} = await render(session);
+      await emitCanvasState({hasContent: true});
+      await press('canvas-save-to-note');
+      expect(session.saveToNote).toHaveBeenCalledTimes(1);
+      expect(shows('Could not add this to the note; nothing was changed')).toBe(true);
+      expect(shows('Added to note: place it on the page before anything else')).toBe(false);
+      // And it goes again, as every other notice does. One that stays reads as the state of things
+      // rather than as what just happened, so the next save would look as though it failed too.
+      await act(async () => {
+        jest.advanceTimersByTime(NOTICE_MS);
+      });
+      expect(shows('Could not add this to the note; nothing was changed')).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // #68: the second tap of a double tap resolves at once while the first save is still running and
+  // about to work. Telling the user it failed would be telling them something untrue, and it is the
+  // message they would be looking at while it succeeded.
+  test('Save to Note says nothing for a tap ignored while one is already running', async () => {
     const session = createFakeSession();
-    session.saveToNote.mockResolvedValue(null);
+    session.saveToNote.mockResolvedValue('ignored');
     const {press, shows, emitCanvasState} = await render(session);
     await emitCanvasState({hasContent: true});
     await press('canvas-save-to-note');
-    expect(session.saveToNote).toHaveBeenCalledTimes(1);
+    expect(shows('Could not add this to the note; nothing was changed')).toBe(false);
     expect(shows('Added to note: place it on the page before anything else')).toBe(false);
   });
 
