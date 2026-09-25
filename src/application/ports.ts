@@ -38,6 +38,13 @@ export type CanvasStorePort = {
    * canvas loaded from it (#30).
    */
   save: (path: string) => Promise<boolean>;
+  /**
+   * Writes the canvas shown to [path] and leaves the view where it is: a copy taken for a file the
+   * canvas has not become yet (#62), so that giving up on it needs nothing put back. Only ever
+   * creates; a path that already holds a canvas is refused, since this writes the canvas the view
+   * holds rather than the one that file holds (#30).
+   */
+  writeTo: (path: string) => Promise<boolean>;
   /** Writes the canvas shown to [path], a file it was not loaded from, and keeps it there from now on. */
   saveAs: (path: string) => Promise<boolean>;
   /** Whether the view shows the canvas saved at [path]. */

@@ -12,7 +12,7 @@ import {TAG} from '../diagnostics/log';
 import type {Logger} from '../sdk/types';
 import {neverThrows} from './neverThrows';
 
-type PathMethod = 'saveCanvas' | 'saveCanvasAs' | 'holdsCanvas' | 'deleteCanvas' | 'generateThumbnail' | 'exportPdf';
+type PathMethod = 'saveCanvas' | 'saveCanvasAs' | 'writeCanvasTo' | 'holdsCanvas' | 'deleteCanvas' | 'generateThumbnail' | 'exportPdf';
 
 export type NativeCanvasModule = Record<PathMethod, (path: string) => Promise<boolean>> & {
   loadCanvas: (path: string, imageDir: string) => Promise<boolean>;
@@ -49,6 +49,7 @@ export function createNativeCanvasStore(
     importImage: (source, imageDir) =>
       invoke('importImage', false, async module => (await module.importImage(source, imageDir)) === true),
     save: path => call('saveCanvas', path),
+    writeTo: path => call('writeCanvasTo', path),
     saveAs: path => call('saveCanvasAs', path),
     holds: path => call('holdsCanvas', path),
     remove: path => call('deleteCanvas', path),

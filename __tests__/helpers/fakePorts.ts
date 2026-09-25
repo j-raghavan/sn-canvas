@@ -98,6 +98,15 @@ export const createFakeStore = (initial: Record<string, string> = {}): FakeStore
       write(path, store.shown);
       return true;
     },
+    async writeTo(path) {
+      // Only ever creates, as the device does: a path already holding a canvas is refused, because
+      // this writes what the view shows rather than what that file holds (#30, #62).
+      if (failing.has('writeTo') || files.has(path)) {
+        return false;
+      }
+      write(path, store.shown);
+      return true;
+    },
     async saveAs(path) {
       if (failing.has('saveAs') || failSaveAsTo.has(path)) {
         return false;

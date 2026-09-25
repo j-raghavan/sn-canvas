@@ -16,7 +16,6 @@ import {
   pictureNumbersOf,
   picturesOf,
   mayNoteHave,
-  withCanvasShownWithoutANote,
   withLastCanvas,
   withPending,
   withoutCanvas,
@@ -150,59 +149,6 @@ export function createNoteThumbnails({
     return guess ?? DEFAULT_CANVAS_ID;
   };
 
-  /**
-   * Undoes a Save to Note that the note refused, for the scratch canvas alone: the forward path's
-   * inverse, named so that what it does not undo is visible rather than buried in an else-branch.
-   *
-   * Normally the canvas goes back to being the scratch one and the new id's files go. When the
-   * write that puts it back fails, it cannot: saveAs rebinds the view to what it wrote, and on
-   * failure the native side puts the binding back where it was, which is the new file the first
-   * save bound it to. Removing that file would take away the only one the view can still write to,
-   * and later saves would go to the scratch file and be refused, since a canvas file only ever
-   * holds the canvas it was loaded from (#30). The drawing stays as the new canvas instead, which
-   * is recorded, since a file holding real work that no note lists is the loss #46 is about coming
-   * back by another route. The scratch id keeps its place: its file is still there.
-   *
-   * The id the drawing kept when it could not go back, or null when the canvas is the scratch one still.
-   */
-  const unwindScratchSave = async (
-    dir: string,
-    {
-      linkedId,
-      canvasFile,
-      thumbnail,
-      saved,
-      at,
-    }: {linkedId: string; canvasFile: string; thumbnail: string; saved: boolean; at: NotePage | null},
-  ): Promise<string | null> => {
-    const restored = saved && (await store.saveAs(canvasFilePath(dir, DEFAULT_CANVAS_ID)));
-    if (!saved || restored) {
-      // The new id never became a canvas, so its files go. Both removes run: a file left here is one
-      // no note lists, and an unlisted file is what newestCanvas can hand to a note it was never
-      // drawn for (#46). The success path says so when its delete fails; so does this one.
-      const fileGone = await store.remove(canvasFile);
-      const thumbGone = await store.remove(thumbnail);
-      if (!fileGone || !thumbGone) {
-        logger.warn(`${TAG}[LINK] canvas=${linkedId} was not saved to the note but its files are still here`);
-      }
-      return null;
-    }
-    // The thumbnail stays: the drawing is this canvas now, so the picture rendered of it is a true
-    // one, and it is what the note's canvas list draws until the next save renders another.
-    shown.rename(linkedId);
-    // Recorded either way: against the note when there is one, and as nobody's when there is not,
-    // which keeps it from being handed to the next note that asks (#49). Nothing reopens a canvas
-    // nobody owns, but the drawing is safe in it and the index knows it is there.
-    const into = at ?? (await host.currentPage());
-    if (into === null) {
-      logger.warn(`${TAG}[LINK] no note to record canvas=${linkedId} against; it is saveable but nothing reopens it`);
-    }
-    await index.update(dir, current =>
-      into === null ? withCanvasShownWithoutANote(current, linkedId) : withLastCanvas(current, linkedId, into.notePath),
-    );
-    return linkedId;
-  };
-
   /** Puts the thumbnail in the note; the canvas it links to (and its folder), or null when it didn't go in. */
   const linkIntoNote = async (): Promise<NoteLink | null> => {
     const dir = await canvasDir();
@@ -217,29 +163,40 @@ export function createNoteThumbnails({
     // The page as it is before the thumbnail goes in: the new picture is the one that was not there (leavePendingLink).
     const at = await host.currentPage();
     const already = at === null ? null : {at, pictures: await picturesOn(at, dir)};
-    // The scratch canvas is written under its new id, and kept there; any other is saved where it was loaded from.
-    const saved = await (fromScratch ? store.saveAs(canvasFile) : store.save(canvasFile));
+    // A copy under the new id, taken without moving the view off the scratch canvas: the canvas only
+    // becomes the new one once the note has actually taken the thumbnail, so a note that refuses
+    // leaves nothing to put back (#62). Any other canvas is saved to the file it was loaded from.
+    const saved = await (fromScratch ? store.writeTo(canvasFile) : store.save(canvasFile));
     const drawn = saved && (await store.renderThumbnail(thumbnail));
     const placed = drawn && (await host.insertImage(thumbnail));
     if (!placed) {
-      const stayedAs = fromScratch ? await unwindScratchSave(dir, {linkedId, canvasFile, thumbnail, saved, at}) : null;
-      // After the unwind, because it is the unwind that decides whether the canvas is still the one
-      // we started on: saying "unchanged" before it has run is a claim this path cannot make.
-      logger.warn(
-        stayedAs === null
-          ? `${TAG}[LINK] save to note failed; canvas=${shown.id()} unchanged`
-          : `${TAG}[LINK] save to note failed; ${DEFAULT_CANVAS_ID} could not be put back, so the drawing is canvas=${stayedAs}`,
-      );
+      if (fromScratch) {
+        // The copy was never anything: it goes, and the canvas is the scratch one still, because it
+        // never stopped being. A file left here is one no note lists, and an unlisted file is what
+        // the newest-canvas guess can hand to a note it was never drawn for (#46).
+        const fileGone = await store.remove(canvasFile);
+        const thumbGone = await store.remove(thumbnail);
+        if (!fileGone || !thumbGone) {
+          logger.warn(`${TAG}[LINK] canvas=${linkedId} was not saved to the note but its files are still here`);
+        }
+      }
+      logger.warn(`${TAG}[LINK] save to note failed; canvas=${shown.id()} unchanged`);
       return null;
     }
-    if (fromScratch) {
-      // The scratch content lives on as the linked canvas, which the sidebar now reopens, and its old file goes.
+    // It went in, so the canvas becomes the new one and the view moves to the file already written.
+    // Should that fail the thumbnail is still in the note and the drawing still in its file, so the
+    // canvas is recorded below all the same; what does not happen is the scratch canvas being given
+    // up, since the view is still holding it.
+    const became = !fromScratch || (await store.saveAs(canvasFile));
+    if (became && fromScratch) {
       shown.rename(linkedId);
+    } else if (!became) {
+      logger.warn(`${TAG}[LINK] canvas=${linkedId} is in the note, but the canvas shown is ${shown.id()} still`);
     }
     // Its id is given up only once its file really has gone. A file still standing there still holds the
     // drawing, and handing the id to the next note that asks is the very loss this is about (#46).
-    const scratchGone = fromScratch && (await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID)));
-    if (fromScratch && !scratchGone) {
+    const scratchGone = became && fromScratch && (await store.remove(canvasFilePath(dir, DEFAULT_CANVAS_ID)));
+    if (fromScratch && became && !scratchGone) {
       logger.warn(`${TAG}[LINK] ${DEFAULT_CANVAS_ID} is still on disk, so it stays this note's`);
     }
     // The note it went into reopens it: asked of the host when no page was read (the scratch canvas's first save),

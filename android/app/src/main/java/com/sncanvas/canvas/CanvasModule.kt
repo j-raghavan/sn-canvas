@@ -64,6 +64,32 @@ class CanvasModule(
     }
 
     /**
+     * Writes the live canvas to [path] and leaves the view where it is: a copy of what is shown,
+     * taken for a file the canvas has not become yet (#62). Save to Note takes one under a new id
+     * before asking the note to place a thumbnail, so that a note which refuses leaves nothing to
+     * put back.
+     *
+     * Only ever creates. A file that is already there is somebody's canvas, and this writes the
+     * canvas the view holds rather than the one that file holds, which is the write #30 exists to
+     * refuse; [saveCanvas] is how a canvas is written to its own file.
+     */
+    @ReactMethod
+    fun writeCanvasTo(
+        path: String,
+        promise: Promise,
+    ) {
+        val view = registry.current() ?: return promise.reject(ERR_NO_ACTIVE_VIEW, "No active canvas view to save from")
+        view.post {
+            if (File(path).exists()) {
+                promise.reject(ERR_NOT_HELD, "$path already holds a canvas; not written")
+                return@post
+            }
+            val elements = view.getState().elements
+            inBackground(promise) { writeCanvas(path, elements) }
+        }
+    }
+
+    /**
      * Writes the live canvas to [path], a file it was not loaded from, and
      * keeps it there from now on: the scratch canvas, given its own id as it
      * goes into a note. Should the write fail, the view keeps the file it held.
