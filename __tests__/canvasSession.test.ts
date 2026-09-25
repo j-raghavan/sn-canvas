@@ -1008,6 +1008,22 @@ describe('saveToNote', () => {
     );
   });
 
+  // #68: the first Save to Note anyone ever does. The scratch canvas has no file yet, so a guard
+  // that asked whether one was on disk rather than what the view is holding would refuse the very
+  // first save, which is the commonest thing this button is used for.
+  test('the first save to note of a scratch canvas never yet written goes in', async () => {
+    const {store, host, session} = setup({}, {installedJustNow: true});
+    host.page = {notePath: '/n.note', page: 0};
+    await session.open(null);
+    expect(store.files.has(SCRATCH)).toBe(false);
+    store.shown = 'the first thing ever drawn';
+
+    expect(await session.saveToNote()).toBe('inserted');
+    expect(host.inserted).toEqual([thumbnail('c-1')]);
+    expect(store.files.get(canvasFile('c-1'))).toBe('the first thing ever drawn');
+    expect(session.currentCanvasId()).toBe('c-1');
+  });
+
   test('a failed re-link of a linked canvas keeps its files', async () => {
     const {store, host, session} = setup({[canvasFile('c-9')]: 'nine'});
     host.lassoed = [lassoedThumbnail('c-9')];
