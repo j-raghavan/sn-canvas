@@ -28,6 +28,7 @@ import {
   isScratchCanvasFree,
   ownCanvasOf,
   parseCanvasIndex,
+  withoutMissingCanvases,
   serializeCanvasIndex,
   lastCanvasFor,
   mayNoteHave,
@@ -217,7 +218,11 @@ export function createCanvasSession({
 
   const loadIndex = async (dir: string): Promise<CanvasIndex> => {
     if (index === null) {
-      index = parseCanvasIndex(await store.readText(indexPath(dir)));
+      // Read once a session, and swept once with it: a canvas deleted from outside Canvas leaves a
+      // record behind, and for the scratch canvas that record refuses it to every note from then on
+      // (#64). Whether a file is there is a fact on disk rather than a guess about what wrote what,
+      // so it is one of the few things a read can decide for itself.
+      index = withoutMissingCanvases(parseCanvasIndex(await store.readText(indexPath(dir))), await store.savedCanvasIds(dir));
     }
     return index;
   };

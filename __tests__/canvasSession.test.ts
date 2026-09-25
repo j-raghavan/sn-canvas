@@ -365,6 +365,26 @@ describe('each note has its own canvas', () => {
     expect(store.shown).not.toBe('drawn with no note known');
   });
 
+  // #64: the scratch canvas is drawn on with no note known, so it becomes nobody's, and then its
+  // file is deleted from outside Canvas. The record left behind would refuse it to every note for
+  // the life of the install, and nothing would say why. With the file gone the id means nothing.
+  test('the scratch canvas is offered again once its file has gone from under the record', async () => {
+    const {store, host, session} = setup({[SCRATCH]: 'scratch'});
+    host.page = null;
+    await session.open(500);
+    store.shown = 'drawn with no note known';
+    await session.close();
+    expect(savedIndex(store).shownWithoutANote).toContain('default');
+
+    // Deleted the way the file manager would, leaving the record behind.
+    const files = Object.fromEntries(store.files);
+    delete files[SCRATCH];
+    const later = setup(files);
+    later.host.page = {notePath: '/a.note', page: 0};
+    await later.session.open(500);
+    expect(later.session.currentCanvasId()).toBe('default');
+  });
+
   // #49: once the scratch canvas has been drawn on with no note known it is nobody's, and every
   // note gets one of its own from then on. That is a quiet change in behaviour, so the log says why
   // rather than leaving a device log showing only that notes stopped being given it.

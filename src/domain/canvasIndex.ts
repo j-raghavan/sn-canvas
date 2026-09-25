@@ -263,6 +263,22 @@ export function ownerOf(index: CanvasIndex, canvasId: string): CanvasOwner {
 }
 
 /**
+ * [index] with the canvases nobody owns that are no longer saved taken out of it. An id is written
+ * down as nobody's to keep it from being handed to a note that never made it (#49), and once its
+ * file has gone there is nothing left to keep from anyone: the id means nothing and refusing it
+ * only costs the next note a canvas it could have had. The scratch canvas is the one that matters,
+ * since its id is a fixed word rather than a minted one, so left behind it is refused for good.
+ *
+ * Only this record is swept. A note's own canvases are deliberately left to be read past when their
+ * files have gone, and the canvas a note reopens is its own whether or not it has been drawn on yet.
+ */
+export function withoutMissingCanvases(index: CanvasIndex, saved: readonly string[]): CanvasIndex {
+  const here = new Set(saved);
+  const kept = index.shownWithoutANote.filter(id => here.has(id));
+  return kept.length === index.shownWithoutANote.length ? index : {...index, shownWithoutANote: kept};
+}
+
+/**
  * Whether [canvasId] is going spare, so an asking note may be given it.
  *
  * A canvas an older build left as its last is spare, and has to stay spare, or upgrading orphans
