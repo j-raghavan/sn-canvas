@@ -9,7 +9,7 @@ import HelpTour from '../src/ui/HelpTour';
 import {ACTION_BAR_GEOMETRY} from '../src/ui/ActionBar';
 import {TOOLBAR_GEOMETRY} from '../src/ui/Toolbar';
 
-jest.mock('react-native/Libraries/utilities/useWindowDimensions');
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions');
 const onAScreen = (width: number, height: number) =>
   (useWindowDimensions as jest.Mock).mockReturnValue({width, height, scale: 1.875, fontScale: 1});
 
