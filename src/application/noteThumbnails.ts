@@ -171,11 +171,19 @@ export function createNoteThumbnails({
     const placed = drawn && (await host.insertImage(thumbnail));
     if (!placed) {
       if (fromScratch) {
-        // The copy was never anything: it goes, and the canvas is the scratch one still, because it
-        // never stopped being. A file left here is one no note lists, and an unlisted file is what
-        // the newest-canvas guess can hand to a note it was never drawn for (#46).
-        const fileGone = await store.remove(canvasFile);
-        const thumbGone = await store.remove(thumbnail);
+        // What was drawn goes to the scratch canvas before anything else. The copy is about to be
+        // deleted and nothing else has written since the last save, so without this the strokes live
+        // only in the view until it next closes, and a save to note that just failed is exactly when
+        // someone gives up and leaves. A plain save, to the file the view still holds: it never left
+        // the scratch canvas, which is the whole point of writing the copy elsewhere (#62).
+        if (!(await store.save(canvasFilePath(dir, DEFAULT_CANVAS_ID)))) {
+          logger.warn(`${TAG}[LINK] could not keep what was drawn in ${DEFAULT_CANVAS_ID} after the save to note failed`);
+        }
+        // Only what this save made. A write that did not happen made no file, and the one reason it
+        // would not is that a file was already there, which is somebody else's canvas: deleting that
+        // would answer refusing to write over it by destroying it instead. Same for the picture.
+        const fileGone = !saved || (await store.remove(canvasFile));
+        const thumbGone = !drawn || (await store.remove(thumbnail));
         if (!fileGone || !thumbGone) {
           logger.warn(`${TAG}[LINK] canvas=${linkedId} was not saved to the note but its files are still here`);
         }
@@ -183,11 +191,12 @@ export function createNoteThumbnails({
       logger.warn(`${TAG}[LINK] save to note failed; canvas=${shown.id()} unchanged`);
       return null;
     }
-    // It went in, so the canvas becomes the new one and the view moves to the file already written.
-    // Should that fail the thumbnail is still in the note and the drawing still in its file, so the
-    // canvas is recorded below all the same; what does not happen is the scratch canvas being given
-    // up, since the view is still holding it.
-    const became = !fromScratch || (await store.saveAs(canvasFile));
+    // It went in, so the canvas becomes the new one: the view takes up the file already written,
+    // which writes nothing and so cannot fail on a write (#62). Without a view at all it can still
+    // fail, and then the thumbnail is in the note and the drawing in its file, so the canvas is
+    // recorded below all the same; what does not happen is the scratch canvas being given up, since
+    // the view is still holding it.
+    const became = !fromScratch || (await store.bindTo(canvasFile));
     if (became && fromScratch) {
       shown.rename(linkedId);
     } else if (!became) {
