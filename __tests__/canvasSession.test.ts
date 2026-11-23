@@ -1693,8 +1693,10 @@ describe('deleting canvases out of this note (#74)', () => {
     const context = await twoNoteCanvases();
     await anotherCanvas(context, 118, 'third drawing');
     await anotherCanvas(context, 119, 'fourth drawing');
-    const {session} = context;
+    const {store, session} = context;
     expect(await session.deleteCanvases(['c-1', 'c-3'])).toEqual(['c-1', 'c-3']);
+    // Both out of the index itself, not just off the list canvasesHere derives from saved files.
+    expect(savedIndex(store).canvasesByNote['/note.note']).toEqual(['c-4', 'c-2']);
     expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-4', 'c-2']);
   });
 
