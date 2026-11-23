@@ -27,7 +27,10 @@ export type CanvasDeletionDeps = {
 };
 
 export type CanvasDeletion = {
-  /** Deletes every id in [canvasIds] besides the one shown; the ids actually deleted, in no particular order. */
+  /**
+   * Deletes every id in [canvasIds] besides the one shown whose file actually goes; those ids, in no
+   * particular order. One left on disk stays recorded everywhere rather than retired out from under it.
+   */
   deleteCanvases: (canvasIds: readonly string[]) => Promise<readonly string[]>;
 };
 
@@ -43,10 +46,27 @@ export function createCanvasDeletion({store, logger, canvasDir, index, shown, se
       if (targets.length === 0) {
         return;
       }
-      await Promise.all(targets.flatMap(id => [store.remove(canvasFilePath(dir, id)), store.remove(thumbnailPath(dir, id))]));
-      await index.update(dir, current => targets.reduce(withoutCanvas, current));
-      removed = targets;
-      logger.log(`${TAG} deleted canvases=${targets.join(',')}`);
+      // The file is what makes a canvas gone (#30: canvasesHere only lists ids with one); a thumbnail
+      // left behind is cosmetic clutter, not a reason to go on recording a canvas whose drawing is gone.
+      const gone = await Promise.all(
+        targets.map(async id => {
+          const fileGone = await store.remove(canvasFilePath(dir, id));
+          if (!(await store.remove(thumbnailPath(dir, id)))) {
+            logger.warn(`${TAG} canvas=${id} deleted, but its thumbnail is still on disk`);
+          }
+          return fileGone ? id : null;
+        }),
+      );
+      removed = gone.filter((id): id is string => id !== null);
+      const failed = targets.filter(id => !removed.includes(id));
+      if (failed.length > 0) {
+        logger.warn(`${TAG} could not delete canvases=${failed.join(',')}; their files are still here`);
+      }
+      if (removed.length === 0) {
+        return;
+      }
+      await index.update(dir, current => removed.reduce(withoutCanvas, current));
+      logger.log(`${TAG} deleted canvases=${removed.join(',')}`);
     });
     return removed;
   };

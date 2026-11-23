@@ -427,6 +427,25 @@ describe('which canvases a note has claimed (#46)', () => {
     expect(retired.lastCanvasId).toBeNull();
   });
 
+  // #74: a note deleting the canvas it reopens is not left with nothing recorded while one of its
+  // own canvases is still sitting right there in its list, or the next open would show a blank one
+  // over it rather than bringing the survivor back.
+  test('retiring the canvas a note reopens falls back to the next one that note still has', () => {
+    const twoOfANote = ['c-old', 'c-new'].reduce((idx, id) => withLastCanvas(idx, id, '/a.note'), EMPTY_INDEX);
+    const retired = withoutCanvas(twoOfANote, 'c-new');
+    expect(canvasesIn(retired, '/a.note')).toEqual(['c-old']);
+    expect(retired.lastByNote['/a.note']).toBe('c-old');
+  });
+
+  // Without a survivor there is nothing to fall back to, which is the case the test above this one
+  // already covers for '/b.note': this one says so for the note whose only canvas was the one retired.
+  test('retiring a note\'s only canvas leaves it with none recorded, not a stale one', () => {
+    const onlyOne = withLastCanvas(EMPTY_INDEX, 'c-1', '/a.note');
+    const retired = withoutCanvas(onlyOne, 'c-1');
+    expect(canvasesIn(retired, '/a.note')).toEqual([]);
+    expect(retired.lastByNote['/a.note']).toBeUndefined();
+  });
+
   // The canvas last open is adopted only by a note with some claim to it. An upgraded index can hold a note's
   // canvases without holding what it reopens, and reading only the latter would give that canvas away (#46).
   test('an upgraded index does not hand the canvas last open to a note with no claim on it', () => {

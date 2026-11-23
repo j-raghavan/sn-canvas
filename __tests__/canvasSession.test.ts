@@ -1723,6 +1723,43 @@ describe('deleting canvases out of this note (#74)', () => {
     host.dir = null;
     expect(await session.deleteCanvases(['c-1'])).toEqual([]);
   });
+
+  // A canvas whose file will not go on being deleted is not retired out from under it: its file is
+  // what canvasesHere's own list reads to decide a canvas is still here (#30), so reporting one gone
+  // and dropping it from the index while the file stays would be saying something untrue.
+  test("a canvas whose file will not delete stays recorded, and isn't reported as deleted", async () => {
+    const {store, session} = await twoNoteCanvases();
+    store.failRemoveOf.add(canvasFile('c-1'));
+    expect(await session.deleteCanvases(['c-1'])).toEqual([]);
+    expect(store.files.has(canvasFile('c-1'))).toBe(true);
+    expect(savedIndex(store).canvasesByNote['/note.note']).toEqual(['c-2', 'c-1']);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-2', 'c-1']);
+  });
+
+  // The thumbnail is a rendering aid, not the drawing: a canvas whose file is gone is gone, whatever
+  // becomes of a leftover thumbnail PNG beside it.
+  test("a canvas is still counted as deleted when only its thumbnail won't go", async () => {
+    const {store, session, logger} = await twoNoteCanvases();
+    store.failRemoveOf.add(thumbnail('c-1'));
+    expect(await session.deleteCanvases(['c-1'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-1'))).toBe(false);
+    expect(store.files.has(thumbnail('c-1'))).toBe(true);
+    expect(logger.lines).toContain('warn [SNCANVAS] canvas=c-1 deleted, but its thumbnail is still on disk');
+  });
+
+  // Several asked for at once, only some of whose files go: the ones that did are retired and
+  // reported; the one that did not stays exactly as it was, file, thumbnail and index record alike.
+  test('of several asked for, only the ones whose files actually go are deleted', async () => {
+    const context = await twoNoteCanvases();
+    await anotherCanvas(context, 118, 'third drawing');
+    await anotherCanvas(context, 119, 'fourth drawing');
+    const {store, session, logger} = context;
+    store.failRemoveOf.add(canvasFile('c-3'));
+    expect(await session.deleteCanvases(['c-1', 'c-3'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-3'))).toBe(true);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-4', 'c-3', 'c-2']);
+    expect(logger.lines).toContain('warn [SNCANVAS] could not delete canvases=c-3; their files are still here');
+  });
 });
 
 describe('showing the tour on opening (#71)', () => {

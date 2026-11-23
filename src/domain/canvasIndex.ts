@@ -328,7 +328,18 @@ export function withoutCanvas(index: CanvasIndex, canvasId: string): CanvasIndex
       canvasesByNote[notePath] = kept;
     }
   });
-  const lastByNote = Object.fromEntries(Object.entries(index.lastByNote).filter(([, id]) => id !== canvasId));
+  // A note that reopened [canvasId] reopens its own next newest instead, if it has one: canvasesByNote
+  // is kept most-recent-first, so that survivor is right there at the head of what [notePath] just lost
+  // one from. Without this a note with canvases left to it would still open a blank one over them (#74).
+  const lastByNote = Object.fromEntries(
+    Object.entries(index.lastByNote).flatMap(([notePath, id]) => {
+      if (id !== canvasId) {
+        return [[notePath, id] as const];
+      }
+      const survivor = canvasesByNote[notePath]?.[0];
+      return survivor === undefined ? [] : [[notePath, survivor] as const];
+    }),
+  );
   return {
     ...index,
     canvasesByNote,
