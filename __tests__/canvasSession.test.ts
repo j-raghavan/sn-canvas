@@ -1655,6 +1655,76 @@ describe("a note's canvases (#30)", () => {
 
 });
 
+describe('deleting canvases out of this note (#74)', () => {
+  /** Two canvases saved to one note, as "a note's canvases" above sets up: c-1 kept, c-2 shown. */
+  const twoNoteCanvases = async () => {
+    const context = setup({[SCRATCH]: 'first drawing'});
+    const {store, host, session} = context;
+    await session.open(500);
+    await session.saveToNote();
+    host.unsaved = [notePicture(117)];
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    return context;
+  };
+
+  /** A further canvas, saved and shown, on top of [twoNoteCanvases]: next mint, numbered [num]'s picture in. */
+  const anotherCanvas = async (context: Awaited<ReturnType<typeof twoNoteCanvases>>, num: number, drawing: string) => {
+    context.host.unsaved = [notePicture(num)];
+    await context.session.newCanvas();
+    context.store.shown = drawing;
+    await context.session.saveToNote();
+  };
+
+  test("deletes a canvas's file and thumbnail, and takes it out of the note's list", async () => {
+    const {store, session} = await twoNoteCanvases();
+    // Both exist before the delete, or removing them would prove nothing.
+    expect(store.files.has(canvasFile('c-1'))).toBe(true);
+    expect(store.files.has(thumbnail('c-1'))).toBe(true);
+    expect(await session.deleteCanvases(['c-1'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-1'))).toBe(false);
+    expect(store.files.has(thumbnail('c-1'))).toBe(false);
+    expect(savedIndex(store).canvasesByNote['/note.note']).toEqual(['c-2']);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-2']);
+  });
+
+  test('deletes several at once, in one index write', async () => {
+    const context = await twoNoteCanvases();
+    await anotherCanvas(context, 118, 'third drawing');
+    await anotherCanvas(context, 119, 'fourth drawing');
+    const {session} = context;
+    expect(await session.deleteCanvases(['c-1', 'c-3'])).toEqual(['c-1', 'c-3']);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-4', 'c-2']);
+  });
+
+  // The view has nothing to put in its place once the canvas it is showing is gone.
+  test('never deletes the canvas shown, even if asked', async () => {
+    const {store, session} = await twoNoteCanvases();
+    expect(await session.deleteCanvases(['c-1', 'c-2'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-2'))).toBe(true);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-2']);
+  });
+
+  test('asking for only the canvas shown deletes nothing, and writes no index at all', async () => {
+    const {store, session} = await twoNoteCanvases();
+    const writeText = jest.spyOn(store, 'writeText');
+    expect(await session.deleteCanvases(['c-2'])).toEqual([]);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  test('the same id twice is deleted once', async () => {
+    const {session} = await twoNoteCanvases();
+    expect(await session.deleteCanvases(['c-1', 'c-1'])).toEqual(['c-1']);
+  });
+
+  test('without a folder for canvases, nothing is deleted', async () => {
+    const {host, session} = setup();
+    host.dir = null;
+    expect(await session.deleteCanvases(['c-1'])).toEqual([]);
+  });
+});
+
 describe('showing the tour on opening (#71)', () => {
   test('it is off until asked for, remembered once it is, and forgotten again', async () => {
     const {store, session} = setup({[SCRATCH]: 'scratch'});

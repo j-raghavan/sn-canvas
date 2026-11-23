@@ -205,6 +205,15 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
     await withTrail(() => session.switchTo(canvasId));
   };
 
+  // #74: delete out of the list that is open; it has nothing left to show once nothing survives it.
+  const deleteSelectedCanvases = async (canvasIds: readonly string[]) => {
+    const deleted = await session.deleteCanvases(canvasIds);
+    setNotice(deleted.length === 0 ? 'Nothing was deleted' : `Deleted ${deleted.length === 1 ? '1 canvas' : `${deleted.length} canvases`}`);
+    setCanvasPicker(current =>
+      current === null ? null : {...current, canvases: current.canvases.filter(canvas => !deleted.includes(canvas.canvasId))},
+    );
+  };
+
   const newCanvas = () => withTrail(() => session.newCanvas());
 
   const clearCanvas = () => withTrail(() => session.clearCanvas());
@@ -345,7 +354,13 @@ export default function CanvasScreen({createSession, buttonEvents, backBadgeTaps
           />
         )}
         {canvasPicker !== null && (
-          <CanvasList canvases={canvasPicker.canvases} onPick={pickedCanvas} onClose={() => setCanvasPicker(null)} />
+          <CanvasList
+            canvases={canvasPicker.canvases}
+            onPick={pickedCanvas}
+            onClose={() => setCanvasPicker(null)}
+            // Not offered while linking (#2): picking a canvas to link to is not the place to delete one.
+            onDeleteSelected={canvasPicker.forLink ? undefined : deleteSelectedCanvases}
+          />
         )}
         {editing !== null && (
           <TextEditor
