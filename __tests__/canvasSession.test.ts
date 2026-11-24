@@ -1655,6 +1655,115 @@ describe("a note's canvases (#30)", () => {
 
 });
 
+describe('deleting canvases out of this note (#74)', () => {
+  /** Two canvases saved to one note, as "a note's canvases" above sets up: c-1 kept, c-2 shown. */
+  const twoNoteCanvases = async () => {
+    const context = setup({[SCRATCH]: 'first drawing'});
+    const {store, host, session} = context;
+    await session.open(500);
+    await session.saveToNote();
+    host.unsaved = [notePicture(117)];
+    await session.newCanvas();
+    store.shown = 'second drawing';
+    await session.saveToNote();
+    return context;
+  };
+
+  /** A further canvas, saved and shown, on top of [twoNoteCanvases]: next mint, numbered [num]'s picture in. */
+  const anotherCanvas = async (context: Awaited<ReturnType<typeof twoNoteCanvases>>, num: number, drawing: string) => {
+    context.host.unsaved = [notePicture(num)];
+    await context.session.newCanvas();
+    context.store.shown = drawing;
+    await context.session.saveToNote();
+  };
+
+  test("deletes a canvas's file and thumbnail, and takes it out of the note's list", async () => {
+    const {store, session} = await twoNoteCanvases();
+    // Both exist before the delete, or removing them would prove nothing.
+    expect(store.files.has(canvasFile('c-1'))).toBe(true);
+    expect(store.files.has(thumbnail('c-1'))).toBe(true);
+    expect(await session.deleteCanvases(['c-1'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-1'))).toBe(false);
+    expect(store.files.has(thumbnail('c-1'))).toBe(false);
+    expect(savedIndex(store).canvasesByNote['/note.note']).toEqual(['c-2']);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-2']);
+  });
+
+  test('deletes several at once, in one index write', async () => {
+    const context = await twoNoteCanvases();
+    await anotherCanvas(context, 118, 'third drawing');
+    await anotherCanvas(context, 119, 'fourth drawing');
+    const {store, session} = context;
+    expect(await session.deleteCanvases(['c-1', 'c-3'])).toEqual(['c-1', 'c-3']);
+    // Both out of the index itself, not just off the list canvasesHere derives from saved files.
+    expect(savedIndex(store).canvasesByNote['/note.note']).toEqual(['c-4', 'c-2']);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-4', 'c-2']);
+  });
+
+  // The view has nothing to put in its place once the canvas it is showing is gone.
+  test('never deletes the canvas shown, even if asked', async () => {
+    const {store, session} = await twoNoteCanvases();
+    expect(await session.deleteCanvases(['c-1', 'c-2'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-2'))).toBe(true);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-2']);
+  });
+
+  test('asking for only the canvas shown deletes nothing, and writes no index at all', async () => {
+    const {store, session} = await twoNoteCanvases();
+    const writeText = jest.spyOn(store, 'writeText');
+    expect(await session.deleteCanvases(['c-2'])).toEqual([]);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  test('the same id twice is deleted once', async () => {
+    const {session} = await twoNoteCanvases();
+    expect(await session.deleteCanvases(['c-1', 'c-1'])).toEqual(['c-1']);
+  });
+
+  test('without a folder for canvases, nothing is deleted', async () => {
+    const {host, session} = setup();
+    host.dir = null;
+    expect(await session.deleteCanvases(['c-1'])).toEqual([]);
+  });
+
+  // A canvas whose file will not go on being deleted is not retired out from under it: its file is
+  // what canvasesHere's own list reads to decide a canvas is still here (#30), so reporting one gone
+  // and dropping it from the index while the file stays would be saying something untrue.
+  test("a canvas whose file will not delete stays recorded, and isn't reported as deleted", async () => {
+    const {store, session} = await twoNoteCanvases();
+    store.failRemoveOf.add(canvasFile('c-1'));
+    expect(await session.deleteCanvases(['c-1'])).toEqual([]);
+    expect(store.files.has(canvasFile('c-1'))).toBe(true);
+    expect(savedIndex(store).canvasesByNote['/note.note']).toEqual(['c-2', 'c-1']);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-2', 'c-1']);
+  });
+
+  // The thumbnail is a rendering aid, not the drawing: a canvas whose file is gone is gone, whatever
+  // becomes of a leftover thumbnail PNG beside it.
+  test("a canvas is still counted as deleted when only its thumbnail won't go", async () => {
+    const {store, session, logger} = await twoNoteCanvases();
+    store.failRemoveOf.add(thumbnail('c-1'));
+    expect(await session.deleteCanvases(['c-1'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-1'))).toBe(false);
+    expect(store.files.has(thumbnail('c-1'))).toBe(true);
+    expect(logger.lines).toContain('warn [SNCANVAS] canvas=c-1 deleted, but its thumbnail is still on disk');
+  });
+
+  // Several asked for at once, only some of whose files go: the ones that did are retired and
+  // reported; the one that did not stays exactly as it was, file, thumbnail and index record alike.
+  test('of several asked for, only the ones whose files actually go are deleted', async () => {
+    const context = await twoNoteCanvases();
+    await anotherCanvas(context, 118, 'third drawing');
+    await anotherCanvas(context, 119, 'fourth drawing');
+    const {store, session, logger} = context;
+    store.failRemoveOf.add(canvasFile('c-3'));
+    expect(await session.deleteCanvases(['c-1', 'c-3'])).toEqual(['c-1']);
+    expect(store.files.has(canvasFile('c-3'))).toBe(true);
+    expect((await session.canvasesHere()).map(canvas => canvas.canvasId)).toEqual(['c-4', 'c-3', 'c-2']);
+    expect(logger.lines).toContain('warn [SNCANVAS] could not delete canvases=c-3; their files are still here');
+  });
+});
+
 describe('showing the tour on opening (#71)', () => {
   test('it is off until asked for, remembered once it is, and forgotten again', async () => {
     const {store, session} = setup({[SCRATCH]: 'scratch'});

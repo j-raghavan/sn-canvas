@@ -50,6 +50,7 @@ const createFakeSession = (): jest.Mocked<CanvasSession> => ({
   followLink: jest.fn().mockResolvedValue(true),
   canvasesHere: jest.fn().mockResolvedValue([]),
   switchTo: jest.fn().mockResolvedValue(undefined),
+  deleteCanvases: jest.fn().mockResolvedValue([]),
   backTo: jest.fn(() => null),
   goBack: jest.fn().mockResolvedValue(undefined),
   exportPdf: jest.fn().mockResolvedValue('/storage/emulated/0/EXPORT/Canvas-20260914-111507.pdf'),
@@ -762,6 +763,149 @@ describe("a note's canvases (#30)", () => {
     await press('canvas-list-close');
     expect(has('canvas-list')).toBe(false);
     expect(session.switchTo).not.toHaveBeenCalled();
+  });
+
+  describe('selecting and deleting canvases (#74)', () => {
+    const MADE2 = new Date(2026, 8, 20, 9, 0).getTime();
+    const canvasId2 = `c-${MADE2.toString(36)}-wxyz`;
+    const THREE_CANVASES = [
+      ...CANVASES,
+      {canvasId: canvasId2, madeAt: MADE2, thumbnail: `/t/${canvasId2}.png`, isShown: false},
+    ];
+
+    const openList = async (session = createFakeSession()) => {
+      session.canvasesHere.mockResolvedValue(THREE_CANVASES);
+      const rendered = await render(session);
+      await rendered.press('canvas-more');
+      await rendered.press('canvas-menu-noteCanvases');
+      return rendered;
+    };
+
+    test('Select is offered for switching canvases, never for linking to one', async () => {
+      const switching = await openList();
+      expect(switching.has('canvas-list-select')).toBe(true);
+
+      const linkSession = createFakeSession();
+      linkSession.canvasesHere.mockResolvedValue(THREE_CANVASES);
+      const linking = await render(linkSession);
+      await linking.press('canvas-link-canvas');
+      expect(linking.has('canvas-list-select')).toBe(false);
+    });
+
+    test('entering select mode offers Select all and Cancel, and Cancel leaves it', async () => {
+      const {press, has} = await openList();
+      await press('canvas-list-select');
+      expect(has('canvas-list-select-all')).toBe(true);
+      expect(has('canvas-list-delete')).toBe(true);
+      await press('canvas-list-cancel-select');
+      expect(has('canvas-list-select-all')).toBe(false);
+      expect(has('canvas-list-select')).toBe(true);
+    });
+
+    test('Delete stays disabled until something is checked, and a tap checks it, and a second tap unchecks it', async () => {
+      const {press, renderer, isDisabled} = await openList();
+      await press('canvas-list-select');
+      expect(isDisabled('canvas-list-delete')).toBe(true);
+      await press(`canvas-list-${canvasId}`);
+      expect(isDisabled('canvas-list-delete')).toBe(false);
+      expect(renderer.root.findByProps({testID: `canvas-list-${canvasId}`}).props.accessibilityState.selected).toBe(true);
+      await press(`canvas-list-${canvasId}`);
+      expect(isDisabled('canvas-list-delete')).toBe(true);
+      expect(renderer.root.findByProps({testID: `canvas-list-${canvasId}`}).props.accessibilityState.selected).toBe(false);
+    });
+
+    // The view has nothing to put in its place once the canvas it is showing is gone (#74).
+    test('the canvas shown cannot be checked', async () => {
+      const {press, renderer} = await openList();
+      await press('canvas-list-select');
+      await press('canvas-list-c-shown');
+      expect(renderer.root.findByProps({testID: 'canvas-list-c-shown'}).props.accessibilityState.selected).toBe(false);
+      expect(renderer.root.findByProps({testID: 'canvas-list-c-shown'}).props.disabled).toBe(true);
+    });
+
+    test('Select all checks every canvas but the one shown, and again unchecks them', async () => {
+      const {press, renderer} = await openList();
+      await press('canvas-list-select');
+      await press('canvas-list-select-all');
+      expect(renderer.root.findByProps({testID: `canvas-list-${canvasId}`}).props.accessibilityState.selected).toBe(true);
+      expect(renderer.root.findByProps({testID: `canvas-list-${canvasId2}`}).props.accessibilityState.selected).toBe(true);
+      // Select all never reaches the one shown: there is nothing to put in its place once it is gone.
+      expect(renderer.root.findByProps({testID: 'canvas-list-c-shown'}).props.accessibilityState.selected).toBe(false);
+      await press('canvas-list-select-all');
+      expect(renderer.root.findByProps({testID: `canvas-list-${canvasId}`}).props.accessibilityState.selected).toBe(false);
+    });
+
+    test('Delete asks before anything is deleted, and cancelling sends nothing', async () => {
+      const {session, press, has} = await openList();
+      await press('canvas-list-select');
+      await press(`canvas-list-${canvasId}`);
+      await press('canvas-list-delete');
+      expect(has('canvas-list-delete-confirm')).toBe(true);
+      expect(session.deleteCanvases).not.toHaveBeenCalled();
+      await press('canvas-list-delete-confirm-cancel');
+      expect(has('canvas-list-delete-confirm')).toBe(false);
+      expect(session.deleteCanvases).not.toHaveBeenCalled();
+      // Still there to pick, since nothing was deleted.
+      expect(has(`canvas-list-${canvasId}`)).toBe(true);
+    });
+
+    test('confirming deletes what was checked, says how many, and takes them off the list', async () => {
+      const session = createFakeSession();
+      session.deleteCanvases.mockResolvedValue([canvasId]);
+      const {press, has, shows} = await openList(session);
+      await press('canvas-list-select');
+      await press(`canvas-list-${canvasId}`);
+      await press('canvas-list-delete');
+      await press('canvas-list-delete-confirm-action');
+      expect(session.deleteCanvases).toHaveBeenCalledWith([canvasId]);
+      expect(shows('Deleted 1 canvas')).toBe(true);
+      expect(has('canvas-list-delete-confirm')).toBe(false);
+      // Taken off the list without closing it, and back to the normal, non-selecting header.
+      expect(has(`canvas-list-${canvasId}`)).toBe(false);
+      expect(has('canvas-list')).toBe(true);
+      expect(has('canvas-list-select-all')).toBe(false);
+    });
+
+    test('deleting more than one says so in the plural', async () => {
+      const session = createFakeSession();
+      session.deleteCanvases.mockResolvedValue([canvasId, canvasId2]);
+      const {press, shows} = await openList(session);
+      await press('canvas-list-select');
+      await press('canvas-list-select-all');
+      await press('canvas-list-delete');
+      await press('canvas-list-delete-confirm-action');
+      expect(shows('Deleted 2 canvases')).toBe(true);
+    });
+
+    // The delete runs through the session before the list updates, and closing the list in that gap
+    // is a real race on a slow device: the confirm dialog is already gone by then, so Done is tappable.
+    test('closing the list while a delete is still running leaves it closed', async () => {
+      const session = createFakeSession();
+      let resolveDelete: (ids: readonly string[]) => void = () => {};
+      session.deleteCanvases.mockImplementation(() => new Promise<readonly string[]>(resolve => (resolveDelete = resolve)));
+      const {press, has} = await openList(session);
+      await press('canvas-list-select');
+      await press(`canvas-list-${canvasId}`);
+      await press('canvas-list-delete');
+      await press('canvas-list-delete-confirm-action');
+      await press('canvas-list-close');
+      expect(has('canvas-list')).toBe(false);
+      await act(async () => resolveDelete([canvasId]));
+      expect(has('canvas-list')).toBe(false);
+    });
+
+    // Asked for only the canvas shown, the session deletes nothing (#74); this says so rather than
+    // claiming a delete that did not happen.
+    test('says nothing was deleted when the session deletes nothing', async () => {
+      const session = createFakeSession();
+      session.deleteCanvases.mockResolvedValue([]);
+      const {press, shows} = await openList(session);
+      await press('canvas-list-select');
+      await press(`canvas-list-${canvasId}`);
+      await press('canvas-list-delete');
+      await press('canvas-list-delete-confirm-action');
+      expect(shows('Nothing was deleted')).toBe(true);
+    });
   });
 
 });

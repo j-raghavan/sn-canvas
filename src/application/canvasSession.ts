@@ -53,6 +53,7 @@ import {
 } from '../domain/canvasLink';
 import type {TrailStep} from '../domain/linkTrail';
 import {BUTTON_ID_OPEN_LINKED} from '../domain/entryPoints';
+import {createCanvasDeletion} from './canvasDeletion';
 import {createLinkNavigation} from './linkNavigation';
 import {createNoteThumbnails} from './noteThumbnails';
 import {createPluginView} from './pluginView';
@@ -112,6 +113,11 @@ export type CanvasSession = {
   canvasesHere: () => Promise<NoteCanvas[]>;
   /** Saves the canvas shown, then shows [canvasId]. */
   switchTo: (canvasId: string) => Promise<void>;
+  /**
+   * Deletes every id in [canvasIds] besides the one shown (#74): its file and
+   * thumbnail, and its place in every note's list. The ids actually deleted.
+   */
+  deleteCanvases: (canvasIds: readonly string[]) => Promise<readonly string[]>;
   /** Where one step back goes (the last link's canvas and note page), or null with no link to go back along. */
   backTo: () => TrailStep | null;
   /**
@@ -307,6 +313,16 @@ export function createCanvasSession({
         canvasId = id;
       },
     },
+    serially,
+  });
+
+  // Deleting canvases out of this note's list (application/canvasDeletion.ts).
+  const deletion = createCanvasDeletion({
+    store,
+    logger,
+    canvasDir: resolveCanvasDir,
+    index: {load: loadIndex, update: updateIndex},
+    shown: {id: () => canvasId},
     serially,
   });
 
@@ -542,6 +558,7 @@ export function createCanvasSession({
     followLink: links.followLink,
     canvasesHere,
     switchTo,
+    deleteCanvases: deletion.deleteCanvases,
     backTo: links.backTo,
     goBack: links.goBack,
     exportPdf,
